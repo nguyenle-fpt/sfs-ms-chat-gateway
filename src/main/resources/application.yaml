@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: sfs-ms-chat-gateway
+
+extensionapp:
+  id: com.symphony.sfs.admin-app
+
+aws:
+  dynamodb:
+    tableName: sfs-ms-chat-gateway
+    endpoint: http://localhost:4569 # localstack
+    signinRegion: us-east-1
+  paramstore:
+    prefix: /sfs
+    name: ms-chat-gateway
+
+server:
+  port: 9700

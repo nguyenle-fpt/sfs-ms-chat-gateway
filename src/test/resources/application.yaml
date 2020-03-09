@@ -1,0 +1,10 @@
+# Backend configuration
+aws:
+  dynamodb:
+    endpoint: http://localhost:8000
+    signinRegion: ""
+    awsAccessKey: ""
+    awsSecretKey: ""
+    tableName: MyTable
+  paramstore:
+    enabled: false
