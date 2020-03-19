@@ -1,6 +1,9 @@
 aws:
   paramstore:
     enabled: false
+  sqs:
+    endpoint: https://sqs.us-east-1.amazonaws.com
+    signinRegion: us-east-1
 
 tds:
   hosts:
@@ -22,3 +25,4 @@ microservices:
 microservice:
   chat:
     msAdminUrl: 'http://localhost:9600'
+    sharedPrivateKey: file:misc/rsa/sa_privatekey.pem

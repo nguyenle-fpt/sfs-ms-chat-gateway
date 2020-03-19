@@ -1,6 +1,8 @@
 package com.symphony.sfs.ms.chat.config;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.sqs.AmazonSQSAsync;
+import com.symphony.sfs.ms.chat.health.SqsHealthIndicator;
 import com.symphony.sfs.ms.chat.service.EmpMicroserviceResolver;
 import com.symphony.sfs.ms.starter.health.CachedHealthIndicator;
 import com.symphony.sfs.ms.starter.health.DynamoDbHealthIndicator;
@@ -23,12 +25,15 @@ public class HealthMetricsConfiguration {
   private EmpMicroserviceResolver empMicroserviceResolver;
   private WebClient webClient;
   private AmazonDynamoDB amazonDynamoDB;
+  private AmazonSQSAsync amazonSqs;
 
-  public HealthMetricsConfiguration(HealthMeterService healthMeterService, EmpMicroserviceResolver empMicroserviceResolver, WebClient webClient, AmazonDynamoDB amazonDynamoDB) {
+
+  public HealthMetricsConfiguration(HealthMeterService healthMeterService, EmpMicroserviceResolver empMicroserviceResolver, WebClient webClient, AmazonDynamoDB amazonDynamoDB, AmazonSQSAsync amazonSqs) {
     this.healthMeterService = healthMeterService;
     this.empMicroserviceResolver = empMicroserviceResolver;
     this.webClient = webClient;
     this.amazonDynamoDB = amazonDynamoDB;
+    this.amazonSqs = amazonSqs;
   }
 
   @PostConstruct
@@ -37,6 +42,9 @@ public class HealthMetricsConfiguration {
 
     HealthIndicator dynamoHealth = new CachedHealthIndicator(cacheTtl, new DynamoDbHealthIndicator(amazonDynamoDB));
     healthMeterService.registerHealthMeter("db", dynamoHealth);
+
+    HealthIndicator sqsHealth = new CachedHealthIndicator(cacheTtl, new SqsHealthIndicator(amazonSqs));
+    healthMeterService.registerHealthMeter("sqs", sqsHealth);
 
     List<MicroserviceHealthIndicator> indicators = buildHealthIndicatorForMicroservices(webClient, empMicroserviceResolver.getAllEmpMicroserviceBaseUris());
     indicators.forEach(indicator -> healthMeterService.registerHealthMeter(indicator.getMicroserviceName(), getCachedTimeoutIndicator(indicator)));

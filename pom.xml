@@ -11,11 +11,66 @@
 
   <artifactId>sfs-ms-chat-gateway</artifactId>
 
+  <properties>
+    <allegro.model.version>0.0.16</allegro.model.version>
+    <chat.model.version>0.3.9</chat.model.version>
+    <canon.runtime.version>0.2.18</canon.runtime.version>
+    <symphony.client.version>1.0.30</symphony.client.version>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>com.symphony.sfs</groupId>
       <artifactId>sfs-ms-starter</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-aws-messaging</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.symphony.oss.models</groupId>
+      <artifactId>allegro-model</artifactId>
+      <version>${allegro.model.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.freemarker</groupId>
+          <artifactId>freemarker</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.symphony.oss.models</groupId>
+      <artifactId>chat-model</artifactId>
+      <version>${chat.model.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.symphony.s2.model</groupId>
+      <artifactId>chat-model-impl</artifactId>
+      <version>${chat.model.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.symphonyoss.s2.canon</groupId>
+      <artifactId>canon-runtime-java</artifactId>
+      <version>${canon.runtime.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.symphony</groupId>
+      <artifactId>symphony-client</artifactId>
+      <version>${symphony.client.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>log4j-slf4j-impl</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-guava</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>com.symphony.sfs</groupId>
       <artifactId>sfs-ms-test-starter</artifactId>
@@ -30,6 +85,18 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs>
+            <!-- for the cryptolib -->
+            <arg>--add-exports=java.base/sun.security.x509=ALL-UNNAMED</arg>
+            <arg>--add-exports=java.base/sun.security.util=ALL-UNNAMED</arg>
+          </compilerArgs>
+        </configuration>
       </plugin>
     </plugins>
   </build>
