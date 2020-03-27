@@ -5,7 +5,7 @@
   <parent>
     <artifactId>sfs-ms-parent</artifactId>
     <groupId>com.symphony.sfs</groupId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.4.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -23,6 +23,13 @@
       <groupId>com.symphony.sfs</groupId>
       <artifactId>sfs-ms-starter</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.symphony.sfs</groupId>
+      <artifactId>sfs-ms-test-starter</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.cloud</groupId>
       <artifactId>spring-cloud-aws-messaging</artifactId>
@@ -43,6 +50,20 @@
       <groupId>com.symphony.oss.models</groupId>
       <artifactId>chat-model</artifactId>
       <version>${chat.model.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-http</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-util</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.symphony.s2.model</groupId>
@@ -70,13 +91,6 @@
       <artifactId>jackson-datatype-guava</artifactId>
       <version>${jackson.version}</version>
     </dependency>
-
-    <dependency>
-      <groupId>com.symphony.sfs</groupId>
-      <artifactId>sfs-ms-test-starter</artifactId>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
 
   <build>
@@ -85,6 +99,19 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+
+      <plugin>
+        <groupId>io.swagger.codegen.v3</groupId>
+        <artifactId>swagger-codegen-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <configuration>
+              <apiPackage>com.symphony.sfs.ms.chat.generated.api</apiPackage>
+              <modelPackage>com.symphony.sfs.ms.chat.generated.model</modelPackage>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
 
       <plugin>

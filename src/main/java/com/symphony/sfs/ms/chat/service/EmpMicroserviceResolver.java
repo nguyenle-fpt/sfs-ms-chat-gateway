@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.symphony.sfs.ms.chat.service.emp.EmpEntity;
 import com.symphony.sfs.ms.starter.exception.MicroserviceNotFound;
 import com.symphony.sfs.ms.starter.service.MicroserviceResolver;
 import lombok.extern.slf4j.Slf4j;

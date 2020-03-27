@@ -4,6 +4,7 @@ import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import model.UserInfo;
 import org.springframework.stereotype.Component;
@@ -59,6 +60,7 @@ public class DatafeedSessionPool {
 
 
   @Getter
+  @EqualsAndHashCode(callSuper = true)
   public static class DatafeedSession extends UserSession {
     private Long userId;
 

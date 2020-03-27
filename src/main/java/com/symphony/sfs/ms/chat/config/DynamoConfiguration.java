@@ -10,9 +10,16 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.Map;
 
+import static com.symphony.sfs.ms.starter.dynamo.DynamoConstants.STANDARD_GSI_PARTITION_KEY;
+import static com.symphony.sfs.ms.starter.dynamo.DynamoConstants.STANDARD_GSI_SORT_KEY;
+
 @Configuration
 public class DynamoConfiguration extends BaseDynamoConfiguration {
   private final AwsDynamoConfiguration awsDynamoConfiguration;
+
+  public static String GSI1_IDX = "gsi1";
+  public static String GSI1_PK = "gsi1pk";
+  public static String GSI1_SK = "gsi1sk";
 
   public DynamoConfiguration(AwsDynamoConfiguration awsDynamoConfiguration) {
     this.awsDynamoConfiguration = awsDynamoConfiguration;
@@ -20,16 +27,11 @@ public class DynamoConfiguration extends BaseDynamoConfiguration {
 
   @Override
   public DynamoSchema getDynamoSchema() {
-    Pair<String, GlobalSecondaryKeyDefinition> standardGSI = GlobalSecondaryKeyDefinition.standard();
-    Pair<String, GlobalSecondaryKeyDefinition> invertedPrimaryKeyGSI = PrimaryKeyDefinition.swapped();
-
-    // inject the database schema for your microservice
     return DynamoSchema.builder()
       .tableName(awsDynamoConfiguration.getDynamodb().getTableName())
       .primaryKey(PrimaryKeyDefinition.standard())
-      .secondaryKeys(Map.ofEntries(
-        Map.entry(standardGSI.getKey(), standardGSI.getValue()),
-        Map.entry(invertedPrimaryKeyGSI.getKey(), invertedPrimaryKeyGSI.getValue())
+      .secondaryKeys(Map.of(
+        GSI1_IDX, new GlobalSecondaryKeyDefinition(GSI1_PK, GSI1_SK)
       ))
       .build();
   }

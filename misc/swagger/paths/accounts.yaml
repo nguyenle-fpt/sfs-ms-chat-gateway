@@ -1,0 +1,20 @@
+accounts:
+  post:
+    tags:
+      - Accounts
+    summary: Create a new account
+    operationId: createAccount
+    description: >
+      => Create a new account managed by the gateway.
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/accounts.yaml#/create-account-request'
+    responses:
+      '204':
+        description: The account has been successfully created
+        content:
+          application/json:
+            schema:
+              $ref: '../components/accounts.yaml#/create-account-response'

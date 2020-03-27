@@ -1,4 +1,4 @@
-package com.symphony.sfs.ms.chat.service;
+package com.symphony.sfs.ms.chat.service.emp;
 
 import java.util.HashMap;
 

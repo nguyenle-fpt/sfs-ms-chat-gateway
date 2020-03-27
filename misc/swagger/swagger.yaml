@@ -1,0 +1,11 @@
+openapi: 3.0.0
+info:
+  description: API for SFS MS Chat Gateway
+  version: "0.0.1"
+  title: SFS MS Chat Gateway API
+tags:
+  - name: Accounts
+    description: Accounts API
+paths:
+  /api/v1/accounts:
+    $ref: './paths/accounts.yaml#/accounts'

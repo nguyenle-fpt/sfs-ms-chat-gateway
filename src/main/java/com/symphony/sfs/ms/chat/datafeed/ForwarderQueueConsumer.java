@@ -48,7 +48,6 @@ public class ForwarderQueueConsumer {
   @Getter
   private final MultiListener<String> rawListeners = new MultiListener<>();
 
-  @Getter
   private final MultiDatafeedListener datafeedListener = new MultiDatafeedListener();
 
   public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor) {
@@ -68,6 +67,15 @@ public class ForwarderQueueConsumer {
       MaestroPayload.FACTORY,
       AuthenticationKey.FACTORY);
   }
+
+  public void registerDatafeedListener(DatafeedListener listener) {
+    datafeedListener.register(listener);
+  }
+
+  public void unregisterDatafeedListener(DatafeedListener listener) {
+    datafeedListener.unregister(listener);
+  }
+
 
   @SqsListener(value = {"${aws.sqs.ingestion:sfs-dev-federation-events}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
   public void consume(String notification) throws IOException {

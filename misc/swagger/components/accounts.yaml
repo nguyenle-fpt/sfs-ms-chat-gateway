@@ -1,0 +1,38 @@
+#Requests
+create-account-request:
+  type: object
+  required:
+    - phoneNumber
+    - emailAddress
+    - firstName
+    - lastName
+    - federatedUserId
+    - emp
+  properties:
+    phoneNumber:
+      type: string
+      format: phone
+    emailAddress:
+      type: string
+      format: email
+    firstName:
+      type: string
+    lastName:
+      type: string
+    federatedUserId:
+      type: string
+    emp:
+      type: string
+    advisors:
+      type: array
+      items:
+        type: string
+
+#Responses
+create-account-response:
+  type: object
+  properties:
+    symphonyUsername:
+      type: string
+    symphonyUserId:
+      type: string

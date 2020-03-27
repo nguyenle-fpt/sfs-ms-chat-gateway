@@ -16,6 +16,11 @@ pod:
   sessionAuth: https://ces3-dev.symphony.com
   keyAuth: https://ces3-dev.symphony.com
 
+bot:
+  username: sfs-admin
+  emailAddress: sfs-admin@symphony.com
+  privateKey: file:misc/rsa/sfs-admin_privatekey.pem
+
 agent:
   url: https://ces3-dev.symphony.com
 
@@ -25,4 +30,5 @@ microservices:
 microservice:
   chat:
     msAdminUrl: 'http://localhost:9600'
+    sharedPublicKey: file:misc/rsa/sa_publickey.pem
     sharedPrivateKey: file:misc/rsa/sa_privatekey.pem

@@ -18,5 +18,8 @@ public class ChatConfiguration {
   private String msAdminUrl;
 
   @NotNull
+  private Key sharedPublicKey;
+
+  @NotNull
   private Key sharedPrivateKey;
 }

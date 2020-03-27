@@ -1,6 +1,8 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
+import com.symphony.sfs.ms.chat.service.emp.EmpEntity;
+import com.symphony.sfs.ms.chat.service.emp.EmpList;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
