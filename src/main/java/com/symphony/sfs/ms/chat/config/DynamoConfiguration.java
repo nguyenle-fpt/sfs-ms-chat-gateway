@@ -5,7 +5,6 @@ import com.symphony.sfs.ms.starter.config.properties.AwsDynamoConfiguration;
 import com.symphony.sfs.ms.starter.dynamo.schema.DynamoSchema;
 import com.symphony.sfs.ms.starter.dynamo.schema.GlobalSecondaryKeyDefinition;
 import com.symphony.sfs.ms.starter.dynamo.schema.PrimaryKeyDefinition;
-import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.Map;

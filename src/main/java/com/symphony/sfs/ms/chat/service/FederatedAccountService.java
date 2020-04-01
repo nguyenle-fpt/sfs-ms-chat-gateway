@@ -1,12 +1,16 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
+import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
-import com.symphony.sfs.ms.chat.exception.FederatedAccountAlreadyExistsProblem;
+import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
+import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
+import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
@@ -17,10 +21,13 @@ import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,31 +36,26 @@ import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUserAttributes.A
 import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUserKeyRequest.ACTION_SAVE;
 
 @Slf4j
+@Service
+@RequiredArgsConstructor
 public class FederatedAccountService implements DatafeedListener {
 
   public static final String EMAIL_DOMAIN = "ces.symphony.com";
 
-  private DatafeedSessionPool datafeedSessionPool;
-  private FederatedAccountRepository federatedAccountRepository;
-  private AdminUserManagementService adminUserManagementService;
-  private AuthenticationService authenticationService;
-  private PodConfiguration podConfiguration;
-  private BotConfiguration botConfiguration;
-  private ChatConfiguration chatConfiguration;
+  private final DatafeedSessionPool datafeedSessionPool;
+  private final FederatedAccountRepository federatedAccountRepository;
+  private final AdminUserManagementService adminUserManagementService;
+  private final AuthenticationService authenticationService;
+  private final PodConfiguration podConfiguration;
+  private final BotConfiguration botConfiguration;
+  private final ChatConfiguration chatConfiguration;
+  private final ConnectionRequestManager connectionRequestManager;
+  private final ChannelService channelService;
 
-  public FederatedAccountService(DatafeedSessionPool datafeedSessionPool, FederatedAccountRepository federatedAccountRepository, AdminUserManagementService adminUserManagementService, AuthenticationService authenticationService, PodConfiguration podConfiguration, BotConfiguration botConfiguration, ChatConfiguration chatConfiguration) {
-    this.datafeedSessionPool = datafeedSessionPool;
-    this.federatedAccountRepository = federatedAccountRepository;
-    this.adminUserManagementService = adminUserManagementService;
-    this.authenticationService = authenticationService;
-    this.podConfiguration = podConfiguration;
-    this.botConfiguration = botConfiguration;
-    this.chatConfiguration = chatConfiguration;
-  }
-
-  @Override
-  public void onIMCreated(String streamId, List<Long> members, IUser initiator, boolean crosspod) {
-    // TODO
+  @PostConstruct
+  @VisibleForTesting
+  public void registerAsDatafeedListener(ForwarderQueueConsumer forwarderQueueConsumer) {
+    forwarderQueueConsumer.registerDatafeedListener(this);
   }
 
   public FederatedAccount createAccount(CreateAccountRequest request) {
@@ -66,13 +68,16 @@ public class FederatedAccountService implements DatafeedListener {
       SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmp());
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
-      datafeedSessionPool.listenDatafeed(
+      DatafeedSession session = datafeedSessionPool.listenDatafeed(
         symphonyUser.getUserAttributes().getUserName(),
         symphonyUser.getUserSystemInfo().getId()
       );
 
       if (request.getAdvisors() != null && !request.getAdvisors().isEmpty()) {
-        // TODO
+        String advisorSymphonyId = request.getAdvisors().get(0);
+        if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
+          channelService.createIMChannel(session, federatedAccount, advisorSymphonyId);
+        }
       }
 
       return federatedAccount;
@@ -80,6 +85,13 @@ public class FederatedAccountService implements DatafeedListener {
       LOG.debug("Failed to save the federated account repository", e);
       throw new FederatedAccountAlreadyExistsProblem();
     }
+  }
+
+  public void onConnectionAccepted(IUser requesting, IUser requested) {
+    federatedAccountRepository.findBySymphonyUserId(requesting.getId().getUserId().toString())
+      .ifPresent(account -> {
+        channelService.createIMChannel(account, requested.getId().getUserId().toString());
+      });
   }
 
   public SymphonyUser createSymphonyUser(String firstName, String lastName, String emp) {
@@ -105,7 +117,8 @@ public class FederatedAccountService implements DatafeedListener {
       .roles(Arrays.asList(ROLE_INDIVIDUAL))
       .build();
 
-    return adminUserManagementService.createUser(user, podConfiguration.getUrl(), botSession);
+    return adminUserManagementService.createUser(user, podConfiguration.getUrl(), botSession)
+      .orElseThrow(CreateUserFailedProblem::new);
   }
 
   private String displayName(String firstName, String lastName, String emp) {
@@ -113,22 +126,14 @@ public class FederatedAccountService implements DatafeedListener {
   }
 
   /**
-   * Returns a username with pattern: {emp}_{random string}
-   *
-   * @param emp
-   * @param uuid
-   * @return
+   * Returns a username with pattern: {emp}_{random uuid}
    */
   private String userName(String emp, String uuid) {
     return emp + '_' + uuid;
   }
 
   /**
-   * Returns an email address with pattern: {emp}_{random string}@{EMAIL_DOMAIN}
-   *
-   * @param emp
-   * @param uuid
-   * @return
+   * Returns an email address with pattern: {emp}_{random uuid}@{EMAIL_DOMAIN}
    */
   private String emailAddress(String emp, String uuid) {
     return emp + '_' + uuid + '@' + EMAIL_DOMAIN;

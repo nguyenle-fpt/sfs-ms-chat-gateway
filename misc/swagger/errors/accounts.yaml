@@ -1,0 +1,56 @@
+account-already-exists:
+  type: object
+  description: 'Federated account already exists'
+  properties:
+    type:
+      type: string
+      format: 'federated.account.already.exists'
+    title:
+      type: string
+      format: 'Federated account already exists'
+    status:
+      type: integer
+      format: 409
+
+cannot-retrieve-streamid:
+  type: object
+  description: 'Cannot retrieve the stream id'
+  properties:
+    type:
+      type: string
+      format: 'cannot.retrieve.stream.id'
+    title:
+      type: string
+      format: 'Cannot retrieve the stream id'
+    status:
+      type: integer
+      format: 500
+
+create-channel-failed:
+  type: object
+  description: 'Unable to create the channel'
+  properties:
+    type:
+      type: string
+      format: 'create.channel.failed'
+    title:
+      type: string
+      format: 'Unable to create the channel'
+    status:
+      type: integer
+      format: 500
+
+
+create-user-failed:
+  type: object
+  description: 'Unable to create the user'
+  properties:
+    type:
+      type: string
+      format: 'create.user.failed'
+    title:
+      type: string
+      format: 'Unable to create the channel'
+    status:
+      type: integer
+      format: 500

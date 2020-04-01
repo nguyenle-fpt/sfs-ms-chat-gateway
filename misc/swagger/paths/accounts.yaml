@@ -18,3 +18,18 @@ accounts:
           application/json:
             schema:
               $ref: '../components/accounts.yaml#/create-account-response'
+      '409':
+        description: Conflict
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/accounts.yaml#/account-already-exists'
+      '500':
+        description: Server Error
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/accounts.yaml#/cannot-retrieve-streamid'
+                - $ref: '../errors/accounts.yaml#/create-channel-failed'
+                - $ref: '../errors/accounts.yaml#/create-user-failed'

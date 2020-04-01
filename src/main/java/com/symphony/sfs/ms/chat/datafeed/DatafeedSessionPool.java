@@ -31,12 +31,16 @@ public class DatafeedSessionPool {
   public DatafeedSession listenDatafeed(String username) {
     UserSession session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), username, chatConfiguration.getSharedPrivateKey().getData());
     UserInfo info = authenticationService.getUserInfo(podConfiguration.getUrl(), session, true).get(); // TODO proper exception
-    return sessions.put(username, new DatafeedSession(session, info.getId()));
+    DatafeedSession datafeedSession = new DatafeedSession(session, info.getId().toString());
+    sessions.put(username, datafeedSession);
+    return datafeedSession;
   }
 
   public DatafeedSession listenDatafeed(String username, Long userId) {
     UserSession session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), username, chatConfiguration.getSharedPrivateKey().getData());
-    return sessions.put(username, new DatafeedSession(session, userId));
+    DatafeedSession datafeedSession = new DatafeedSession(session, userId.toString());
+    sessions.put(username, datafeedSession);
+    return datafeedSession;
   }
 
   public DatafeedSession getSession(String username) {
@@ -62,11 +66,15 @@ public class DatafeedSessionPool {
   @Getter
   @EqualsAndHashCode(callSuper = true)
   public static class DatafeedSession extends UserSession {
-    private Long userId;
+    private String userId;
 
-    public DatafeedSession(UserSession session, Long userId) {
+    public DatafeedSession(UserSession session, String userId) {
       super(session.getUsername(), session.getJwt(), session.getKmToken(), session.getSessionToken());
       this.userId = userId;
+    }
+
+    public Long getUserIdAsLong() {
+      return Long.valueOf(userId);
     }
   }
 }

@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
+
 import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_IDX;
 import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_PK;
 import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_SK;
