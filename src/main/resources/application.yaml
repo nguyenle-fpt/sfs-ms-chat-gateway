@@ -10,6 +10,10 @@ aws:
     tableName: sfs-ms-chat-gateway
     endpoint: http://localhost:4569 # localstack
     signinRegion: us-east-1
+  sqs:
+    endpoint: http://localhost:4576 # localstack
+    signinRegion: us-east-1
+    ingestion: sfs-federation-events
   paramstore:
     prefix: /sfs
     name: ms-chat-gateway

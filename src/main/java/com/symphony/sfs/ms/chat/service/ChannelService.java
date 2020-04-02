@@ -29,10 +29,11 @@ public class ChannelService implements DatafeedListener {
   private final PodConfiguration podConfiguration;
   private final ChatConfiguration chatConfiguration;
   private final EmpClient empClient;
+  private final ForwarderQueueConsumer forwarderQueueConsumer;
 
   @PostConstruct
   @VisibleForTesting
-  public void registerAsDatafeedListener(ForwarderQueueConsumer forwarderQueueConsumer) {
+  public void registerAsDatafeedListener() {
     forwarderQueueConsumer.registerDatafeedListener(this);
   }
 

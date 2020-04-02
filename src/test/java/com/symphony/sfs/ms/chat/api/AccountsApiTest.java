@@ -62,8 +62,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       botConfiguration,
       chatConfiguration,
       connectionRequestManager,
-      channelService);
-    federatedAccountService.registerAsDatafeedListener(forwarderQueueConsumer);
+      channelService,
+      forwarderQueueConsumer);
+    federatedAccountService.registerAsDatafeedListener();
 
     accountsApi = new AccountsApi(federatedAccountService);
   }

@@ -88,8 +88,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     streamService = new StreamService(webClient);
     connectionsServices = new ConnectionsService(webClient);
     connectionRequestManager = new ConnectionRequestManager(connectionsServices, podConfiguration);
-    channelService = new ChannelService(streamService, authenticationService, podConfiguration, chatConfiguration, empClient);
-    channelService.registerAsDatafeedListener(forwarderQueueConsumer);
+    channelService = new ChannelService(streamService, authenticationService, podConfiguration, chatConfiguration, empClient, forwarderQueueConsumer);
+    channelService.registerAsDatafeedListener();
   }
 
   @AfterEach

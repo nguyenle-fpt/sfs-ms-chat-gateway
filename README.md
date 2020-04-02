@@ -22,3 +22,6 @@ Test that the queue receive data:
 aws sqs receive-message --queue-url <QUEUE_URL> --wait-time-seconds 20  
 ```
 
+## Create a local forwarder topic
+
+aws --endpoint-url=http://localhost:4576 sqs create-queue --queue-name sfs-federation-events

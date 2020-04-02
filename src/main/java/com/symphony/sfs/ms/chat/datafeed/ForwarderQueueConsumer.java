@@ -77,7 +77,7 @@ public class ForwarderQueueConsumer {
   }
 
 
-  @SqsListener(value = {"${aws.sqs.ingestion:sfs-dev-federation-events}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
+  @SqsListener(value = {"${aws.sqs.ingestion}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
   public void consume(String notification) throws IOException {
     ISNSSQSWireObject sqsObject = SNSSQSWireObjectEntity.FACTORY.newInstance(JacksonAdaptor.adaptObject((ObjectNode) objectMapper.readTree(notification)).immutify(), modelRegistry);
     String payloadType = sqsObject.getJsonObject().getObject("MessageAttributes").getObject("payloadType").get("Value").toString();

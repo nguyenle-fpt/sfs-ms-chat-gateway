@@ -51,10 +51,11 @@ public class FederatedAccountService implements DatafeedListener {
   private final ChatConfiguration chatConfiguration;
   private final ConnectionRequestManager connectionRequestManager;
   private final ChannelService channelService;
+  private final ForwarderQueueConsumer forwarderQueueConsumer;
 
   @PostConstruct
   @VisibleForTesting
-  public void registerAsDatafeedListener(ForwarderQueueConsumer forwarderQueueConsumer) {
+  public void registerAsDatafeedListener() {
     forwarderQueueConsumer.registerDatafeedListener(this);
   }
 

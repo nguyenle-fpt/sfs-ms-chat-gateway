@@ -2,7 +2,8 @@ aws:
   paramstore:
     enabled: false
   sqs:
-    endpoint: https://sqs.us-east-1.amazonaws.com
+    #endpoint: https://sqs.us-east-1.amazonaws.com
+    #ingestion: sfs-dev-federation-events
     signinRegion: us-east-1
 
 tds:
