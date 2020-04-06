@@ -18,7 +18,7 @@ import static com.symphony.sfs.ms.starter.util.WebClientUtils.logWebClientError;
 @Slf4j
 public class EmpSchemaService {
 
-  public static final String EMPS_ENDPOINT = "/api/v1/emps";
+  public static final String EMPS_ENDPOINT = "/api/v1/internal/emps";
 
   private final WebClient webClient;
   private final ChatConfiguration chatConfiguration;
@@ -45,6 +45,10 @@ public class EmpSchemaService {
         .retrieve()
         .bodyToMono(EmpList.class)
         .block();
+
+      LOG.info("Loaded {} EMP definitions: {}", emps.size(), emps.keySet());
+      LOG.debug("{}", emps);
+
       return emps;
     } catch (Exception e) {
       logWebClientError(LOG, EMPS_ENDPOINT, e);

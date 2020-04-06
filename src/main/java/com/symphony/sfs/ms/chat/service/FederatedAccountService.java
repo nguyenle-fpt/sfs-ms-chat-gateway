@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.security.utils.SecurityKeyUtils;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -22,11 +23,13 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
+import com.symphony.sfs.ms.starter.util.RsaUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
@@ -98,8 +101,15 @@ public class FederatedAccountService implements DatafeedListener {
   public SymphonyUser createSymphonyUser(String firstName, String lastName, String emp) {
     UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
+    String publicKey = null;
+    try {
+      publicKey = RsaUtils.encodeRSAKey(RsaUtils.parseRSAPublicKey(chatConfiguration.getSharedPublicKey().getData()));
+    } catch (GeneralSecurityException e) {
+      LOG.error("Cannot parse shared public key");
+    }
+
     SymphonyUserKeyRequest userKey = SymphonyUserKeyRequest.builder()
-      .key(chatConfiguration.getSharedPublicKey().getData())
+      .key(publicKey)
       .action(ACTION_SAVE)
       .build();
 

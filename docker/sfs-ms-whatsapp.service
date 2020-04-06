@@ -1,0 +1,17 @@
+[Unit]
+Description=sfs-ms-chat-gateway
+After=network.target
+
+[Service]
+Type=simple
+User=sfs
+WorkingDirectory=/opt/symphony/sfs-ms-chat-gateway
+ExecStart=/opt/symphony/sfs-ms-chat-gateway/startup.sh
+TimeoutSec=15
+Restart=always
+Environment=LOGGING_PATH=./
+Environment=PARAMSTORE=1
+Environment=SPRING_PROFILES_ACTIVE=dev
+
+[Install]
+WantedBy=default.target

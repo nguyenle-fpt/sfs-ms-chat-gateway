@@ -22,12 +22,16 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
 import com.symphony.sfs.ms.starter.testing.LocalProfileTest;
 import com.symphony.sfs.ms.starter.testing.RestApiTest;
+import com.symphony.sfs.ms.starter.util.RsaUtils;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import javax.net.ssl.SSLException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
@@ -48,14 +52,20 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected ConnectionRequestManager connectionRequestManager;
   protected ChannelService channelService;
   protected ForwarderQueueConsumer forwarderQueueConsumer;
+  protected KeyPair keyPair;
 
   @BeforeEach
-  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws SSLException {
+  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     this.mockServer = mockServer;
     webClient = buildTestClient();
 
     dynamoConfiguration = provisionTestTable(db);
     objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
+
+    // keys
+    KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+    kpg.initialize(2048);
+    keyPair = kpg.generateKeyPair();
 
     // configurations
     podConfiguration = new PodConfiguration();
@@ -64,12 +74,12 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     podConfiguration.setSessionAuth(podConfiguration.getUrl());
 
     botConfiguration = new BotConfiguration();
-    botConfiguration.setPrivateKey(mock(Key.class));
+    botConfiguration.setPrivateKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
     botConfiguration.setUsername("bot");
 
     chatConfiguration = new ChatConfiguration();
-    chatConfiguration.setSharedPrivateKey(mock(Key.class));
-    chatConfiguration.setSharedPublicKey(mock(Key.class));
+    chatConfiguration.setSharedPrivateKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
+    chatConfiguration.setSharedPublicKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPublic())));
 
     // emp client
     empClient = new MockEmpClient();

@@ -25,7 +25,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 
-import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.util.Collections;
 
@@ -38,8 +37,8 @@ import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_E
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 public class AccountsApiTest extends AbstractIntegrationTest {
@@ -49,7 +48,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   protected AccountsApi accountsApi;
 
   @BeforeEach
-  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws SSLException {
+  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     super.setUp(db, mockServer);
 
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
@@ -74,8 +73,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     UserSession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), (String) isNull())).thenReturn(botSession);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), (String) isNull())).thenReturn(accountSession);
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
     SymphonyUser symphonyUser = new SymphonyUser();
     symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
@@ -133,8 +132,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     UserSession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), (String) isNull())).thenReturn(botSession);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), (String) isNull())).thenReturn(accountSession);
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
     SymphonyUser symphonyUser = new SymphonyUser();
     symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
@@ -194,8 +193,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     UserSession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), (String) isNull())).thenReturn(botSession);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), (String) isNull())).thenReturn(accountSession);
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
     SymphonyUser symphonyUser = new SymphonyUser();
     symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
@@ -277,7 +276,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   @Test
   public void createAccountWithoutAdvisors_AlreadyExists() {
     UserSession botSession = getSession(botConfiguration.getUsername());
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), (String) isNull())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
 
     FederatedAccount existingAccount = FederatedAccount.builder()
       .emailAddress("emailAddress@symphony.com")

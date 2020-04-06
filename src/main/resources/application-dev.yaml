@@ -4,11 +4,16 @@ logging:
     org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
 
 aws:
+  dynamodb:
+    tableName: sfs-ms-chat-gateway
+    endpoint: https://dynamodb.us-east-1.amazonaws.com
+    signinRegion: us-east-1
   paramstore:
-    enabled: false
+    prefix: /sfs
+    name: ms-chat-gateway
   sqs:
-    #endpoint: https://sqs.us-east-1.amazonaws.com
-    #ingestion: sfs-dev-federation-events
+    endpoint: https://sqs.us-east-1.amazonaws.com
+    ingestion: sfs-dev-federation-events
     signinRegion: us-east-1
 
 tds:
@@ -25,16 +30,16 @@ pod:
 bot:
   username: sfs-admin
   emailAddress: sfs-admin@symphony.com
-  privateKey: file:misc/certs/sfs-admin_privatekey.pem
+  privateKey: file:certs/sfs-admin_privatekey.pem
 
 agent:
   url: https://ces3-dev.symphony.com
 
 microservices:
-  WHATSAPP: 'http://localhost:9601'
+  WHATSAPP: 'https://federation-dev.symphony.com:9601'
 
 microservice:
   chat:
-    msAdminUrl: 'https://localhost:9600'
-    sharedPublicKey: file:misc/certs/sa_publickey.pem
-    sharedPrivateKey: file:misc/certs/sa_privatekey.pem
+    msAdminUrl: 'https://federation-dev.symphony.com:9600'
+    sharedPublicKey: file:certs/sa_publickey.pem
+    sharedPrivateKey: file:certs/sa_privatekey.pem
