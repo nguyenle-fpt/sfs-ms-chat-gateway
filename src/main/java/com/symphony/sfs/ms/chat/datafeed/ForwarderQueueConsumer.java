@@ -108,11 +108,12 @@ public class ForwarderQueueConsumer {
     String messageId = socialMessage.getMessageId().toBase64UrlSafeString();
     String streamId = socialMessage.getThreadId().toBase64UrlSafeString();
     Long timestamp = socialMessage.getIngestionDate().asLong(); // or getActualIngestionDate()?
+    IUser fromUser = socialMessage.getFrom(); // or getActualFromUser()?
 
     try {
-      LOG.debug("onIMMessage streamId={} messageId={} timestamp={} message={}", streamId, messageId, timestamp, socialMessage.getText());
+      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, timestamp={} message={}", streamId, messageId, fromUser.getId().getUserId().asLong(), timestamp, socialMessage.getText());
       String text = messageDecryptor.decrypt(socialMessage);
-      datafeedListener.onIMMessage(streamId, messageId, timestamp, text);
+      datafeedListener.onIMMessage(streamId, messageId, fromUser, timestamp, text);
     } catch (UnknownDatafeedUserException e) {
       LOG.debug("Unmanaged user {}", e.getMessage());
     }

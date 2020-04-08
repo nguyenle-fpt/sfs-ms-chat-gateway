@@ -12,6 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,6 +34,30 @@ public class DefaultEmpClient implements EmpClient {
   @Override
   public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
     URI uri = empMicroserviceResolver.buildEmpMicroserviceUri(emp, CREATE_CHANNEL_ENDPOINT);
+    List<ChannelMember> members = toChannelMembers(federatedUsers, initiatorUserId, symphonyUsers);
+
+    return post(new CreateChannelRequest(streamId, members), uri, AsyncResponse.class)
+      .map(AsyncResponse::getOperationId);
+  }
+
+  @Override
+  public Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message) {
+    URI uri = empMicroserviceResolver.buildEmpMicroserviceUri(emp, SEND_MESSAGE_ENDPOINT);
+
+    List<ChannelMember> channelMembers = toChannelMembers(Collections.singletonList(toFederatedAccount), fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser));
+
+    return post(new SendMessageToEmpRequest(streamId, messageId, channelMembers, fromSymphonyUser.getId().toString(), timestamp, message), uri, AsyncResponse.class)
+      .map(AsyncResponse::getOperationId);
+  }
+
+  /**
+   * @param federatedUsers
+   * @param initiatorUserId
+   * @param symphonyUsers
+   * @return
+   */
+  private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
+
     List<ChannelMember> members = new ArrayList<>();
     federatedUsers.forEach(account -> members.add(ChannelMember.builder()
       .emailAddress(account.getEmailAddress())
@@ -55,8 +80,7 @@ public class DefaultEmpClient implements EmpClient {
       .build()
     ));
 
-    return post(new CreateChannelRequest(streamId, members), uri, AsyncResponse.class)
-      .map(AsyncResponse::getOperationId);
+    return members;
   }
 
 

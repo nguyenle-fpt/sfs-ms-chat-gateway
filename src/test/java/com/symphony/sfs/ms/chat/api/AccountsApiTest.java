@@ -17,6 +17,9 @@ import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import com.symphony.sfs.ms.starter.symphony.stream.StringId;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import io.fabric8.mockwebserver.DefaultMockServer;
+import model.AdminUserAttributes;
+import model.AdminUserInfo;
+import model.AdminUserSystemInfo;
 import model.InboundConnectionRequest;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +34,7 @@ import java.util.Collections;
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
 import static clients.symphony.api.constants.PodConstants.GETCONNECTIONSTATUS;
 import static clients.symphony.api.constants.PodConstants.GETIM;
+import static clients.symphony.api.constants.PodConstants.GETUSERADMIN;
 import static clients.symphony.api.constants.PodConstants.SENDCONNECTIONREQUEST;
 import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
@@ -136,6 +140,24 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
+
+
+    AdminUserSystemInfo adminUserSystemInfo = new AdminUserSystemInfo();
+    adminUserSystemInfo.setId(2L);
+    AdminUserAttributes adminUserAttributes = new AdminUserAttributes();
+    adminUserAttributes.setUserName("username");
+    adminUserAttributes.setUserName("firstName");
+    adminUserAttributes.setUserName("lastName");
+    AdminUserInfo adminUserInfo = new AdminUserInfo();
+    adminUserInfo.setUserSystemInfo(adminUserSystemInfo);
+    adminUserInfo.setUserAttributes(adminUserAttributes);
+
+    mockServer.expect()
+      .get()
+      .withPath(GETUSERADMIN.replace("{uid}", "2"))
+      .andReturn(HttpStatus.OK.value(), adminUserInfo)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
 
     SymphonyUser symphonyUser = new SymphonyUser();
     symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());

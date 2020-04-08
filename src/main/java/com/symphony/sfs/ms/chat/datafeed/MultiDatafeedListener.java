@@ -29,8 +29,8 @@ public class MultiDatafeedListener implements DatafeedListener {
     listeners.forEach(l -> l.onConnectionAccepted(requesting, requested));
   }
 
-  public void onIMMessage(String streamId, String messageId, Long timestamp, String message) {
-    listeners.forEach(l -> l.onIMMessage(streamId, messageId, timestamp, message));
+  public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, Long timestamp, String message) {
+    listeners.forEach(l -> l.onIMMessage(streamId, messageId, fromSymphonyUser, timestamp, message));
   }
 
   public void register(DatafeedListener listener) {
