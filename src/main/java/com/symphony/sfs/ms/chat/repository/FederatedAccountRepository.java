@@ -38,7 +38,7 @@ public class FederatedAccountRepository extends AbstractRawDynamoRepository {
     amazonDynamoDB.putItem(new PutItemRequest()
       .withTableName(schema.getTableName())
       .withItem(map)
-      .withConditionExpression("attribute_not_exists(" + pkName + ")")
+      .withConditionExpression("attribute_not_exists(" + pkName + ") AND attribute_not_exists(" + skName + ")")
     );
 
     LOG.debug("Document {}={}, {}={} successfully inserted",
@@ -57,8 +57,8 @@ public class FederatedAccountRepository extends AbstractRawDynamoRepository {
     return findByPrimaryKey(federatedAccountPk(federatedUserId), federatedAccountSk(emp), FederatedAccount::new);
   }
 
-  public Optional<FederatedAccount> findBySymphonyUserId(String symphonyUserId) {
-    return findBySecondaryKey(GSI1_IDX, federatedAccountGsi1Pk(symphonyUserId), federatedAccountGsi1Sk(), FederatedAccount::new);
+  public Optional<FederatedAccount> findBySymphonyId(String symphonyId) {
+    return findBySecondaryKey(GSI1_IDX, federatedAccountGsi1Pk(symphonyId), federatedAccountGsi1Sk(), FederatedAccount::new);
   }
 
 }

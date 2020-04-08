@@ -1,62 +1,78 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
+import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import model.UserInfo;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-@Component
+@Service
+@RequiredArgsConstructor
 public class DatafeedSessionPool {
 
-  private AuthenticationService authenticationService;
-  private PodConfiguration podConfiguration;
-  private ChatConfiguration chatConfiguration;
+  private final AuthenticationService authenticationService;
+  private final PodConfiguration podConfiguration;
+  private final ChatConfiguration chatConfiguration;
+  private final FederatedAccountSessionService federatedAccountSessionService;
 
   private Map<String, DatafeedSession> sessions = new HashMap<>();
 
-  public DatafeedSessionPool(AuthenticationService authenticationService, PodConfiguration podConfiguration, ChatConfiguration chatConfiguration) {
-    this.authenticationService = authenticationService;
-    this.podConfiguration = podConfiguration;
-    this.chatConfiguration = chatConfiguration;
-  }
+  public DatafeedSession listenDatafeed(String symphonyId) throws UnknownDatafeedUserException {
+    FederatedAccount account = federatedAccountSessionService.findBySymphonyIdOrFail(symphonyId);
 
-  public DatafeedSession listenDatafeed(String username) {
-    UserSession session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), username, chatConfiguration.getSharedPrivateKey().getData());
-    UserInfo info = authenticationService.getUserInfo(podConfiguration.getUrl(), session, true).get(); // TODO proper exception
-    DatafeedSession datafeedSession = new DatafeedSession(session, info.getId().toString());
-    sessions.put(username, datafeedSession);
+    UserSession session = authenticationService.authenticate(
+      podConfiguration.getSessionAuth(),
+      podConfiguration.getKeyAuth(),
+      account.getSymphonyUsername(),
+      chatConfiguration.getSharedPrivateKey().getData());
+    federatedAccountSessionService.updateSession(account, session);
+
+    DatafeedSession datafeedSession = new DatafeedSession(session, symphonyId);
+    sessions.put(symphonyId, datafeedSession);
     return datafeedSession;
   }
 
-  public DatafeedSession listenDatafeed(String username, Long userId) {
-    UserSession session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), username, chatConfiguration.getSharedPrivateKey().getData());
-    DatafeedSession datafeedSession = new DatafeedSession(session, userId.toString());
-    sessions.put(username, datafeedSession);
-    return datafeedSession;
-  }
-
-  public DatafeedSession getSession(String username) {
-    return sessions.get(username);
-  }
-
-  public DatafeedSession refreshSession(String username, Long userId) {
-    DatafeedSession session = getSession(username);
+  public DatafeedSession getSession(String symphonyId) {
+    DatafeedSession session = sessions.get(symphonyId);
     if (session == null) {
-      return listenDatafeed(username, userId);
+      federatedAccountSessionService.findBySymphonyId(symphonyId)
+        .map(account -> new DatafeedSession(new UserSession(account.getSymphonyUsername(), null, account.getKmToken(), account.getSessionToken()), symphonyId))
+        .ifPresent(s -> sessions.put(symphonyId, s));
+
+      session = sessions.get(symphonyId);
+    }
+    return session;
+  }
+
+  public boolean sessionExists(String symphonyId) {
+    return getSession(symphonyId) != null;
+  }
+
+  public boolean sessionNotExists(String symphonyId) {
+    return !sessionExists(symphonyId);
+  }
+
+  public DatafeedSession refreshSession(String symphonyId) throws UnknownDatafeedUserException {
+    DatafeedSession session = getSession(symphonyId);
+    if (session == null) {
+      return listenDatafeed(symphonyId);
     }
 
     // ask for user info, to check if the session is active
     Optional<UserInfo> info = authenticationService.getUserInfo(podConfiguration.getUrl(), session, true);
     if (info.isEmpty()) {
-      return listenDatafeed(username, userId);
+      return listenDatafeed(symphonyId);
     }
 
     return session;

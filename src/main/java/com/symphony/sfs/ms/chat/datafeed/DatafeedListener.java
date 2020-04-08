@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface DatafeedListener {
 
-  default void onIMCreated(String streamId, List<Long> members, IUser initiator, boolean crosspod) {
+  default void onIMCreated(String streamId, List<String> members, IUser initiator, boolean crosspod) {
   }
 
   default void onConnectionRequested(IUser requesting, IUser requested) {
@@ -16,6 +16,9 @@ public interface DatafeedListener {
   }
 
   default void onConnectionAccepted(IUser requesting, IUser requested) {
+  }
+
+  default void onConnectionDeleted(IUser requesting, IUser requested) {
   }
 
   default void onIMMessage(String streamId, String messageId, Long timestamp, String message) {

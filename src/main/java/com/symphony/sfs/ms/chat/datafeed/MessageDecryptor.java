@@ -33,7 +33,7 @@ public class MessageDecryptor {
       // Get message ciphertext transport to extract rotation Id of key that was used to cipher the text.
       ICiphertextTransport msgCipherTransport = CiphertextFactory.getTransport(socialMessage.getText());
 
-      Long userId = socialMessage.getFrom().getId().longValue();
+      String userId = socialMessage.getFrom().getId().toString();
       String username = socialMessage.getFrom().getUsername();
       // TODO username can be null, we need to deal with userId -> username resolution
       byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), username, userId, msgCipherTransport.getRotationId());

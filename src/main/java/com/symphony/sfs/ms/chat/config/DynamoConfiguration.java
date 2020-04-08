@@ -9,9 +9,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.Map;
 
-import static com.symphony.sfs.ms.starter.dynamo.DynamoConstants.STANDARD_GSI_PARTITION_KEY;
-import static com.symphony.sfs.ms.starter.dynamo.DynamoConstants.STANDARD_GSI_SORT_KEY;
-
 @Configuration
 public class DynamoConfiguration extends BaseDynamoConfiguration {
   private final AwsDynamoConfiguration awsDynamoConfiguration;

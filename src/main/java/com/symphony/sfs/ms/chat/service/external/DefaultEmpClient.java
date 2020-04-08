@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.service.external;
 
+import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.EmpMicroserviceResolver;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,7 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<String> symphonyUserIds) {
+  public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
     URI uri = empMicroserviceResolver.buildEmpMicroserviceUri(emp, CREATE_CHANNEL_ENDPOINT);
     List<ChannelMember> members = new ArrayList<>();
     federatedUsers.forEach(account -> members.add(ChannelMember.builder()
@@ -45,15 +46,17 @@ public class DefaultEmpClient implements EmpClient {
       .build()
     ));
 
-    symphonyUserIds.forEach(userId -> members.add(ChannelMember.builder()
-      .symphonyId(userId)
+    symphonyUsers.forEach(user -> members.add(ChannelMember.builder()
+      .symphonyId(user.getId().toString())
+      .firstName(user.getFirstName())
+      .lastName(user.getSurname())
       .isFederatedUser(false)
-      .isInitiator(initiatorUserId.equals(userId))
+      .isInitiator(initiatorUserId.equals(user.getId().toString()))
       .build()
     ));
 
     return post(new CreateChannelRequest(streamId, members), uri, AsyncResponse.class)
-      .map(AsyncResponse::getLeaseId);
+      .map(AsyncResponse::getOperationId);
   }
 
 

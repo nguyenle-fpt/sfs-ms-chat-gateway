@@ -8,8 +8,10 @@ import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
+import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
@@ -28,10 +30,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import javax.net.ssl.SSLException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
@@ -52,6 +52,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected ConnectionRequestManager connectionRequestManager;
   protected ChannelService channelService;
   protected ForwarderQueueConsumer forwarderQueueConsumer;
+  protected FederatedAccountSessionService federatedAccountSessionService;
+  protected FederatedAccountRepository federatedAccountRepository;
   protected KeyPair keyPair;
 
   @BeforeEach
@@ -87,18 +89,20 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // authentication
     authenticationService = mock(AuthenticationService.class);
 
-    // datafeed
-    datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration);
+    // account and datafeed
+    federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
+    federatedAccountSessionService = new FederatedAccountSessionService(federatedAccountRepository);
+    datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService);
 
     ContentKeyManager contentKeyManager = new ContentKeyManager(podConfiguration, datafeedSessionPool);
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool);
 
     // services
     streamService = new StreamService(webClient);
     connectionsServices = new ConnectionsService(webClient);
     connectionRequestManager = new ConnectionRequestManager(connectionsServices, podConfiguration);
-    channelService = new ChannelService(streamService, authenticationService, podConfiguration, chatConfiguration, empClient, forwarderQueueConsumer);
+    channelService = new ChannelService(streamService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool);
     channelService.registerAsDatafeedListener();
   }
 

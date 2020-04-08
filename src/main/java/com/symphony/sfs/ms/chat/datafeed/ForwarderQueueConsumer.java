@@ -2,24 +2,20 @@ package com.symphony.sfs.ms.chat.datafeed;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.symphony.oss.models.chat.canon.AuthenticationKey;
-import com.symphony.oss.models.chat.canon.Entities;
+import com.symphony.oss.models.chat.canon.ChatModel;
 import com.symphony.oss.models.chat.canon.IMaestroMessage;
 import com.symphony.oss.models.chat.canon.ISNSSQSWireObject;
 import com.symphony.oss.models.chat.canon.MaestroEventType;
 import com.symphony.oss.models.chat.canon.MaestroMessage;
-import com.symphony.oss.models.chat.canon.MaestroPayload;
 import com.symphony.oss.models.chat.canon.SNSSQSWireObjectEntity;
-import com.symphony.oss.models.chat.canon.UserMention;
 import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.oss.models.chat.canon.facade.MaestroPayloadContainer;
 import com.symphony.oss.models.chat.canon.facade.SocialMessage;
-import com.symphony.oss.models.chat.canon.facade.User;
+import com.symphony.oss.models.core.canon.CoreModel;
 import com.symphony.oss.models.core.canon.facade.Envelope;
 import com.symphony.oss.models.core.canon.facade.IEnvelope;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
-import com.symphony.oss.models.core.canon.facade.UserId;
+import com.symphony.oss.models.crypto.canon.CryptoModel;
 import com.symphony.oss.models.fundamental.FundamentalModelRegistry;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import lombok.Getter;
@@ -27,7 +23,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base64;
 import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
 import org.springframework.cloud.aws.messaging.listener.annotation.SqsListener;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
+import org.symphonyoss.s2.canon.runtime.IEntityFactory;
 import org.symphonyoss.s2.canon.runtime.ModelRegistry;
 import org.symphonyoss.s2.common.dom.json.IJsonObject;
 import org.symphonyoss.s2.common.dom.json.jackson.JacksonAdaptor;
@@ -36,36 +33,42 @@ import org.symphonyoss.s2.common.immutable.ImmutableByteArray;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-@Component
+@Service
 @Slf4j
 public class ForwarderQueueConsumer {
 
   private final ObjectMapper objectMapper;
-  private final ModelRegistry modelRegistry;
   private final MessageDecryptor messageDecryptor;
+  private final DatafeedSessionPool datafeedSessionPool;
+  private final ModelRegistry modelRegistry;
 
   @Getter
   private final MultiListener<String> rawListeners = new MultiListener<>();
 
   private final MultiDatafeedListener datafeedListener = new MultiDatafeedListener();
 
-  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor) {
+  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool) {
     this.objectMapper = objectMapper;
     this.messageDecryptor = messageDecryptor;
+    this.datafeedSessionPool = datafeedSessionPool;
 
-    // To refine, is ChatModel.FACTORIES a viable alternative?
-    modelRegistry = new FundamentalModelRegistry().withFactories(
-      SNSSQSWireObjectEntity.FACTORY,
-      Envelope.FACTORY,
-      MaestroMessage.FACTORY,
-      SocialMessage.FACTORY,
-      Entities.FACTORY,
-      User.FACTORY,
-      UserMention.FACTORY,
-      MaestroPayloadContainer.FACTORY,
-      MaestroPayload.FACTORY,
-      AuthenticationKey.FACTORY);
+    // Hell...
+    IEntityFactory<?, ?, ?>[] factories = Stream.of(
+      Stream.of(CoreModel.FACTORIES),
+      // Stream.of(FundamentalModel.FACTORIES),
+      // Stream.of(AllegroModel.FACTORIES),
+      Stream.of(ChatModel.FACTORIES),
+      Stream.of(CryptoModel.FACTORIES)
+      // Stream.of(SystemModel.FACTORIES)
+    )
+      .reduce(Stream::concat)
+      .orElseGet(Stream::empty)
+      .collect(Collectors.toList())
+      .toArray(new IEntityFactory<?, ?, ?>[0]);
+
+    modelRegistry = new FundamentalModelRegistry().withFactories(factories);
   }
 
   public void registerDatafeedListener(DatafeedListener listener) {
@@ -75,7 +78,6 @@ public class ForwarderQueueConsumer {
   public void unregisterDatafeedListener(DatafeedListener listener) {
     datafeedListener.unregister(listener);
   }
-
 
   @SqsListener(value = {"${aws.sqs.ingestion}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
   public void consume(String notification) throws IOException {
@@ -100,7 +102,7 @@ public class ForwarderQueueConsumer {
   private void notifySocialMessage(ISNSSQSWireObject sqsObject) throws IOException {
     IEnvelope envelope = parseEnvelope(sqsObject);
 
-    // Getting the SocialMessage from the envelope.
+    // getting the SocialMessage from the envelope
     ISocialMessage socialMessage = SocialMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
 
     String messageId = socialMessage.getMessageId().toBase64UrlSafeString();
@@ -119,7 +121,7 @@ public class ForwarderQueueConsumer {
   private void notifyMaestroMessage(ISNSSQSWireObject sqsObject) throws IOException {
     IEnvelope envelope = parseEnvelope(sqsObject);
 
-    // Getting the MaestroMessage from the envelope.
+    // getting the MaestroMessage from the envelope
     IMaestroMessage maestroMessage = MaestroMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
 
     MaestroEventType eventType = maestroMessage.getEvent();
@@ -150,6 +152,12 @@ public class ForwarderQueueConsumer {
     IUser affectedUser = message.getAffectedUsers().get(0);
     IUser requesting = message.getRequestingUser();
 
+    // if there is no session for both members of the connection request, it means that this user is not managed by our gateway
+    if (!datafeedSessionPool.sessionExists(requesting.getId().toString()) && !datafeedSessionPool.sessionExists(affectedUser.getId().toString())) {
+      LOG.warn("Connection request with no gateway-managed accounts: {}, {}", requesting.getUsername(), affectedUser.getUsername());
+      return;
+    }
+
     if ("pending_incoming".equalsIgnoreCase(status)) {
       LOG.debug("onIMCreated requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
       datafeedListener.onConnectionRequested(requesting, affectedUser);
@@ -159,6 +167,9 @@ public class ForwarderQueueConsumer {
     } else if ("refused".equalsIgnoreCase(status)) {
       LOG.debug("onConnectionRefused requesting={} requested={}", affectedUser.getUsername(), requesting.getUsername());
       datafeedListener.onConnectionRefused(affectedUser, requesting);
+    } else if ("deleted".equalsIgnoreCase(status)) {
+      LOG.debug("onConnectionDeleted requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
+      datafeedListener.onConnectionDeleted(requesting, affectedUser);
     } else {
       throw new IllegalArgumentException("Unknown connection request status type: " + status);
     }
@@ -166,10 +177,9 @@ public class ForwarderQueueConsumer {
 
   private void notifyCreateIm(IMaestroMessage message) {
     // we only have user id in the JSON payload
-    List<Long> members = message.getAffectedUsers().stream()
+    List<String> members = message.getAffectedUsers().stream()
       .map(IUser::getId)
-      .map(PodAndUserId::getUserId)
-      .map(UserId::asLong)
+      .map(PodAndUserId::toString)
       .collect(Collectors.toList());
 
     // apparently, there is no entity class for the maestroObject property -_-"
@@ -178,7 +188,18 @@ public class ForwarderQueueConsumer {
     boolean crosspod = maestroObject.getRequiredBoolean("crossPod");
     IUser initiator = message.getRequestingUser();
 
-    // ICreateIMMaestroPayload payload = CreateIMMaestroPayload.FACTORY.newInstance(message.getPayload().getJsonObject(), modelRegistry);
+    // at least one of the members must be part of the IM
+    boolean atLeastOneHasSession = datafeedSessionPool.sessionExists(initiator.getId().toString());
+    if (!atLeastOneHasSession) {
+      atLeastOneHasSession = members.stream()
+        .filter(symphonyId -> datafeedSessionPool.sessionExists(symphonyId))
+        .findAny()
+        .isPresent();
+    }
+    if (!atLeastOneHasSession) {
+      LOG.warn("IM with no gateway-managed accounts: stream={} members={} initiator={}", streamId, members, initiator.getUsername());
+      return;
+    }
 
     LOG.debug("onIMCreated stream={} members={} initiator={} crosspod={}", streamId, members, initiator.getUsername(), crosspod);
     datafeedListener.onIMCreated(streamId, members, initiator, crosspod);

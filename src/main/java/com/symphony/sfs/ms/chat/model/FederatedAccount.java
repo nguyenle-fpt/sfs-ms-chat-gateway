@@ -8,8 +8,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-
-import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_IDX;
 import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_PK;
 import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_SK;
 import static com.symphony.sfs.ms.chat.model.FederatedAccountMapper.federatedAccountGsi1Pk;
@@ -36,6 +34,8 @@ public class FederatedAccount extends DynamoDocument {
   private String emp;
   private String symphonyUserId;
   private String symphonyUsername;
+  private String sessionToken;
+  private String kmToken;
 
   public FederatedAccount(AttributeMap attributes) {
     super(attributes);
@@ -47,6 +47,8 @@ public class FederatedAccount extends DynamoDocument {
     this.emp = attributes.getString("emp");
     this.symphonyUserId = attributes.getString("symphonyUserId");
     this.symphonyUsername = attributes.getString("symphonyUsername");
+    this.sessionToken = attributes.getString("sessionToken");
+    this.kmToken = attributes.getString("kmToken");
   }
 
   @Override
@@ -61,6 +63,8 @@ public class FederatedAccount extends DynamoDocument {
     attributes.putString("emp", getEmp());
     attributes.putString("symphonyUserId", getSymphonyUserId());
     attributes.putString("symphonyUsername", getSymphonyUsername());
+    attributes.putString("sessionToken", getSessionToken());
+    attributes.putString("kmToken", getKmToken());
 
     attributes.putString(PARTITION_KEY, federatedAccountPk(getFederatedUserId()));
     attributes.putString(SORT_KEY, federatedAccountSk(getEmp()));

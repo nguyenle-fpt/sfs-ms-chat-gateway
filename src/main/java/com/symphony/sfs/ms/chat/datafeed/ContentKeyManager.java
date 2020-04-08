@@ -46,14 +46,14 @@ public class ContentKeyManager {
   }
 
   @Cacheable(CachingConfiguration.CONTENT_KEY_CACHE)
-  public byte[] getContentKey(ThreadId threadId, String username, Long userId, Long rotationId) throws UnknownDatafeedUserException, ContentKeyRetrievalException {
+  public byte[] getContentKey(ThreadId threadId, String username, String userId, Long rotationId) throws UnknownDatafeedUserException, ContentKeyRetrievalException {
     // if there is no session, it means that this user is not managed by our gateway
-    if (datafeedSessionPool.getSession(username) == null) {
+    if (datafeedSessionPool.sessionNotExists(userId)) {
       throw new UnknownDatafeedUserException("Unknown datafeed user: " + username);
     }
 
     // make sure we have an up-to-date session
-    DatafeedSession session = datafeedSessionPool.refreshSession(username, userId);
+    DatafeedSession session = datafeedSessionPool.refreshSession(userId);
 
     SymphonyClient client = getSymphonyClient(session.getUsername());
     AuthProvider auth = getAuthProvider(session);
@@ -62,10 +62,11 @@ public class ContentKeyManager {
       IClientKeyRetrieverHandler clientKeyRetriever = new ClientKeyRetrieverHandler(client, authSecretPersister);
       clientKeyRetriever.init(auth, authSecretPersister, false);
 
-      KeyIdentifier keyId = new KeyIdentifier(threadId.asImmutableByteArray().toByteArray(), userId, rotationId);
+      Long symphonyUserId = Long.valueOf(userId);
+      KeyIdentifier keyId = new KeyIdentifier(threadId.asImmutableByteArray().toByteArray(), symphonyUserId, rotationId);
       return clientKeyRetriever.getKey(auth, keyId);
     } catch (ClientKeyRetrieverException | SymphonyInputException | UnsupportedEncodingException | SymphonySignatureException | SymphonyPEMFormatException | SymphonyNativeException | SymphonyEncryptionException e) {
-      throw new ContentKeyRetrievalException(threadId, username, rotationId, e);
+      throw new ContentKeyRetrievalException(threadId, session.getUsername(), rotationId, e);
     }
   }
 

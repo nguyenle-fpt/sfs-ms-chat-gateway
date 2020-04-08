@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service.symphony;
 import clients.symphony.api.constants.PodConstants;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import lombok.extern.slf4j.Slf4j;
+import model.AdminUserInfo;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpHeaders;
@@ -49,6 +50,26 @@ public class AdminUserManagementService {
       return Optional.of(response);
     } catch (Exception e) {
       logWebClientError(LOG, PodConstants.ADMINCREATEUSER, e);
+    }
+    return Optional.empty();
+  }
+
+  public Optional<AdminUserInfo> getUserInfo(String userId, String podUrl, UserSession botSession) {
+
+    if (StringUtils.isBlank(podUrl)) {
+      throw new IllegalArgumentException("No URL provided for get user");
+    }
+
+    try {
+      AdminUserInfo response = blockWithRetries(webClient.get()
+        .uri(podUrl + PodConstants.GETUSERADMIN, userId)
+        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .header("sessionToken", botSession.getSessionToken())
+        .retrieve()
+        .bodyToMono(AdminUserInfo.class));
+      return Optional.of(response);
+    } catch (Exception e) {
+      logWebClientError(LOG, PodConstants.GETUSERADMIN, e);
     }
     return Optional.empty();
   }

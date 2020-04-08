@@ -15,8 +15,8 @@ public class FederatedAccountMapper {
     return emp;
   }
 
-  public static String federatedAccountGsi1Pk(String symphonyUserId) {
-    return symphonyUserId;
+  public static String federatedAccountGsi1Pk(String symphonyId) {
+    return symphonyId;
   }
 
   public static String federatedAccountGsi1Sk() {

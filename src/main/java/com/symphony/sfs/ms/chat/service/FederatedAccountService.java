@@ -2,13 +2,16 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
 import com.google.common.annotations.VisibleForTesting;
+import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.security.utils.SecurityKeyUtils;
+import com.symphony.oss.models.chat.canon.facade.User;
+import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
@@ -26,6 +29,8 @@ import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import model.AdminUserInfo;
+import model.UserInfo;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -68,39 +73,39 @@ public class FederatedAccountService implements DatafeedListener {
       throw new FederatedAccountAlreadyExistsProblem();
     }
 
+    UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+
     try {
-      SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmp());
+      SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmp(), botSession);
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
-      DatafeedSession session = datafeedSessionPool.listenDatafeed(
-        symphonyUser.getUserAttributes().getUserName(),
-        symphonyUser.getUserSystemInfo().getId()
-      );
+      DatafeedSession session = datafeedSessionPool.listenDatafeed(federatedAccount.getSymphonyUserId());
 
       if (request.getAdvisors() != null && !request.getAdvisors().isEmpty()) {
         String advisorSymphonyId = request.getAdvisors().get(0);
         if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
-          channelService.createIMChannel(session, federatedAccount, advisorSymphonyId);
+          channelService.createIMChannel(session, federatedAccount, getCustomerInfo(advisorSymphonyId, botSession));
         }
       }
 
       return federatedAccount;
     } catch (ConditionalCheckFailedException e) {
-      LOG.debug("Failed to save the federated account repository", e);
+      LOG.debug("Failed to save the federated account repository, already exists", e);
       throw new FederatedAccountAlreadyExistsProblem();
+    } catch (UnknownDatafeedUserException e) {
+      // should never happen, as we have a valid FederatedAccount
+      throw new IllegalStateException(e);
     }
   }
 
   public void onConnectionAccepted(IUser requesting, IUser requested) {
-    federatedAccountRepository.findBySymphonyUserId(requesting.getId().getUserId().toString())
+    federatedAccountRepository.findBySymphonyId(requesting.getId().toString())
       .ifPresent(account -> {
-        channelService.createIMChannel(account, requested.getId().getUserId().toString());
+        channelService.createIMChannel(account, requested);
       });
   }
 
-  public SymphonyUser createSymphonyUser(String firstName, String lastName, String emp) {
-    UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-
+  public SymphonyUser createSymphonyUser(String firstName, String lastName, String emp, UserSession botSession) {
     String publicKey = null;
     try {
       publicKey = RsaUtils.encodeRSAKey(RsaUtils.parseRSAPublicKey(chatConfiguration.getSharedPublicKey().getData()));
@@ -166,4 +171,15 @@ public class FederatedAccountService implements DatafeedListener {
 
     return federatedServiceAccount;
   }
+
+  private IUser getCustomerInfo(String symphonyId, UserSession botSession) {
+    AdminUserInfo info = adminUserManagementService.getUserInfo(symphonyId, podConfiguration.getUrl(), botSession).get(); // TODO better exception
+    return new User.Builder()
+      .withId(PodAndUserId.newBuilder().build(info.getUserSystemInfo().getId()))
+      .withUsername(info.getUserAttributes().getUserName())
+      .withFirstName(info.getUserAttributes().getFirstName())
+      .withSurname(info.getUserAttributes().getLastName())
+      .build();
+  }
+
 }

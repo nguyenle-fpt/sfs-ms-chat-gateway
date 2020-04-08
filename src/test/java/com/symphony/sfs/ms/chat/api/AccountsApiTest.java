@@ -106,10 +106,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .as(CreateAccountResponse.class);
 
     assertEquals(new CreateAccountResponse()
-      .symphonyUserId(accountSession.getUserId().toString())
+      .symphonyUserId(accountSession.getUserId())
       .symphonyUsername(accountSession.getUsername()), response);
 
-    DatafeedSession session = datafeedSessionPool.getSession(accountSession.getUsername());
+    DatafeedSession session = datafeedSessionPool.getSession(accountSession.getUserId());
     assertEquals(accountSession, session);
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
@@ -121,6 +121,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .emp(createAccountRequest.getEmp())
       .symphonyUserId(accountSession.getUserId())
       .symphonyUsername(accountSession.getUsername())
+      .kmToken(accountSession.getKmToken())
+      .sessionToken(accountSession.getSessionToken())
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();

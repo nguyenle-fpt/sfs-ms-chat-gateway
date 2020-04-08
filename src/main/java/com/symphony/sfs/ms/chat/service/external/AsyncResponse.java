@@ -4,5 +4,5 @@ import lombok.Data;
 
 @Data
 public class AsyncResponse {
-  private String leaseId;
+  private String operationId;
 }

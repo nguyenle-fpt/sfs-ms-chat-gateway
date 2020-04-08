@@ -9,7 +9,7 @@ import java.util.Set;
 public class MultiDatafeedListener implements DatafeedListener {
   private Set<DatafeedListener> listeners = new HashSet<>();
 
-  public void onIMCreated(String streamId, List<Long> members, IUser initiator, boolean crosspod) {
+  public void onIMCreated(String streamId, List<String> members, IUser initiator, boolean crosspod) {
     listeners.forEach(l -> l.onIMCreated(streamId, members, initiator, crosspod));
   }
 
@@ -19,6 +19,10 @@ public class MultiDatafeedListener implements DatafeedListener {
 
   public void onConnectionRefused(IUser requesting, IUser requested) {
     listeners.forEach(l -> l.onConnectionRefused(requesting, requested));
+  }
+
+  public void onConnectionDeleted(IUser requesting, IUser requested) {
+    listeners.forEach(l -> l.onConnectionDeleted(requesting, requested));
   }
 
   public void onConnectionAccepted(IUser requesting, IUser requested) {
