@@ -33,11 +33,6 @@ public class MessageService implements DatafeedListener {
   private final EmpClient empClient;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
-  private final StreamService streamService;
-  private final AuthenticationService authenticationService;
-  private final PodConfiguration podConfiguration;
-  private final BotConfiguration botConfiguration;
-
 
   @PostConstruct
   @VisibleForTesting
@@ -46,20 +41,15 @@ public class MessageService implements DatafeedListener {
   }
 
   @Override
-  public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, Long timestamp, String message) {
+  public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message) {
 
-    // Authenticate on Federation Pod with Bot User
-    UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-    // Get the recipients of the message from streamId
-    StreamInfo streamInfo = streamService.getStreamInfo(podConfiguration.getUrl(), streamId, botSession).orElseThrow(CannotRetrieveStreamIdProblem::new);
-
-    if (streamInfo.getStreamType().getType() != StreamTypes.IM) {
-      throw new IllegalArgumentException("Expected IM as StreamType. Got " + streamInfo.getStreamType().getType());
+    if (members.size() != 2) {
+      return;
     }
 
     // Recipients correspond to all userIds which are not fromUserId
     String fromSymphonyUserId = fromSymphonyUser.getId().toString();
-    List<String> toUserIds = streamInfo.getStreamAttributes().getMembers().stream().map(String::valueOf).filter(id -> !id.equals(fromSymphonyUserId)).collect(Collectors.toList());
+    List<String> toUserIds = members.stream().filter(id -> !id.equals(fromSymphonyUserId)).collect(Collectors.toList());
 
     Optional<FederatedAccount> fromFederatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId);
     boolean isMessageFromFederatedUser = fromFederatedAccount.isPresent();

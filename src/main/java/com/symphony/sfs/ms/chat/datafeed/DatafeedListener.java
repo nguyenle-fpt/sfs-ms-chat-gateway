@@ -21,7 +21,7 @@ public interface DatafeedListener {
   default void onConnectionDeleted(IUser requesting, IUser requested) {
   }
 
-  default void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, Long timestamp, String message) {
+  default void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message) {
   }
 
   /*default void onRoomMessage(InboundMessage inboundMessage) {

@@ -28,15 +28,12 @@ public class MessageDecryptor {
     this.cryptoHandler = new ClientCryptoHandler();
   }
 
-  public String decrypt(ISocialMessage socialMessage) throws UnknownDatafeedUserException, ContentKeyRetrievalException, DecryptionException {
+  public String decrypt(ISocialMessage socialMessage, String userId) throws UnknownDatafeedUserException, ContentKeyRetrievalException, DecryptionException {
     try {
       // Get message ciphertext transport to extract rotation Id of key that was used to cipher the text.
       ICiphertextTransport msgCipherTransport = CiphertextFactory.getTransport(socialMessage.getText());
 
-      String userId = socialMessage.getFrom().getId().toString();
-      String username = socialMessage.getFrom().getUsername();
-      // TODO username can be null, we need to deal with userId -> username resolution
-      byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), username, userId, msgCipherTransport.getRotationId());
+      byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), userId, msgCipherTransport.getRotationId());
 
       return cryptoHandler.decryptMsg(contentKey, socialMessage.getText());
     } catch (SymphonyInputException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException e) {

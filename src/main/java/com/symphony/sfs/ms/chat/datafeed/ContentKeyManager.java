@@ -46,12 +46,7 @@ public class ContentKeyManager {
   }
 
   @Cacheable(CachingConfiguration.CONTENT_KEY_CACHE)
-  public byte[] getContentKey(ThreadId threadId, String username, String userId, Long rotationId) throws UnknownDatafeedUserException, ContentKeyRetrievalException {
-    // if there is no session, it means that this user is not managed by our gateway
-    if (datafeedSessionPool.sessionNotExists(userId)) {
-      throw new UnknownDatafeedUserException("Unknown datafeed user: " + username);
-    }
-
+  public byte[] getContentKey(ThreadId threadId, String userId, Long rotationId) throws UnknownDatafeedUserException, ContentKeyRetrievalException {
     // make sure we have an up-to-date session
     DatafeedSession session = datafeedSessionPool.refreshSession(userId);
 

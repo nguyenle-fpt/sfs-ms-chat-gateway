@@ -17,6 +17,7 @@ import com.symphony.oss.models.core.canon.facade.IEnvelope;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.oss.models.crypto.canon.CryptoModel;
 import com.symphony.oss.models.fundamental.FundamentalModelRegistry;
+import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -27,13 +28,17 @@ import org.springframework.stereotype.Service;
 import org.symphonyoss.s2.canon.runtime.IEntityFactory;
 import org.symphonyoss.s2.canon.runtime.ModelRegistry;
 import org.symphonyoss.s2.common.dom.json.IJsonObject;
+import org.symphonyoss.s2.common.dom.json.ImmutableJsonList;
 import org.symphonyoss.s2.common.dom.json.jackson.JacksonAdaptor;
 import org.symphonyoss.s2.common.immutable.ImmutableByteArray;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 @Service
 @Slf4j
@@ -110,10 +115,33 @@ public class ForwarderQueueConsumer {
     Long timestamp = socialMessage.getIngestionDate().asLong(); // or getActualIngestionDate()?
     IUser fromUser = socialMessage.getFrom(); // or getActualFromUser()?
 
+    List<String> members = Collections.emptyList();
+    ImmutableJsonList memberJsonList = ((ImmutableJsonList) envelope.getPayload().getJsonObject().getRequiredObject("attributes").get("dist"));
+    if (memberJsonList != null) {
+      members = StreamSupport
+        .stream(memberJsonList.spliterator(), false)
+        .map(node -> node.toString())
+        .collect(Collectors.toList());
+    }
+
+    // at least one of the members must be part of the IM
+    DatafeedSession managedSession = datafeedSessionPool.getSession(fromUser.getId().toString());
+    if (managedSession == null) {
+      managedSession = members.stream()
+        .map(symphonyId -> datafeedSessionPool.getSession(symphonyId))
+        .filter(Objects::nonNull)
+        .findAny()
+        .orElse(null);
+    }
+    if (managedSession == null) {
+      LOG.warn("IM message with no gateway-managed accounts: stream={} members={} initiator={}", streamId, members, fromUser.getId());
+      return;
+    }
+
     try {
-      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, timestamp={} message={}", streamId, messageId, fromUser.getId().getUserId().asLong(), timestamp, socialMessage.getText());
-      String text = messageDecryptor.decrypt(socialMessage);
-      datafeedListener.onIMMessage(streamId, messageId, fromUser, timestamp, text);
+      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} message={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getText());
+      String text = messageDecryptor.decrypt(socialMessage, managedSession.getUserId());
+      datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text);
     } catch (UnknownDatafeedUserException e) {
       LOG.debug("Unmanaged user {}", e.getMessage());
     }

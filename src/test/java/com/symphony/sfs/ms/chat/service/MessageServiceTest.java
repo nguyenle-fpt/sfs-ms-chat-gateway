@@ -66,7 +66,7 @@ class MessageServiceTest {
 
     userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
-    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), streamService, authenticationService, podConfiguration, botConfiguration);
+    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class));
   }
 
   @Test
@@ -82,15 +82,9 @@ class MessageServiceTest {
     long now = OffsetDateTime.now().toEpochSecond();
 
 
-    StreamInfo streamInfo = StreamInfo.builder()
-      .streamType(new StreamType(StreamTypes.IM))
-      .streamAttributes(StreamAttributes.builder().members(Arrays.asList(123456789L, 234567891L)).build())
-      .build();
-    when(streamService.getStreamInfo("podUrl", "streamId", userSession)).thenReturn(Optional.of(streamInfo));
-
     when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
     when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text")).thenReturn(Optional.of("leaseId"));
-    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, now, "text");
+    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text");
 
     verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
     verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
@@ -101,25 +95,10 @@ class MessageServiceTest {
   void onIMMessage_FederatedServiceAccountNotFound() {
 
     IUser fromSymphonyUser = newSymphonyUser("123456789");
-
     long now = OffsetDateTime.now().toEpochSecond();
-
-    StreamInfo streamInfo = StreamInfo.builder()
-      .streamType(new StreamType(StreamTypes.IM))
-      .streamAttributes(StreamAttributes.builder().members(Arrays.asList(123456789L, 234567891L)).build())
-      .build();
-    when(streamService.getStreamInfo("podUrl", "streamId", userSession)).thenReturn(Optional.of(streamInfo));
 
     when(federatedAccountRepository.findBySymphonyId("123456789")).thenReturn(Optional.empty());
-    assertThrows(FederatedAccountNotFoundProblem.class, () -> messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, now, "text"));
-  }
-
-  @Test
-  void onIMMessage_StreamIdNotFoundProblem() {
-
-    IUser fromSymphonyUser = newSymphonyUser("123456789");
-    long now = OffsetDateTime.now().toEpochSecond();
-    assertThrows(CannotRetrieveStreamIdProblem.class, () -> messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, now, "text"));
+    assertThrows(FederatedAccountNotFoundProblem.class, () -> messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text"));
   }
 
   private IUser newSymphonyUser(String symphonyUserId) {
