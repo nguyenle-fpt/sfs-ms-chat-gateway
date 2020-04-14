@@ -3,6 +3,9 @@ package com.symphony.sfs.ms.chat.service.external;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.EmpMicroserviceResolver;
+import com.symphony.sfs.ms.starter.service.MicroServiceClient;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,24 +22,20 @@ import java.util.Optional;
 import static com.symphony.sfs.ms.starter.util.WebClientUtils.blockWithRetries;
 import static com.symphony.sfs.ms.starter.util.WebClientUtils.logWebClientError;
 
+@RequiredArgsConstructor
 @Component
 @Slf4j
 public class DefaultEmpClient implements EmpClient {
 
-  private final WebClient webClient;
+  private final MicroServiceClient microServiceClient;
   private final EmpMicroserviceResolver empMicroserviceResolver;
-
-  public DefaultEmpClient(WebClient webClient, EmpMicroserviceResolver empMicroserviceResolver) {
-    this.webClient = webClient;
-    this.empMicroserviceResolver = empMicroserviceResolver;
-  }
 
   @Override
   public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
     URI uri = empMicroserviceResolver.buildEmpMicroserviceUri(emp, CREATE_CHANNEL_ENDPOINT);
     List<ChannelMember> members = toChannelMembers(federatedUsers, initiatorUserId, symphonyUsers);
 
-    return post(new CreateChannelRequest(streamId, members), uri, AsyncResponse.class)
+    return microServiceClient.post(new CreateChannelRequest(streamId, members), uri, AsyncResponse.class)
       .map(AsyncResponse::getOperationId);
   }
 
@@ -46,7 +45,7 @@ public class DefaultEmpClient implements EmpClient {
 
     List<ChannelMember> channelMembers = toChannelMembers(Collections.singletonList(toFederatedAccount), fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser));
 
-    return post(new SendMessageToEmpRequest(streamId, messageId, channelMembers, fromSymphonyUser.getId().toString(), timestamp, message), uri, AsyncResponse.class)
+    return microServiceClient.post(new SendMessageToEmpRequest(streamId, messageId, channelMembers, fromSymphonyUser.getId().toString(), timestamp, message), uri, AsyncResponse.class)
       .map(AsyncResponse::getOperationId);
   }
 
@@ -81,43 +80,5 @@ public class DefaultEmpClient implements EmpClient {
     ));
 
     return members;
-  }
-
-
-  private <I, O> Optional<O> post(I input, URI uri, Class<O> outputClass) {
-    if (uri == null) {
-      return Optional.empty();
-    }
-
-    try {
-      O output = blockWithRetries(webClient.post()
-        .uri(uri)
-        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-        .bodyValue(input)
-        .retrieve()
-        .bodyToMono(outputClass));
-      return Optional.of(output);
-    } catch (Exception e) {
-      logWebClientError(LOG, uri.toString(), e);
-    }
-    return Optional.empty();
-  }
-
-  private <I> Optional<ResponseEntity<Void>> post(I input, URI uri) {
-    if (uri == null) {
-      return Optional.empty();
-    }
-    try {
-      ResponseEntity<Void> output = blockWithRetries(webClient.post()
-        .uri(uri)
-        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-        .bodyValue(input)
-        .retrieve()
-        .toBodilessEntity());
-      return Optional.of(output);
-    } catch (Exception e) {
-      logWebClientError(LOG, uri.toString(), e);
-    }
-    return Optional.empty();
   }
 }

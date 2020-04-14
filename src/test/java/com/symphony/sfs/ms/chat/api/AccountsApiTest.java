@@ -21,6 +21,7 @@ import model.AdminUserAttributes;
 import model.AdminUserInfo;
 import model.AdminUserSystemInfo;
 import model.InboundConnectionRequest;
+import model.UserInfo;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ import org.springframework.http.MediaType;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Optional;
 
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
 import static clients.symphony.api.constants.PodConstants.GETCONNECTIONSTATUS;
@@ -43,6 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class AccountsApiTest extends AbstractIntegrationTest {
@@ -66,7 +70,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       chatConfiguration,
       connectionRequestManager,
       channelService,
-      forwarderQueueConsumer);
+      forwarderQueueConsumer,
+      adminClient,
+      streamService);
     federatedAccountService.registerAsDatafeedListener();
 
     accountsApi = new AccountsApi(federatedAccountService);
@@ -331,6 +337,51 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .statusCode(HttpStatus.CONFLICT.value());
   }
 
+  @Test
+  public void onConnectionRequestedFederatedAccount() throws IOException {
+    UserInfo requester = new UserInfo();
+    requester.setId(1L);
+
+    FederatedAccount requested = FederatedAccount.builder()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP")
+      .symphonyUserId("2")
+      .symphonyUsername("username")
+      .build();
+    federatedAccountRepository.save(requested);
+
+    UserInfo requestedUser = new UserInfo();
+    requester.setId(2L);
+
+    UserSession botSession = getSession(botConfiguration.getUsername());
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.getUserInfo(any(), any(), eq(true))).thenReturn(Optional.of(requestedUser));
+
+    mockServer.expect()
+      .post()
+      .withPath(GETIM)
+      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getConnectionRequestMaestroMessage(
+      requester,
+      requested
+    )));
+
+    forwarderQueueConsumer.consume(notification);
+
+    verify(connectionRequestManager, times(1)).refuseConnectionRequest(any(), eq(String.valueOf(requester.getId())));
+
+    verify(streamService, times(1)).sendMessage(any(), eq("streamId"),
+      eq("<messageML>Connection request to emailAddress@symphony.com/WHATSAPP has been automatically declined because you are not authorized: advisor rights are needed</messageML>"),
+      any());
+  }
+
   private String getAcceptedConnectionRequestMaestroMessage(FederatedAccount requester, FederatedAccount requested) {
     return "{" +
       "  \"_type\":\"com.symphony.s2.model.chat.MaestroMessage\"," +
@@ -386,6 +437,94 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       "    \"imgUrlSmall\":\"../avatars/static/50/default.png\"," +
       "    \"requestCounter\":0," +
       "    \"status\":\"accepted\"," +
+      "    \"targetUserId\":13606456395797," +
+      "    \"version\":\"connectionRequestAlertPayload\"" +
+      "  }," +
+      "  \"podDistribution\":[" +
+      "    196," +
+      "    198" +
+      "  ]," +
+      "  \"requestingUser\":{" +
+      "    \"company\":\"Symphony\"," +
+      "    \"emailAddress\":\"" + requested.getEmailAddress() + "\"," +
+      "    \"firstName\":\"" + requested.getFirstName() + "\"," +
+      "    \"id\":" + requested.getSymphonyUserId() + "," +
+      "    \"imageUrl\":\"../avatars/static/150/default.png\"," +
+      "    \"imageUrlSmall\":\"../avatars/static/50/default.png\"," +
+      "    \"images\":{" +
+      "      \"150\":\"../avatars/static/150/default.png\"," +
+      "      \"50\":\"../avatars/static/50/default.png\"," +
+      "      \"500\":\"../avatars/static/500/default.png\"," +
+      "      \"600\":\"../avatars/static/600/default.png\"," +
+      "      \"orig\":\"../avatars/static/orig/default.png\"" +
+      "    }," +
+      "    \"prettyName\":\"" + requested.getFirstName() + " " + requested.getLastName() + "\"," +
+      "    \"firstName\":\"" + requested.getLastName() + "\"," +
+      "    \"userType\":\"lc\"," +
+      "    \"username\":\"" + requested.getSymphonyUsername() + "\"" +
+      "  }," +
+      "  \"schemaVersion\":1," +
+      "  \"semVersion\":\"1.56.0-SNAPSHOT\"," +
+      "  \"traceId\":\"EFpFOL\"," +
+      "  \"version\":\"MAESTRO\"" +
+      "}";
+  }
+
+  private String getConnectionRequestMaestroMessage(UserInfo requester, FederatedAccount requested) {
+    return "{" +
+      "  \"_type\":\"com.symphony.s2.model.chat.MaestroMessage\"," +
+      "  \"affectedUsers\":[" +
+      "    {" +
+      "      \"companyName\":\"Symphony\"," +
+      "      \"emailAddress\":\"" + requester.getEmailAddress() + "\"," +
+      "      \"firstName\":\"" + requester.getFirstName() + "\"," +
+      "      \"givenName\":\"" + requester.getFirstName() + "\"," +
+      "      \"id\":" + requester.getId() + "," +
+      "      \"imageUrl\":\"../avatars/static/150/default.png\"," +
+      "      \"imageUrlSmall\":\"../avatars/static/50/default.png\"," +
+      "      \"images\":{" +
+      "      }," +
+      "      \"location\":\"\"," +
+      "      \"prettyName\":\"" + requester.getFirstName() + " " + requester.getLastName() + "\"," +
+      "      \"screenName\":\"" + requester.getFirstName() + "\"," +
+      "      \"surname\":\"" + requester.getLastName() + "\"," +
+      "      \"userType\":\"lc\"," +
+      "      \"verifiedForBadge\":true" +
+      "    }" +
+      "  ]," +
+      "  \"copyDisabled\":false," +
+      "  \"event\":\"CONNECTION_REQUEST_ALERT\"," +
+      "  \"fromPod\":196," +
+      "  \"ingestionDate\":1584448898220," +
+      "  \"isCopyDisabled\":false," +
+      "  \"messageId\":\"jEt58ZHU580+FiQS40XhjH///o8XfHtTbw==\"," +
+      "  \"payload\":{" +
+      "    \"cargo\":{" +
+      "      \"images\":{" +
+      "        \"150\":\"../avatars/static/150/default.png\"," +
+      "        \"50\":\"../avatars/static/50/default.png\"," +
+      "        \"500\":\"../avatars/static/500/default.png\"," +
+      "        \"600\":\"../avatars/static/600/default.png\"," +
+      "        \"orig\":\"../avatars/static/orig/default.png\"" +
+      "      }," +
+      "      \"imgUrl\":\"../avatars/static/150/default.png\"," +
+      "      \"imgUrlSmall\":\"../avatars/static/50/default.png\"," +
+      "      \"initiatorUserId\":13469017440257," +
+      "      \"requestCounter\":0," +
+      "      \"status\":\"accepted\"," +
+      "      \"targetUserId\":13606456395797" +
+      "    }," +
+      "    \"images\":{" +
+      "      \"150\":\"../avatars/static/150/default.png\"," +
+      "      \"50\":\"../avatars/static/50/default.png\"," +
+      "      \"500\":\"../avatars/static/500/default.png\"," +
+      "      \"600\":\"../avatars/static/600/default.png\"," +
+      "      \"orig\":\"../avatars/static/orig/default.png\"" +
+      "    }," +
+      "    \"imgUrl\":\"../avatars/static/150/default.png\"," +
+      "    \"imgUrlSmall\":\"../avatars/static/50/default.png\"," +
+      "    \"requestCounter\":0," +
+      "    \"status\":\"pending_incoming\"," +
       "    \"targetUserId\":13606456395797," +
       "    \"version\":\"connectionRequestAlertPayload\"" +
       "  }," +

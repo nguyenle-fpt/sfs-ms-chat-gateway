@@ -23,4 +23,12 @@ public class ConnectionRequestManager {
       .map(InboundConnectionRequest::getStatus)
       .map(ConnectionRequestStatus::valueOf);
   }
+
+  public Optional<InboundConnectionRequest> acceptConnectionRequest(UserSession session, String fromSymphonyId) {
+    return connectionsService.acceptConnectionRequest(podConfiguration.getUrl(), fromSymphonyId, session);
+  }
+
+  public Optional<InboundConnectionRequest> refuseConnectionRequest(UserSession session, String fromSymphonyId) {
+    return connectionsService.refuseConnectionRequest(podConfiguration.getUrl(), fromSymphonyId, session);
+  }
 }
