@@ -122,9 +122,9 @@ public class FederatedAccountService implements DatafeedListener {
         String requestingUserId = requesting.getId().toString();
         Optional<UserInfo> advisor = adminClient.getAdvisor(requestingUserId);
         if (advisor.isPresent()) {
-          // TODO: implements auto accept connection request. Two line below are only an example, it will be fully implemented in another story
-          // DatafeedSession session = datafeedSessionPool.refreshSession(requestedUserId);
-          // connectionRequestManager.acceptConnectionRequest(session, requestingUserId);
+          // TODO: implements auto accept connection request only for wechat (see https://perzoinc.atlassian.net/browse/CES-755)
+          DatafeedSession session = datafeedSessionPool.refreshSession(requestedUserId);
+          connectionRequestManager.acceptConnectionRequest(session, requestingUserId);
         } else {
           // 2.KO If the requesting is a normal user, refuse the connection
           DatafeedSession session = datafeedSessionPool.refreshSession(requestedUserId);
