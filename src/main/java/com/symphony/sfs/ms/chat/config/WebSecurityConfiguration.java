@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.starter.security.AuthorizationService;
 import com.symphony.sfs.ms.starter.security.JwtAuthorizationFilterFactory;
 import com.symphony.sfs.ms.starter.security.SymphonyJwtAuthorizationFilter;
+import com.symphony.sfs.ms.starter.util.AuthorizeRequestsConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,5 +22,11 @@ public class WebSecurityConfiguration {
   @Bean
   public JwtAuthorizationFilterFactory jwtAuthorizationFilterFactory() {
     return SymphonyJwtAuthorizationFilter.factory(authenticationService, objectMapper);
+  }
+
+  @Bean
+  public AuthorizeRequestsConfigurer authorizeRequestsConfigurer() {
+    return registry -> registry
+      .antMatchers("/api/v1/internal/messages/**").permitAll();
   }
 }

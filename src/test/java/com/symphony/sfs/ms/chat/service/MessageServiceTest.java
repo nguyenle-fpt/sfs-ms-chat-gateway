@@ -4,7 +4,6 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.FederatedAccountNotFoundProblem;
-import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
@@ -13,11 +12,7 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.Key;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,11 +32,12 @@ class MessageServiceTest {
   private MessageService messageService;
 
   private EmpClient empClient;
-  private FederatedAccountRepository federatedAccountRepository;
-  private StreamService streamService;
   private AuthenticationService authenticationService;
   private PodConfiguration podConfiguration;
   private BotConfiguration botConfiguration;
+  private FederatedAccountRepository federatedAccountRepository;
+  private StreamService streamService;
+
 
   private UserSession userSession;
 

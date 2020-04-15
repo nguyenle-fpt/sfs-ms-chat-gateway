@@ -1,0 +1,34 @@
+messages:
+  post:
+    tags:
+      - Symphony Messaging
+    summary: Send a message from EMP to Symphony
+    operationId: sendMessage
+    description: >
+      => Send a message from EMP to Symphony.
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/messaging.yaml#/send-message-request'
+    responses:
+      '200':
+        description: Messge successfully sent
+        content:
+          application/json:
+            schema:
+              $ref: '../components/messaging.yaml#/send-message-response'
+      '400':
+        description: Bad Request
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/messaging.yaml#/message-send-error'
+                - $ref: '../errors/messaging.yaml#/message-recipient-not-found'
+      '500':
+        description: Technical Error
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/messaging.yaml#/message-send-failed'

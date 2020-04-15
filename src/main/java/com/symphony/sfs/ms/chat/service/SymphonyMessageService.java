@@ -1,19 +1,27 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
+import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.SymphonySendMessageFailedProblem;
+import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class SymphonyMessageService {
+
   private final PodConfiguration podConfiguration;
-  private final MessageSource messageSource;
+  private final ChatConfiguration chatConfiguration;
+  private final AuthenticationService authenticationService;
+  private final FederatedAccountRepository federatedAccountRepository;
   private final StreamService streamService;
 
   public static final String USER_WAITING_CONFIRMATION = "user.waiting.confirmation";
@@ -30,11 +38,26 @@ public class SymphonyMessageService {
 
   public void sendRawMessage(UserSession session, String streamId, String messageContent) {
     try {
-      LOG.debug("Send message to symphony: {} {}", streamId, messageContent);
-      streamService.sendMessage(podConfiguration.getUrl(), streamId, messageContent, session);
+      LOG.debug("Send message to symphony: {} - {}", streamId, messageContent);
+      streamService.sendMessage(podConfiguration.getUrl(), streamId, messageContent, session).orElseThrow(SymphonySendMessageFailedProblem::new);
     } catch (Exception e) {
       LOG.error("Cannot send message on stream {}", streamId, e);
     }
+  }
+
+  public void sendRawMessage(String streamId, String fromSymphonyUserId, String messageContent) {
+    FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
+      LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
+      return new SendMessageFailedProblem();
+    });
+
+    UserSession userSession = authenticationService.authenticate(
+      podConfiguration.getSessionAuth(),
+      podConfiguration.getKeyAuth(),
+      federatedAccount.getSymphonyUsername(),
+      chatConfiguration.getSharedPrivateKey().getData());
+
+    sendRawMessage(userSession, streamId, messageContent);
   }
 
   // TODO

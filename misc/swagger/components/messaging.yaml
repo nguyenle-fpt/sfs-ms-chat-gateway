@@ -1,0 +1,24 @@
+#Requests
+send-message-request:
+  type: object
+  required:
+    - streamId
+    - fromSymphonyUserId
+    - text
+  properties:
+    streamId:
+      type: string
+    fromSymphonyUserId:
+      type: string
+    text:
+      type: string
+    appendTags:
+      type: boolean
+      default: false
+
+#Responses
+send-message-response:
+  type: object
+  properties:
+    id:
+      type: string

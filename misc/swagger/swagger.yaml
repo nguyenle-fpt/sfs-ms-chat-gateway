@@ -9,3 +9,5 @@ tags:
 paths:
   /api/v1/accounts:
     $ref: './paths/accounts.yaml#/accounts'
+  /api/v1/internal/messages:
+    $ref: './paths/messaging.yaml#/messages'

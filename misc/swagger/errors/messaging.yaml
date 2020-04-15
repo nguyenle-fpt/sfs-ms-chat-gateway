@@ -1,0 +1,41 @@
+message-send-error:
+  type: object
+  description: 'Failed to send a message'
+  properties:
+    type:
+      type: string
+      format: 'send.message.failed'
+    title:
+      type: string
+      format: 'Failed to send a message'
+    status:
+      type: integer
+      format: 400
+
+message-recipient-not-found:
+  type: object
+  description: 'Symphony recipient not found'
+  properties:
+    type:
+      type: string
+      format: 'symphony.recipient.not.found'
+    title:
+      type: string
+      format: 'Did not find Symphony recipient to send the message to'
+    status:
+      type: integer
+      format: 400
+
+message-send-failed:
+  type: object
+  description: 'Failed to send a message to Symphony'
+  properties:
+    type:
+      type: string
+      format: 'symphony.send.message.failed'
+    title:
+      type: string
+      format: 'Failed to send a message to Symphony'
+    status:
+      type: integer
+      format: 500
