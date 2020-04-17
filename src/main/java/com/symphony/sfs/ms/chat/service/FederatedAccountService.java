@@ -2,7 +2,6 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
 import com.google.common.annotations.VisibleForTesting;
-import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
@@ -11,6 +10,8 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.exception.AdvisorNotFoundException;
+import com.symphony.sfs.ms.chat.exception.CannotRetrieveAdvisorException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
@@ -84,7 +85,7 @@ public class FederatedAccountService implements DatafeedListener {
       SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmp(), botSession);
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
-      DatafeedSession session = datafeedSessionPool.listenDatafeed(federatedAccount.getSymphonyUserId());
+      DatafeedSession session = datafeedSessionPool.listenDatafeed(federatedAccount);
 
       if (request.getAdvisors() != null && !request.getAdvisors().isEmpty()) {
         String advisorSymphonyId = request.getAdvisors().get(0);
@@ -97,9 +98,6 @@ public class FederatedAccountService implements DatafeedListener {
     } catch (ConditionalCheckFailedException e) {
       LOG.debug("Failed to save the federated account repository, already exists", e);
       throw new FederatedAccountAlreadyExistsProblem();
-    } catch (UnknownDatafeedUserException e) {
-      // should never happen, as we have a valid FederatedAccount
-      throw new IllegalStateException(e);
     }
   }
 
@@ -120,24 +118,33 @@ public class FederatedAccountService implements DatafeedListener {
       if (federatedAccount.isPresent()) {
         // 2.OK If the requesting is an advisor, accept the connection
         String requestingUserId = requesting.getId().toString();
-        Optional<UserInfo> advisor = adminClient.getAdvisor(requestingUserId);
-        if (advisor.isPresent()) {
+        try {
+          UserInfo advisor = adminClient.getAdvisor(requestingUserId).orElseThrow(CannotRetrieveAdvisorException::new);
+
           // TODO: implements auto accept connection request only for wechat (see https://perzoinc.atlassian.net/browse/CES-755)
           DatafeedSession session = datafeedSessionPool.refreshSession(requestedUserId);
           connectionRequestManager.acceptConnectionRequest(session, requestingUserId);
-        } else {
+
+        } catch (AdvisorNotFoundException e) {
           // 2.KO If the requesting is a normal user, refuse the connection
           DatafeedSession session = datafeedSessionPool.refreshSession(requestedUserId);
           connectionRequestManager.refuseConnectionRequest(session, requestingUserId);
           // ... and send a message with federated bot
           UserSession federatedBotSession = authenticationService.authenticate(
             podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-          String streamId = streamService.getIM(podConfiguration.getUrl(), requestingUserId, federatedBotSession)
-            .orElseThrow(CannotRetrieveStreamIdProblem::new);
-          String message = String.format("<messageML>Connection request to %s/%s has been automatically declined because you are not authorized: advisor rights are needed</messageML>",
-            federatedAccount.get().getEmailAddress(),
-            federatedAccount.get().getEmp());
-          streamService.sendMessage(podConfiguration.getUrl(), streamId, message, federatedBotSession);
+
+          if (connectionRequestManager.sendConnectionRequest(federatedBotSession, requestingUserId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
+            String streamId = streamService.getIM(podConfiguration.getUrl(), requestingUserId, federatedBotSession)
+              .orElseThrow(CannotRetrieveStreamIdProblem::new);
+            String message = String.format("<messageML>Connection request to %s/%s has been automatically declined because you are not authorized: advisor rights are needed</messageML>",
+              federatedAccount.get().getEmailAddress(),
+              federatedAccount.get().getEmp());
+            streamService.sendMessage(podConfiguration.getUrl(), streamId, message, federatedBotSession);
+          } else {
+            // TODO better exception?
+            // with this exception we make sure that the queue will reprocess regularly the message
+            throw new IllegalStateException("No connection request accepted between the federated bot and " + requestingUserId);
+          }
         }
       }
     } catch (UnknownDatafeedUserException e) {

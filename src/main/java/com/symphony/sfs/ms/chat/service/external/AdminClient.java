@@ -1,15 +1,13 @@
 package com.symphony.sfs.ms.chat.service.external;
 
+import com.symphony.sfs.ms.chat.exception.AdvisorNotFoundException;
 import model.UserInfo;
 
 import java.util.Optional;
 
-/**
- * @author enrico.molino (09/04/2020)
- */
 public interface AdminClient {
 
-  String GET_ADVISOR_ENDPOINT = "/v1/advisors/{userId}";
+  String GET_ADVISOR_ENDPOINT = "/api/v1/internal/advisors/{userId}";
 
   /**
    * Retrieve, the advisor with the corresponding userId
@@ -17,5 +15,5 @@ public interface AdminClient {
    * @param userId
    * @return
    */
-  Optional<UserInfo> getAdvisor(String userId);
+  Optional<UserInfo> getAdvisor(String userId) throws AdvisorNotFoundException;
 }

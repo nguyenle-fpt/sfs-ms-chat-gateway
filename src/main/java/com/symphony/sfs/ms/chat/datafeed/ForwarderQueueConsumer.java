@@ -29,10 +29,12 @@ import org.symphonyoss.s2.canon.runtime.IEntityFactory;
 import org.symphonyoss.s2.canon.runtime.ModelRegistry;
 import org.symphonyoss.s2.common.dom.json.IJsonObject;
 import org.symphonyoss.s2.common.dom.json.ImmutableJsonList;
+import org.symphonyoss.s2.common.dom.json.JsonString;
 import org.symphonyoss.s2.common.dom.json.jackson.JacksonAdaptor;
 import org.symphonyoss.s2.common.immutable.ImmutableByteArray;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -70,8 +72,7 @@ public class ForwarderQueueConsumer {
     )
       .reduce(Stream::concat)
       .orElseGet(Stream::empty)
-      .collect(Collectors.toList())
-      .toArray(new IEntityFactory<?, ?, ?>[0]);
+      .toArray(IEntityFactory<?, ?, ?>[]::new);
 
     modelRegistry = new FundamentalModelRegistry().withFactories(factories);
   }
@@ -115,12 +116,17 @@ public class ForwarderQueueConsumer {
     Long timestamp = socialMessage.getIngestionDate().asLong(); // or getActualIngestionDate()?
     IUser fromUser = socialMessage.getFrom(); // or getActualFromUser()?
 
+    IJsonObject<?> attributes = envelope.getPayload().getJsonObject().getObject("attributes");
+    if (attributes == null) {
+      LOG.debug("No attributes in social message: object={}, envelope={}, payload={}", sqsObject, envelope, envelope.getPayload());
+      return;
+    }
+    ImmutableJsonList memberJsonList = ((ImmutableJsonList) attributes.get("dist"));
     List<String> members = Collections.emptyList();
-    ImmutableJsonList memberJsonList = ((ImmutableJsonList) envelope.getPayload().getJsonObject().getRequiredObject("attributes").get("dist"));
     if (memberJsonList != null) {
       members = StreamSupport
         .stream(memberJsonList.spliterator(), false)
-        .map(node -> node.toString())
+        .map(Object::toString)
         .collect(Collectors.toList());
     }
 
@@ -128,7 +134,7 @@ public class ForwarderQueueConsumer {
     DatafeedSession managedSession = datafeedSessionPool.getSession(fromUser.getId().toString());
     if (managedSession == null) {
       managedSession = members.stream()
-        .map(symphonyId -> datafeedSessionPool.getSession(symphonyId))
+        .map(datafeedSessionPool::getSession)
         .filter(Objects::nonNull)
         .findAny()
         .orElse(null);
@@ -188,7 +194,7 @@ public class ForwarderQueueConsumer {
     }
 
     if ("pending_incoming".equalsIgnoreCase(status)) {
-      LOG.debug("onIMCreated requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
+      LOG.debug("onConnectionRequested requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
       datafeedListener.onConnectionRequested(requesting, affectedUser);
     } else if ("accepted".equalsIgnoreCase(status)) {
       LOG.debug("onConnectionAccepted requesting={} requested={}", affectedUser.getUsername(), requesting.getUsername());
@@ -213,17 +219,14 @@ public class ForwarderQueueConsumer {
 
     // apparently, there is no entity class for the maestroObject property -_-"
     IJsonObject<?> maestroObject = message.getJsonObject().getRequiredObject("maestroObject");
-    String streamId = maestroObject.getRequiredString("streamId");
+    String streamId = Base64.encodeBase64URLSafeString(Base64.decodeBase64(maestroObject.getRequiredString("streamId").getBytes(StandardCharsets.UTF_8)));
     boolean crosspod = maestroObject.getRequiredBoolean("crossPod");
     IUser initiator = message.getRequestingUser();
 
     // at least one of the members must be part of the IM
     boolean atLeastOneHasSession = datafeedSessionPool.sessionExists(initiator.getId().toString());
     if (!atLeastOneHasSession) {
-      atLeastOneHasSession = members.stream()
-        .filter(symphonyId -> datafeedSessionPool.sessionExists(symphonyId))
-        .findAny()
-        .isPresent();
+      atLeastOneHasSession = members.stream().anyMatch(datafeedSessionPool::sessionExists);
     }
     if (!atLeastOneHasSession) {
       LOG.warn("IM with no gateway-managed accounts: stream={} members={} initiator={}", streamId, members, initiator.getUsername());

@@ -1,8 +1,7 @@
 package com.symphony.sfs.ms.chat.api.util;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.config.DynamoConfiguration;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
@@ -28,9 +27,6 @@ import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
 import com.symphony.sfs.ms.starter.testing.LocalProfileTest;
 import com.symphony.sfs.ms.starter.testing.RestApiTest;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
-
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +35,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.UUID;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 
 public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfileTest, RestApiTest {
   protected AuthenticationService authenticationService;
@@ -108,7 +107,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     streamService = spy(new StreamService(webClient));
     connectionsServices = new ConnectionsService(webClient);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
-    channelService = new ChannelService(streamService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool);
+    channelService = new ChannelService(streamService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository);
     channelService.registerAsDatafeedListener();
   }
 

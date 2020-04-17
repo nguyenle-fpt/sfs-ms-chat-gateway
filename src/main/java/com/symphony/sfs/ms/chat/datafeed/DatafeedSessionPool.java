@@ -30,7 +30,10 @@ public class DatafeedSessionPool {
 
   public DatafeedSession listenDatafeed(String symphonyId) throws UnknownDatafeedUserException {
     FederatedAccount account = federatedAccountSessionService.findBySymphonyIdOrFail(symphonyId);
+    return listenDatafeed(account);
+  }
 
+  public DatafeedSession listenDatafeed(FederatedAccount account) {
     UserSession session = authenticationService.authenticate(
       podConfiguration.getSessionAuth(),
       podConfiguration.getKeyAuth(),
@@ -38,8 +41,8 @@ public class DatafeedSessionPool {
       chatConfiguration.getSharedPrivateKey().getData());
     federatedAccountSessionService.updateSession(account, session);
 
-    DatafeedSession datafeedSession = new DatafeedSession(session, symphonyId);
-    sessions.put(symphonyId, datafeedSession);
+    DatafeedSession datafeedSession = new DatafeedSession(session, account.getSymphonyUserId());
+    sessions.put(account.getSymphonyUserId(), datafeedSession);
     return datafeedSession;
   }
 

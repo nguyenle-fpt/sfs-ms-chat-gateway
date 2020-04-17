@@ -35,9 +35,6 @@ bot:
 agent:
   url: https://ces3-dev.symphony.com
 
-microservices:
-  WHATSAPP: 'https://federation-dev.symphony.com:9601'
-
 microservice:
   chat:
     msAdminUrl: 'https://federation-dev.symphony.com:9600'

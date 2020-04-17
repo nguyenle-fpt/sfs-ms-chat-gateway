@@ -4,23 +4,15 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.EmpMicroserviceResolver;
 import com.symphony.sfs.ms.starter.service.MicroServiceClient;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
-import static com.symphony.sfs.ms.starter.util.WebClientUtils.blockWithRetries;
-import static com.symphony.sfs.ms.starter.util.WebClientUtils.logWebClientError;
 
 @RequiredArgsConstructor
 @Component

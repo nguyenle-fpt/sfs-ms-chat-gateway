@@ -42,6 +42,7 @@ import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSess
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -373,13 +374,13 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       requested
     )));
 
-    forwarderQueueConsumer.consume(notification);
+    assertThrows(IllegalStateException.class, () -> forwarderQueueConsumer.consume(notification));
 
     verify(connectionRequestManager, times(1)).refuseConnectionRequest(any(), eq(String.valueOf(requester.getId())));
 
-    verify(streamService, times(1)).sendMessage(any(), eq("streamId"),
+    /*verify(streamService, times(1)).sendMessage(any(), eq("streamId"),
       eq("<messageML>Connection request to emailAddress@symphony.com/WHATSAPP has been automatically declined because you are not authorized: advisor rights are needed</messageML>"),
-      any());
+      any());*/
   }
 
   private String getAcceptedConnectionRequestMaestroMessage(FederatedAccount requester, FederatedAccount requested) {
