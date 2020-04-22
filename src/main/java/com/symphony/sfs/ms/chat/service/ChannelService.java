@@ -29,6 +29,7 @@ import java.util.Optional;
 public class ChannelService implements DatafeedListener {
 
   private final StreamService streamService;
+  private final SymphonyMessageService symphonyMessageService;
   private final PodConfiguration podConfiguration;
   private final EmpClient empClient;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -81,8 +82,7 @@ public class ChannelService implements DatafeedListener {
     empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser))
       .orElseThrow(CreateChannelFailedProblem::new);
 
-    // TODO have a nice message template
-    streamService.sendMessage(podConfiguration.getUrl(), streamId, "<messageML>Hello, I will be ready as soon as I join the whatsapp group</messageML>", session);
+    symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I'm ready to discuss with you");
 
     return streamId;
   }

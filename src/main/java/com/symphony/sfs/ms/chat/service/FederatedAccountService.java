@@ -66,6 +66,7 @@ public class FederatedAccountService implements DatafeedListener {
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final AdminClient adminClient;
   private final StreamService streamService;
+  private final SymphonyMessageService symphonyMessageService;
 
   @PostConstruct
   @VisibleForTesting
@@ -136,10 +137,10 @@ public class FederatedAccountService implements DatafeedListener {
           if (connectionRequestManager.sendConnectionRequest(federatedBotSession, requestingUserId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
             String streamId = streamService.getIM(podConfiguration.getUrl(), requestingUserId, federatedBotSession)
               .orElseThrow(CannotRetrieveStreamIdProblem::new);
-            String message = String.format("<messageML>Connection request to %s/%s has been automatically declined because you are not authorized: advisor rights are needed</messageML>",
+            String message = String.format("Connection request to %s/%s has been automatically declined because you are not authorized: advisor rights are needed",
               federatedAccount.get().getEmailAddress(),
               federatedAccount.get().getEmp());
-            streamService.sendMessage(podConfiguration.getUrl(), streamId, message, federatedBotSession);
+            symphonyMessageService.sendAlertMessage(federatedBotSession, streamId, message);
           } else {
             // TODO better exception?
             // with this exception we make sure that the queue will reprocess regularly the message

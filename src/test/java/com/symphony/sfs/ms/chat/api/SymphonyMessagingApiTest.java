@@ -61,7 +61,7 @@ class SymphonyMessagingApiTest extends AbstractIntegrationTest {
     sendMessageRequest.setFromSymphonyUserId("wrongSymphonyUserId");
     sendMessageRequest.setText("text");
 
-    doThrow(new SendMessageFailedProblem()).when(symphonyMessageService).sendRawMessage("streamId", "wrongSymphonyUserId", "text");
+    doThrow(new SendMessageFailedProblem()).when(symphonyMessageService).sendRawMessage("streamId", "wrongSymphonyUserId", "<messageML>text</messageML>");
 
     configuredGiven(objectMapper, new ExceptionHandling(), symphonyMessagingApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)

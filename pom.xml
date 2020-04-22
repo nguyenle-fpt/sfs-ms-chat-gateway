@@ -16,6 +16,7 @@
     <chat.model.version>0.3.9</chat.model.version>
     <canon.runtime.version>0.2.18</canon.runtime.version>
     <symphony.client.version>1.0.30</symphony.client.version>
+    <handlebars.version>4.1.2</handlebars.version>
   </properties>
 
   <dependencies>
@@ -90,6 +91,12 @@
       <groupId>com.fasterxml.jackson.datatype</groupId>
       <artifactId>jackson-datatype-guava</artifactId>
       <version>${jackson.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.github.jknack</groupId>
+      <artifactId>handlebars</artifactId>
+      <version>${handlebars.version}</version>
     </dependency>
   </dependencies>
 

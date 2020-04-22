@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.api.util;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.config.DynamoConfiguration;
+import com.symphony.sfs.ms.chat.config.HandlebarsConfiguration;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -12,10 +13,12 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
+import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
+import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -45,12 +48,15 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected DynamoConfiguration dynamoConfiguration;
   protected PodConfiguration podConfiguration;
   protected ChatConfiguration chatConfiguration;
+  protected HandlebarsConfiguration handlebarsConfiguration;
   protected BotConfiguration botConfiguration;
   protected DatafeedSessionPool datafeedSessionPool;
   protected EmpClient empClient;
   protected DefaultMockServer mockServer;
   protected WebClient webClient;
   protected StreamService streamService;
+  protected SymphonyMessageService symphonyMessageService;
+  protected SymphonySystemMessageTemplateProcessor symphonySystemMessageTemplateProcessor;
   protected ConnectionsService connectionsServices;
   protected ConnectionRequestManager connectionRequestManager;
   protected ChannelService channelService;
@@ -87,6 +93,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     chatConfiguration.setSharedPrivateKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
     chatConfiguration.setSharedPublicKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPublic())));
 
+    handlebarsConfiguration = new HandlebarsConfiguration();
+
     // emp client
     empClient = new MockEmpClient();
     adminClient = new MockAdminClient();
@@ -105,9 +113,11 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     // services
     streamService = spy(new StreamService(webClient));
+    symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
+    symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor));
     connectionsServices = new ConnectionsService(webClient);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
-    channelService = new ChannelService(streamService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository);
+    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository);
     channelService.registerAsDatafeedListener();
   }
 

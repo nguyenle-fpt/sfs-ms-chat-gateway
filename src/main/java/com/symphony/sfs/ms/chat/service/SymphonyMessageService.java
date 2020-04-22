@@ -5,6 +5,7 @@ import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonySendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
@@ -23,6 +24,7 @@ public class SymphonyMessageService {
   private final AuthenticationService authenticationService;
   private final FederatedAccountRepository federatedAccountRepository;
   private final StreamService streamService;
+  private final SymphonySystemMessageTemplateProcessor templateProcessor;
 
   public static final String USER_WAITING_CONFIRMATION = "user.waiting.confirmation";
   public static final String USER_JOINED_GROUP = "user.joined.group";
@@ -35,6 +37,11 @@ public class SymphonyMessageService {
   public static final String ROOM_NOT_ALLOWED = "room.not.allowed";
   public static final String ONBOARDING_SUCCESS = "onboarding.success";
   public static final String USER_INVITE_EXPIRED = "user.invite.expired";
+
+  public static final String SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE = "system_message_alert";
+  public static final String SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE = "system_message_information";
+  public static final String SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE = "system_message_notification";
+  public static final String SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE = "system_message_simple";
 
   public void sendRawMessage(UserSession session, String streamId, String messageContent) {
     try {
@@ -60,35 +67,48 @@ public class SymphonyMessageService {
     sendRawMessage(userSession, streamId, messageContent);
   }
 
-  // TODO
-  /*public void sendUntemplatedMessage(String whatsAppId, String streamId, String messageI18nKey, Object... args) {
-    String content = RendererUtils.resolveI18n(messageSource, messageI18nKey, args, messageI18nKey);
-    sendRawMessage(whatsAppId, streamId, content);
+  public void sendSimpleMessage(UserSession userSession, String streamId, String messageContent) {
+    String detemplatized = templateProcessor.process(messageContent, SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE);
+    sendRawMessage(userSession, streamId, detemplatized);
   }
 
-  public void sendInfoMessage(String whatsAppId, String streamId, String messageI18nKey, Object... args) {
-    String content = RendererUtils.getRenderedMessage(messageSource, new RendererMessage(SmsRenderer.SmsTypes.INFORMATION, messageI18nKey, args));
-    sendRawMessage(whatsAppId, streamId, content);
+  public void sendNotificationMessage(UserSession userSession, String streamId, String messageContent) {
+    sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE));
   }
 
-  public void sendAlertMessage(String whatsAppId, String streamId, String messageI18nKey, Object... args) {
-    String content = RendererUtils.getRenderedMessage(messageSource, new RendererMessage(SmsRenderer.SmsTypes.ALERT, messageI18nKey, args));
-    sendRawMessage(whatsAppId, streamId, content);
+  public void sendInfoMessage(UserSession userSession, String streamId, String messageContent) {
+    sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
-  public void sendUntemplatedMessage(ISymClient client, String streamId, String messageI18nKey, Object... args) {
-    String content = RendererUtils.resolveI18n(messageSource, messageI18nKey, args, messageI18nKey);
-    sendRawMessage(client, streamId, content);
+  public void sendAlertMessage(UserSession userSession, String streamId, String messageContent) {
+    sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
   }
 
-  public void sendInfoMessage(ISymClient client, String streamId, String messageI18nKey, Object... args) {
-    String content = RendererUtils.getRenderedMessage(messageSource, new RendererMessage(SmsRenderer.SmsTypes.INFORMATION, messageI18nKey, args));
-    sendRawMessage(client, streamId, content);
-  }
+  // TODO i18n?
+//  public void sendUntemplatedMessage(String whatsAppId, String streamId, String messageI18nKey, Object... args) {
+//    String content = RendererUtils.resolveI18n(messageSource, messageI18nKey, args, messageI18nKey);
+//    sendRawMessage(whatsAppId, streamId, content);
+//  }
 
-  public void sendAlertMessage(ISymClient client, String streamId, String messageI18nKey, Object... args) {
-    String content = RendererUtils.getRenderedMessage(messageSource, new RendererMessage(SmsRenderer.SmsTypes.ALERT, messageI18nKey, args));
-    sendRawMessage(client, streamId, content);
-  }*/
+//  public void sendAlertMessage(String whatsAppId, String streamId, String messageI18nKey, Object... args) {
+//    String content = RendererUtils.getRenderedMessage(messageSource, new RendererMessage(SmsRenderer.SmsTypes.ALERT, messageI18nKey, args));
+//    sendRawMessage(whatsAppId, streamId, content);
+//  }
+//
+//  public void sendUntemplatedMessage(ISymClient client, String streamId, String messageI18nKey, Object... args) {
+//    String content = RendererUtils.resolveI18n(messageSource, messageI18nKey, args, messageI18nKey);
+//    sendRawMessage(client, streamId, content);
+//  }
+//
+//  public void sendInfoMessage(ISymClient client, String streamId, String messageI18nKey, Object... args) {
+//    String content = RendererUtils.getRenderedMessage(messageSource, new RendererMessage(SmsRenderer.SmsTypes.INFORMATION, messageI18nKey, args));
+//    sendRawMessage(client, streamId, content);
+//  }
+//
+//  public void sendAlertMessage(ISymClient client, String streamId, String messageI18nKey, Object... args) {
+//    String content = RendererUtils.getRenderedMessage(messageSource, new RendererMessage(SmsRenderer.SmsTypes.ALERT, messageI18nKey, args));
+//    sendRawMessage(client, streamId, content);
+//  }
+
 
 }

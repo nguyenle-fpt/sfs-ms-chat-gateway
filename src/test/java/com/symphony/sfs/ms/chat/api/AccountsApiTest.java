@@ -7,6 +7,7 @@ import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
+import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
@@ -41,6 +42,7 @@ import static clients.symphony.api.constants.PodConstants.SENDCONNECTIONREQUEST;
 import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
+import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -73,7 +75,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       channelService,
       forwarderQueueConsumer,
       adminClient,
-      streamService);
+      streamService,
+      symphonyMessageService);
     federatedAccountService.registerAsDatafeedListener();
 
     accountsApi = new AccountsApi(federatedAccountService);
@@ -339,7 +342,95 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void onConnectionRequestedFederatedAccount() throws IOException {
+  public void onConnectionRequestedFederatedAccount_RequesterIsNotAdvisor_ConnectionRequestFromBotUserRefused() {
+    UserInfo requester = new UserInfo();
+    requester.setId(1L);
+
+    FederatedAccount requested = FederatedAccount.builder()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP")
+      .symphonyUserId("2")
+      .symphonyUsername("username")
+      .build();
+    federatedAccountRepository.save(requested);
+
+    UserInfo requestedUser = new UserInfo();
+    requester.setId(2L);
+
+    UserSession botSession = getSession(botConfiguration.getUsername());
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.getUserInfo(any(), any(), eq(true))).thenReturn(Optional.of(requestedUser));
+    when(connectionRequestManager.sendConnectionRequest(botSession, "2")).thenReturn(Optional.of(ConnectionRequestStatus.REJECTED));
+
+    mockServer.expect()
+      .post()
+      .withPath(GETIM)
+      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getConnectionRequestMaestroMessage(
+      requester,
+      requested
+    )));
+
+    assertThrows(IllegalStateException.class, () -> forwarderQueueConsumer.consume(notification));
+
+    verify(connectionRequestManager, times(1)).refuseConnectionRequest(any(), eq(String.valueOf(requester.getId())));
+  }
+
+
+  @Test
+  public void onConnectionRequestedFederatedAccount_RequesterIsNotAdvisor_ConnectionRequestFromBotUserAccepted() throws IOException {
+    UserInfo requester = new UserInfo();
+    requester.setId(1L);
+
+    FederatedAccount requested = FederatedAccount.builder()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP")
+      .symphonyUserId("2")
+      .symphonyUsername("username")
+      .build();
+    federatedAccountRepository.save(requested);
+
+    UserInfo requestedUser = new UserInfo();
+    requester.setId(2L);
+
+    UserSession botSession = getSession(botConfiguration.getUsername());
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.getUserInfo(any(), any(), eq(true))).thenReturn(Optional.of(requestedUser));
+    when(connectionRequestManager.sendConnectionRequest(botSession, "2")).thenReturn(Optional.of(ConnectionRequestStatus.ACCEPTED));
+
+    mockServer.expect()
+      .post()
+      .withPath(GETIM)
+      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getConnectionRequestMaestroMessage(
+      requester,
+      requested
+    )));
+
+    forwarderQueueConsumer.consume(notification);
+
+    verify(connectionRequestManager, times(1)).refuseConnectionRequest(any(), eq(String.valueOf(requester.getId())));
+    verify(symphonyMessageService, once()).sendAlertMessage(botSession, "streamId", "Connection request to emailAddress@symphony.com/WHATSAPP has been automatically declined because you are not authorized: advisor rights are needed");
+
+  }
+
+
+  @Test
+  public void onConnectionRequestedFederatedAccount_RequesterIsAdvisor() throws IOException {
     UserInfo requester = new UserInfo();
     requester.setId(1L);
 
@@ -362,6 +453,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.getUserInfo(any(), any(), eq(true))).thenReturn(Optional.of(requestedUser));
 
+    ((MockAdminClient) adminClient).mockAdvisor(requester);
+
     mockServer.expect()
       .post()
       .withPath(GETIM)
@@ -374,13 +467,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       requested
     )));
 
-    assertThrows(IllegalStateException.class, () -> forwarderQueueConsumer.consume(notification));
+    forwarderQueueConsumer.consume(notification);
 
-    verify(connectionRequestManager, times(1)).refuseConnectionRequest(any(), eq(String.valueOf(requester.getId())));
-
-    /*verify(streamService, times(1)).sendMessage(any(), eq("streamId"),
-      eq("<messageML>Connection request to emailAddress@symphony.com/WHATSAPP has been automatically declined because you are not authorized: advisor rights are needed</messageML>"),
-      any());*/
+    verify(connectionRequestManager, times(1)).acceptConnectionRequest(any(), eq(String.valueOf(requester.getId())));
   }
 
   private String getAcceptedConnectionRequestMaestroMessage(FederatedAccount requester, FederatedAccount requested) {
