@@ -20,8 +20,8 @@ function prepareFiles() {
     mkdir -p docker/resources
     # mkdir -p docker/resources/templates
     mkdir -p docker/resources/certs
-    cp "target/sfs-ms-chat-gateway-${POM_VERSION}.jar" docker/resources/sfs-ms-chat-gateway.jar
-    cp "src/main/resources/application-${ENV}.yaml" docker/resources/sfs-ms-chat-gateway.yaml
+    cp "sfs-ms-chat-gateway-server/target/sfs-ms-chat-gateway-server-${POM_VERSION}.jar" docker/resources/sfs-ms-chat-gateway.jar
+    cp "sfs-ms-chat-gateway-server/src/main/resources/application-${ENV}.yaml" docker/resources/sfs-ms-chat-gateway.yaml
     cp docker/startup.sh docker/resources/startup.sh
     # cp -R misc/templates/* docker/resources/templates
     cp -R misc/certs/* docker/resources/certs

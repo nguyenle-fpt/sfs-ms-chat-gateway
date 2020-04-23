@@ -2,14 +2,21 @@
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <artifactId>sfs-ms-parent</artifactId>
     <groupId>com.symphony.sfs</groupId>
-    <version>0.6.2-SNAPSHOT</version>
+    <version>0.7.0-SNAPSHOT</version>
   </parent>
-  <modelVersion>4.0.0</modelVersion>
 
   <artifactId>sfs-ms-chat-gateway</artifactId>
+  <packaging>pom</packaging>
+
+  <modules>
+    <module>sfs-ms-chat-gateway-client</module>
+    <module>sfs-ms-chat-gateway-server</module>
+  </modules>
 
   <properties>
     <allegro.model.version>0.0.16</allegro.model.version>
@@ -30,108 +37,6 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
-
-    <dependency>
-      <groupId>org.springframework.cloud</groupId>
-      <artifactId>spring-cloud-aws-messaging</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.symphony.oss.models</groupId>
-      <artifactId>allegro-model</artifactId>
-      <version>${allegro.model.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.freemarker</groupId>
-          <artifactId>freemarker</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.symphony.oss.models</groupId>
-      <artifactId>chat-model</artifactId>
-      <version>${chat.model.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>jetty-http</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>jetty-servlet</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>jetty-util</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.symphony.s2.model</groupId>
-      <artifactId>chat-model-impl</artifactId>
-      <version>${chat.model.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.symphonyoss.s2.canon</groupId>
-      <artifactId>canon-runtime-java</artifactId>
-      <version>${canon.runtime.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.symphony</groupId>
-      <artifactId>symphony-client</artifactId>
-      <version>${symphony.client.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.logging.log4j</groupId>
-          <artifactId>log4j-slf4j-impl</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.datatype</groupId>
-      <artifactId>jackson-datatype-guava</artifactId>
-      <version>${jackson.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.github.jknack</groupId>
-      <artifactId>handlebars</artifactId>
-      <version>${handlebars.version}</version>
-    </dependency>
   </dependencies>
 
-  <build>
-    <plugins>
-      <!-- Enable "mvn spring-boot:run" -->
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-      </plugin>
-
-      <plugin>
-        <groupId>io.swagger.codegen.v3</groupId>
-        <artifactId>swagger-codegen-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <configuration>
-              <apiPackage>com.symphony.sfs.ms.chat.generated.api</apiPackage>
-              <modelPackage>com.symphony.sfs.ms.chat.generated.model</modelPackage>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <compilerArgs>
-            <!-- for the cryptolib -->
-            <arg>--add-exports=java.base/sun.security.x509=ALL-UNNAMED</arg>
-            <arg>--add-exports=java.base/sun.security.util=ALL-UNNAMED</arg>
-          </compilerArgs>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
 </project>

@@ -11,3 +11,9 @@ paths:
     $ref: './paths/accounts.yaml#/accounts'
   /api/v1/internal/messages:
     $ref: './paths/messaging.yaml#/messages'
+components:
+  securitySchemes:
+    sfsAuthentication:
+      type: http
+      scheme: bearer
+      bearerFormat: '{"jwt":"<jwt>","podId":"<podId>"}'
