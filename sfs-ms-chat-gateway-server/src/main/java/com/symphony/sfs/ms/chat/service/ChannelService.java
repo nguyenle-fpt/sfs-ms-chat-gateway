@@ -1,7 +1,9 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -17,10 +19,14 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import javax.annotation.PostConstruct;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -44,24 +50,16 @@ public class ChannelService implements DatafeedListener {
 
   @Override
   public void onIMCreated(String streamId, List<String> members, IUser initiator, boolean crosspod) {
+    if (members.size() < 2) {
+      LOG.warn("IM initiated by {} with streamId {} has less than 2 members (count={})", initiator.getId().toString(), streamId, members.size());
+    }
+
     // TODO check also advisors like in connection requests?
 
     if (members.size() == 2) {
-      members.remove(initiator.getId().toString());
-      if (members.size() == 1) {
-        String toFederatedAccountId = members.get(0);
-        Optional<FederatedAccount> toFederatedAccount = federatedAccountRepository.findBySymphonyId(toFederatedAccountId);
-        if (toFederatedAccount.isPresent()) {
-          createIMChannel(streamId, initiator, toFederatedAccount.get());
-        } else {
-          LOG.warn("onIMCreated towards a non-federated account {}", toFederatedAccountId);
-        }
-      } else {
-        LOG.warn("Member list does not contain initiation: list={} initiator={}", members, initiator.getId());
-      }
+      handleIMCreation(streamId, members, initiator, crosspod);
     } else {
-      // TODO MIMs/rooms
-      LOG.warn("Only IMs supported");
+      handleMIMCreation(streamId, members, initiator, crosspod);
     }
   }
 
@@ -88,16 +86,32 @@ public class ChannelService implements DatafeedListener {
   }
 
   public String createIMChannel(String streamId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount) {
+    return createMIMChannel(
+      streamId,
+      fromSymphonyUser,
+      Collections.singletonMap(toFederatedAccount.getEmp(), Collections.singletonList(toFederatedAccount)),
+      Collections.singletonList(fromSymphonyUser));
+  }
+
+  public String createMIMChannel(String streamId, IUser fromSymphonyUser, Map<String, List<FederatedAccount>> toFederatedAccounts, List<IUser> toSymphonyUsers) {
 
     try {
-      UserSession session = datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId());
+      for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
+        List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
+        List<UserSession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
+        for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
+          // TODO The process stops at first UnknownDatafeedUserException
+          //  Some EMPs may have been called, others may have not
+          //  Do we check first all sessions are ok?
+          userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
+        }
 
-      empClient.createChannel(toFederatedAccount.getEmp(), streamId, Collections.singletonList(toFederatedAccount), toFederatedAccount.getSymphonyUserId(), Collections.singletonList(fromSymphonyUser))
-        .orElseThrow(CreateChannelFailedProblem::new);
+        // TODO need a recovery mechanism to re-trigger the failed channel creation
+        empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers)
+          .orElseThrow(CreateChannelFailedProblem::new);
 
-      // TODO have a nice message template
-      // TODO this should not be here, but in the whatsapp EMP
-      streamService.sendMessage(podConfiguration.getUrl(), streamId, "<messageML>Hello, I will be ready as soon as I join the whatsapp group</messageML>", session);
+        userSessions.forEach(session -> symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
+      }
 
       return streamId;
     } catch (UnknownDatafeedUserException e) {
@@ -106,4 +120,39 @@ public class ChannelService implements DatafeedListener {
     }
   }
 
+  private void handleIMCreation(String streamId, List<String> members, IUser initiator, boolean crosspod) {
+    members.remove(initiator.getId().toString());
+    if (members.size() == 1) {
+      String toFederatedAccountId = members.get(0);
+      Optional<FederatedAccount> toFederatedAccount = federatedAccountRepository.findBySymphonyId(toFederatedAccountId);
+      if (toFederatedAccount.isPresent()) {
+        createIMChannel(streamId, initiator, toFederatedAccount.get());
+      } else {
+        LOG.warn("onIMCreated towards a non-federated account {}", toFederatedAccountId);
+      }
+    } else {
+      LOG.warn("Member list does not contain initiation: list={} initiator={}", members, initiator.getId());
+    }
+  }
+
+  private void handleMIMCreation(String streamId, List<String> members, IUser initiator, boolean crosspod) {
+    MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
+    List<IUser> symphonyUsers = new ArrayList<>();
+
+    for (String symphonyId : members) {
+      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(newIUser(symphonyId)));
+    }
+
+    createMIMChannel(streamId, initiator, federatedAccountsByEmp, symphonyUsers);
+  }
+
+  private IUser newIUser(String symphonyId) {
+    // TODO resolve firstName and lastName
+    UserEntity.Builder builder = new UserEntity.Builder()
+      .withId(Long.valueOf(symphonyId))
+      .withFirstName(symphonyId + "_firstName")
+      .withSurname(symphonyId + "_lastName");
+    return new User(builder);
+
+  }
 }
