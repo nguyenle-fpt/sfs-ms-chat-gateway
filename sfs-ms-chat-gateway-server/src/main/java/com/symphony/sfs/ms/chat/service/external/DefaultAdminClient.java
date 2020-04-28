@@ -60,6 +60,6 @@ public class DefaultAdminClient implements AdminClient {
 
   @Override
   public EmpList getEmpList() {
-    return adminClient.getEmpApi().getEmpList().orElse(new EmpList());
+    return adminClient.getInternalApi().getEmpList().orElse(new EmpList());
   }
 }
