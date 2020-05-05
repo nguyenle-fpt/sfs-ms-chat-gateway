@@ -44,12 +44,17 @@ public class DefaultEmpClient implements EmpClient {
 
   @Override
   public Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message) {
+    return sendMessage(emp, streamId, messageId, fromSymphonyUser, Collections.singletonList(toFederatedAccount), timestamp, message);
+  }
+
+  @Override
+  public Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     SendMessageRequest request = new SendMessageRequest()
       .streamId(streamId)
       .messageId(messageId)
-      .channelMembers(toChannelMembers(Collections.singletonList(toFederatedAccount), fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser)));
+      .channelMembers(toChannelMembers(toFederatedAccounts, fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser)));
 
     // TODO async result too?
     return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getId);

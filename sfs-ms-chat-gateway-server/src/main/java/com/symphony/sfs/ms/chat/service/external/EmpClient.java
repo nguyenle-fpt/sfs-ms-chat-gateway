@@ -17,7 +17,7 @@ public interface EmpClient {
   Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers);
 
   /**
-   * Currently only IM supported as we have only one recipient: toFederatedServiceAccount
+   * IM
    *
    * @param emp
    * @param streamId
@@ -29,4 +29,18 @@ public interface EmpClient {
    * @return
    */
   Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message);
+
+  /**
+   * MIM/Room
+   *
+   * @param emp
+   * @param streamId
+   * @param messageId
+   * @param fromSymphonyUser
+   * @param toFederatedAccounts
+   * @param timestamp
+   * @param message
+   * @return
+   */
+  Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message);
 }

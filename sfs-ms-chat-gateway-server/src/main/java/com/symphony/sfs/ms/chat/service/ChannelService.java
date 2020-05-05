@@ -107,6 +107,7 @@ public class ChannelService implements DatafeedListener {
         }
 
         // TODO need a recovery mechanism to re-trigger the failed channel creation
+        //  Short term proposition: recovery is manual - display a System message in the MIM indicating that channel creation has failed for some EMPs and to contact an administrator
         empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers)
           .orElseThrow(CreateChannelFailedProblem::new);
 
