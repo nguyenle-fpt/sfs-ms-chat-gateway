@@ -27,6 +27,6 @@ public class WebSecurityConfiguration {
   @Bean
   public AuthorizeRequestsConfigurer authorizeRequestsConfigurer() {
     return registry -> registry
-      .antMatchers("/api/v1/internal/messages/**").permitAll();
+      .antMatchers("/api/v1/internal/**").permitAll();
   }
 }
