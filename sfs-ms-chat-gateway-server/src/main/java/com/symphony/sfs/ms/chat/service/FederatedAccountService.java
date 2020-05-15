@@ -12,9 +12,11 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.AdvisorNotFoundException;
 import com.symphony.sfs.ms.chat.exception.CannotRetrieveAdvisorException;
+import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
+import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -100,6 +102,27 @@ public class FederatedAccountService implements DatafeedListener {
       LOG.debug("Failed to save the federated account repository, already exists", e);
       throw new FederatedAccountAlreadyExistsProblem();
     }
+  }
+
+  public String createChannel(CreateChannelRequest request) {
+    Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp());
+    if (federatedAccount.isEmpty()) {
+      throw new FederatedAccountNotFoundProblem();
+    }
+
+    String advisorSymphonyId = request.getAdvisorUserId();
+    UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+    DatafeedSession session = datafeedSessionPool.listenDatafeed(federatedAccount.get());
+
+    // If for whatever reason the connection request is already accepted
+    // Maybe in case of offboarding and re-onboarding?
+    //
+    // Otherwise, the createIMChannel will be called when the ConnectionRequestStatus.ACCEPTED event is received from the forwarder queue
+    if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
+      return channelService.createIMChannel(session, federatedAccount.get(), getCustomerInfo(advisorSymphonyId, botSession));
+    }
+
+   return null;
   }
 
   @Override

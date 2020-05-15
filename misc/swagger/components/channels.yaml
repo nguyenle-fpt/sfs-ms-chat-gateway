@@ -1,0 +1,23 @@
+#Requests
+create-channel-request:
+  type: object
+  required:
+    - federatedUserId
+    - emp
+    - advisorUserId
+  properties:
+    federatedUserId:
+      type: string
+    emp:
+      type: string
+    advisorUserId:
+      type: string
+
+#Responses
+create-channel-response:
+  type: object
+  properties:
+    channelId:
+      type: string
+
+

@@ -1,0 +1,13 @@
+federated-account-not-found:
+  type: object
+  description: 'Federated account not found'
+  properties:
+    type:
+      type: string
+      format: 'federated.account.not.found'
+    title:
+      type: string
+      format: 'Federated account not found'
+    status:
+      type: integer
+      format: 400

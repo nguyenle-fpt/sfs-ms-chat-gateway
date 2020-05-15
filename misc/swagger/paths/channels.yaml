@@ -1,0 +1,31 @@
+channels:
+  post:
+    tags:
+      - Channels
+    summary: Create a new channel between a federated account and and symphony advisor
+    operationId: createChannel
+    description: >
+      => Create a new Channel
+    security:
+      - sfsAuthentication: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/channels.yaml#/create-channel-request'
+    responses:
+      '204':
+        description: The channel has been successfully created
+        content:
+          application/json:
+            schema:
+              $ref: '../components/channels.yaml#/create-channel-response'
+      '500':
+        description: Server Error
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/channels.yaml#/federated-account-not-found'
+                - $ref: '../errors/accounts.yaml#/create-channel-failed'
+

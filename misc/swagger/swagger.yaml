@@ -9,6 +9,8 @@ tags:
 paths:
   /api/v1/internal/accounts:
     $ref: './paths/accounts.yaml#/accounts'
+  /api/v1/channels:
+    $ref: './paths/channels.yaml#/channels'
   /api/v1/internal/messages:
     $ref: './paths/messaging.yaml#/messages'
 components:

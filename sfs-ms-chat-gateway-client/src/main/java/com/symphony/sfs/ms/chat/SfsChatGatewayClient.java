@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.generated.api.AccountsApi;
+import com.symphony.sfs.ms.chat.generated.api.ChannelsApi;
 import com.symphony.sfs.ms.chat.generated.api.SymphonyMessagingApi;
 import com.symphony.sfs.ms.chat.generated.client.ApiClient;
 import lombok.Getter;
@@ -15,6 +16,7 @@ public class SfsChatGatewayClient {
   private final ApiClient apiClient;
 
   private final AccountsApi accountsApi;
+  private final ChannelsApi channelsApi;
   private final SymphonyMessagingApi symphonyMessagingApi;
 
   public SfsChatGatewayClient(String baseUri, WebClient webClient, ObjectMapper objectMapper) {
@@ -23,6 +25,7 @@ public class SfsChatGatewayClient {
 
     this.apiClient = new ApiClient(objectMapper, webClient);
     this.accountsApi = new AccountsApi(baseUri, apiClient);
+    this.channelsApi = new ChannelsApi(baseUri, apiClient);
     this.symphonyMessagingApi = new SymphonyMessagingApi(baseUri, apiClient);
   }
 }
