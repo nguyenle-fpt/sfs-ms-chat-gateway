@@ -44,10 +44,12 @@ public interface DatafeedListener {
 
   default void onRoomUpdated(RoomUpdated roomUpdated) {
   }
+  */
 
-  default void onUserJoinedRoom(UserJoinedRoom userJoinedRoom) {
+  default void onUserJoinedRoom(String streamId, List<String> members, IUser fromSymphonyUser) {
   }
 
+  /*
   default void onUserLeftRoom(UserLeftRoom userLeftRoom) {
   }
 

@@ -13,6 +13,7 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
+import com.symphony.sfs.ms.chat.service.RoomService;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
@@ -70,6 +71,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     this.mockServer = mockServer;
     webClient = buildTestClient();
+    RoomService roomService = mock(RoomService.class);
 
     dynamoConfiguration = provisionTestTable(db);
     objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
@@ -117,7 +119,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor));
     connectionsServices = new ConnectionsService(webClient);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
-    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository);
+    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, roomService);
     channelService.registerAsDatafeedListener();
   }
 

@@ -12,7 +12,9 @@ import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
+import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,8 @@ public class MessageService implements DatafeedListener {
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final DatafeedSessionPool datafeedSessionPool;
+  private final StreamService streamService;
+  private final PodConfiguration podConfiguration;
 
   @PostConstruct
   @VisibleForTesting
@@ -46,7 +50,7 @@ public class MessageService implements DatafeedListener {
   public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message) {
 
     if (members.size() < 2) {
-      LOG.warn("M(IM) with streamId {} and messageId {} has less than 2 members", streamId, messageId);
+      LOG.warn("(M)IM with streamId {} and messageId {} has less than 2 members", streamId, messageId);
       return;
     }
 
@@ -100,14 +104,20 @@ public class MessageService implements DatafeedListener {
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
 
-        // TODO Define the behavior in case of message not correctly sent to all EMPs
-        //  need a recovery mechanism to re-send message in case of error only on some EMPs
-        //
-        // TODO Clarify the behavior when all MIM federated users have not joined the MIM
-        //  Example: a WhatsApp user must join a WhatsGroup to discuss in the associated
-        //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
-        //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
-         empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, message);
+        // Check there are only 2 users
+        if (toUserIds.size() > 1) {
+          userSessions.forEach(session -> streamService.sendMessage(podConfiguration.getUrl(), streamId, "You are not allowed to send a message to a " + entry.getKey() + " contact in a MIM.", session));
+        } else {
+
+          // TODO Define the behavior in case of message not correctly sent to all EMPs
+          //  need a recovery mechanism to re-send message in case of error only on some EMPs
+          //
+          // TODO Clarify the behavior when all MIM federated users have not joined the MIM
+          //  Example: a WhatsApp user must join a WhatsGroup to discuss in the associated
+          //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
+          //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
+          empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, message);
+        }
       }
     } catch(UnknownDatafeedUserException e){
         // should never happen, as we have a FederatedAccount

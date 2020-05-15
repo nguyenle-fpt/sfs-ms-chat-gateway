@@ -59,9 +59,11 @@ class ChannelServiceTest {
   private AuthenticationService authenticationService;
   private UserSession userSession;
 
+  private RoomService roomService;
+
   @BeforeEach
   public void setUp() {
-
+    roomService = mock(RoomService.class);
     streamService = mock(StreamService.class);
     symphonyMessageService = mock(SymphonyMessageService.class);
     empClient = mock(EmpClient.class);
@@ -84,7 +86,7 @@ class ChannelServiceTest {
     userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository);
+    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, roomService);
   }
 
   @Test

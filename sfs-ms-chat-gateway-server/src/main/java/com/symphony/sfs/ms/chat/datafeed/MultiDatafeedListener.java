@@ -41,4 +41,8 @@ public class MultiDatafeedListener implements DatafeedListener {
     listeners.remove(listener);
   }
 
+  public void onUserJoinedRoom(String streamId, List<String> members, IUser initiator) {
+    listeners.forEach(l -> l.onUserJoinedRoom(streamId, members, initiator));
+  }
+
 }

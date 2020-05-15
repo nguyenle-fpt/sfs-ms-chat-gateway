@@ -26,12 +26,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
-import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,7 +45,7 @@ class MessageServiceTest {
   private BotConfiguration botConfiguration;
   private FederatedAccountRepository federatedAccountRepository;
   private DatafeedSessionPool datafeedSessionPool;
-
+  private StreamService streamService;
 
   private UserSession userSession;
 
@@ -70,10 +67,11 @@ class MessageServiceTest {
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
 
+    streamService = mock(StreamService.class);
 
     userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
-    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool);
+    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, streamService, podConfiguration);
   }
 
   @Test
@@ -147,7 +145,7 @@ class MessageServiceTest {
     DatafeedSessionPool.DatafeedSession userSession102 = new DatafeedSessionPool.DatafeedSession(userSession, "102");
     when(datafeedSessionPool.refreshSession("102")).thenReturn(userSession102);
     DatafeedSessionPool.DatafeedSession userSession201 = new DatafeedSessionPool.DatafeedSession(userSession, "201");
-    when(datafeedSessionPool.refreshSession("201")).thenReturn(userSession201);;
+    when(datafeedSessionPool.refreshSession("201")).thenReturn(userSession201);
     DatafeedSessionPool.DatafeedSession userSession202 = new DatafeedSessionPool.DatafeedSession(userSession, "202");
     when(datafeedSessionPool.refreshSession("202")).thenReturn(userSession202);
 

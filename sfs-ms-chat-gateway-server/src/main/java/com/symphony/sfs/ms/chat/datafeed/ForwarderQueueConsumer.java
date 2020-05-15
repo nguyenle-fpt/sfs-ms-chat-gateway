@@ -29,7 +29,6 @@ import org.symphonyoss.s2.canon.runtime.IEntityFactory;
 import org.symphonyoss.s2.canon.runtime.ModelRegistry;
 import org.symphonyoss.s2.common.dom.json.IJsonObject;
 import org.symphonyoss.s2.common.dom.json.ImmutableJsonList;
-import org.symphonyoss.s2.common.dom.json.JsonString;
 import org.symphonyoss.s2.common.dom.json.jackson.JacksonAdaptor;
 import org.symphonyoss.s2.common.immutable.ImmutableByteArray;
 
@@ -168,8 +167,11 @@ public class ForwarderQueueConsumer {
       case CONNECTION_REQUEST_ALERT:
         notifyConnectionRequest(maestroMessage);
         break;
-      case CREATE_ROOM:
       case JOIN_ROOM:
+        notifyJoinRoom(maestroMessage);
+        break;
+
+      case CREATE_ROOM:
       case LEAVE_ROOM:
         // TODO implement these events
         System.out.println("==== RAW ====");
@@ -235,6 +237,27 @@ public class ForwarderQueueConsumer {
 
     LOG.debug("onIMCreated stream={} members={} initiator={} crosspod={}", streamId, members, initiator.getUsername(), crosspod);
     datafeedListener.onIMCreated(streamId, members, initiator, crosspod);
+  }
+
+  private void notifyJoinRoom(IMaestroMessage message) {
+    IJsonObject<?> maestroObject = message.getJsonObject().getRequiredObject("maestroObject");
+    String streamId = Base64.encodeBase64URLSafeString(Base64.decodeBase64(maestroObject.getRequiredString("streamId").getBytes(StandardCharsets.UTF_8)));
+
+    List<String> members = message.getAffectedUsers().stream()
+      .map(IUser::getId)
+      .map(PodAndUserId::toString)
+      .collect(Collectors.toList());
+
+    IUser initiator = message.getRequestingUser();
+
+    // at least one of the members must be a federated user
+    boolean atLeastOneHasSession = members.stream().anyMatch(datafeedSessionPool::sessionExists);
+    if (!atLeastOneHasSession) {
+      LOG.warn("Room with no gateway-managed accounts: stream={} members={} initiator={}", streamId, members, initiator.getUsername());
+      return;
+    }
+
+    datafeedListener.onUserJoinedRoom(streamId, members, initiator);
   }
 
   private IEnvelope parseEnvelope(ISNSSQSWireObject sqsObject) throws IOException {

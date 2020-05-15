@@ -41,6 +41,7 @@ public class ChannelService implements DatafeedListener {
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
+  private final RoomService roomService;
 
   @PostConstruct
   @VisibleForTesting
@@ -106,15 +107,55 @@ public class ChannelService implements DatafeedListener {
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
 
-        // TODO need a recovery mechanism to re-trigger the failed channel creation
-        //  Short term proposition: recovery is manual - display a System message in the MIM indicating that channel creation has failed for some EMPs and to contact an administrator
-        empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers)
-          .orElseThrow(CreateChannelFailedProblem::new);
+        // Check there are only 2 users
+        if (toFederatedAccounts.size() == 1 && toSymphonyUsers.size() == 1 && toSymphonyUsers.get(0) == fromSymphonyUser) {
+          // TODO need a recovery mechanism to re-trigger the failed channel creation
+          //  Short term proposition: recovery is manual - display a System message in the MIM indicating that channel creation has failed for some EMPs and to contact an administrator
+          empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers)
+            .orElseThrow(CreateChannelFailedProblem::new);
 
-        userSessions.forEach(session -> symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
+          userSessions.forEach(session -> symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
+        } else {
+          userSessions.forEach(session -> streamService.sendMessage(podConfiguration.getUrl(), streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM.", session));
+        }
       }
+    } catch (UnknownDatafeedUserException e) {
+      // should never happen, as we have a FederatedAccount
+      throw new IllegalStateException(e);
+    }
+    return streamId;
+  }
 
-      return streamId;
+  @Override
+  public void onUserJoinedRoom(String streamId, List<String> members, IUser fromSymphonyUser) {
+    MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
+    List<IUser> symphonyUsers = new ArrayList<>();
+
+    for (String symphonyId : members) {
+      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(newIUser(symphonyId)));
+    }
+
+    userJoinRoom(streamId, federatedAccountsByEmp);
+  }
+
+  public void userJoinRoom(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts) {
+    try {
+      for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
+        List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
+        List<UserSession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
+        for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
+          // TODO The process stops at first UnknownDatafeedUserException
+          //  Some EMPs may have been called, others may have not
+          //  Do we check first all sessions are ok?
+          userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
+        }
+
+        // Send message to alert it is impossible to add WhatsApp user into a room
+        userSessions.forEach(session -> streamService.sendMessage(podConfiguration.getUrl(), streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a chat room.", session));
+
+        // Remove all federated users
+        userSessions.forEach(session -> roomService.removeMemberFromRoom(streamId, session));
+      }
     } catch (UnknownDatafeedUserException e) {
       // should never happen, as we have a FederatedAccount
       throw new IllegalStateException(e);
