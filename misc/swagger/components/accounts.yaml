@@ -6,6 +6,7 @@ create-account-request:
     - emailAddress
     - firstName
     - lastName
+    - companyName
     - federatedUserId
     - emp
   properties:
@@ -18,6 +19,8 @@ create-account-request:
     firstName:
       type: string
     lastName:
+      type: string
+    companyName:
       type: string
     federatedUserId:
       type: string

@@ -241,7 +241,7 @@ public class ForwarderQueueConsumer {
 
   private void notifyJoinRoom(IMaestroMessage message) {
     IJsonObject<?> maestroObject = message.getJsonObject().getRequiredObject("maestroObject");
-    String streamId = Base64.encodeBase64URLSafeString(Base64.decodeBase64(maestroObject.getRequiredString("streamId").getBytes(StandardCharsets.UTF_8)));
+    String streamId = Base64.encodeBase64URLSafeString(Base64.decodeBase64(maestroObject.getRequiredString("threadId").getBytes(StandardCharsets.UTF_8)));
 
     List<String> members = message.getAffectedUsers().stream()
       .map(IUser::getId)

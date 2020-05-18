@@ -39,6 +39,7 @@ public class MessageService implements DatafeedListener {
   private final DatafeedSessionPool datafeedSessionPool;
   private final StreamService streamService;
   private final PodConfiguration podConfiguration;
+  private final SymphonyMessageService symphonyMessageService;
 
   @PostConstruct
   @VisibleForTesting
@@ -71,11 +72,6 @@ public class MessageService implements DatafeedListener {
       }
 
       handleFromSymphonyIMorMIM(streamId, messageId, fromSymphonyUser, toUserIds, timestamp, message);
-    } else {
-      // IM from WhatsApp to Symphony
-      LOG.info("MessageService.onIMMessage: message from WhatsApp to Symphony - streamdId={} messageId={} fromFederatedUserId={}", streamId, messageId, fromSymphonyUserId);
-
-      // TODO To be implemented with https://perzoinc.atlassian.net/browse/CES-318
     }
   }
 
@@ -106,7 +102,7 @@ public class MessageService implements DatafeedListener {
 
         // Check there are only 2 users
         if (toUserIds.size() > 1) {
-          userSessions.forEach(session -> streamService.sendMessage(podConfiguration.getUrl(), streamId, "You are not allowed to send a message to a " + entry.getKey() + " contact in a MIM.", session));
+          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + entry.getKey() + " contact in a MIM."));
         } else {
 
           // TODO Define the behavior in case of message not correctly sent to all EMPs

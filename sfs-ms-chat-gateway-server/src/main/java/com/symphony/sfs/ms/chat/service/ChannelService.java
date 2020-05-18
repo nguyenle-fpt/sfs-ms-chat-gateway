@@ -78,10 +78,13 @@ public class ChannelService implements DatafeedListener {
     String streamId = streamService.getIM(podConfiguration.getUrl(), toSymphonyUser.getId().toString(), session)
       .orElseThrow(CannotRetrieveStreamIdProblem::new);
 
-    empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser))
-      .orElseThrow(CreateChannelFailedProblem::new);
+    Optional<String> channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
 
-    symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I'm ready to discuss with you");
+    if (channelId.isPresent()) {
+      symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I'm ready to discuss with you");
+    } else {
+      symphonyMessageService.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+    }
 
     return streamId;
   }
@@ -116,7 +119,7 @@ public class ChannelService implements DatafeedListener {
 
           userSessions.forEach(session -> symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
         } else {
-          userSessions.forEach(session -> streamService.sendMessage(podConfiguration.getUrl(), streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM.", session));
+          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
         }
       }
     } catch (UnknownDatafeedUserException e) {
@@ -135,10 +138,10 @@ public class ChannelService implements DatafeedListener {
       federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(newIUser(symphonyId)));
     }
 
-    userJoinRoom(streamId, federatedAccountsByEmp);
+    refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, true);
   }
 
-  public void userJoinRoom(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts) {
+  public void refuseToJoinRoomOrMIM(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts, boolean isRoom) {
     try {
       for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
@@ -150,11 +153,16 @@ public class ChannelService implements DatafeedListener {
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
 
-        // Send message to alert it is impossible to add WhatsApp user into a room
-        userSessions.forEach(session -> streamService.sendMessage(podConfiguration.getUrl(), streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a chat room.", session));
-
         // Remove all federated users
-        userSessions.forEach(session -> roomService.removeMemberFromRoom(streamId, session));
+        if (isRoom) {
+          // Send message to alert it is impossible to add WhatsApp user into a room
+          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a chat room."));
+
+          userSessions.forEach(session -> roomService.removeMemberFromRoom(streamId, session));
+        } else {
+          // Send message to alert it is impossible to add WhatsApp user into a MIM
+          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
+        }
       }
     } catch (UnknownDatafeedUserException e) {
       // should never happen, as we have a FederatedAccount
@@ -185,7 +193,9 @@ public class ChannelService implements DatafeedListener {
       federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(newIUser(symphonyId)));
     }
 
-    createMIMChannel(streamId, initiator, federatedAccountsByEmp, symphonyUsers);
+    refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, false);
+
+    // createMIMChannel(streamId, initiator, federatedAccountsByEmp, symphonyUsers);
   }
 
   private IUser newIUser(String symphonyId) {

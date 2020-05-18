@@ -106,6 +106,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
+      .companyName("companyName")
       .federatedUserId("federatedUserId")
       .emp("WHATSAPP");
 
@@ -131,6 +132,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName(createAccountRequest.getFirstName())
       .lastName(createAccountRequest.getLastName())
+      .companyName(createAccountRequest.getCompanyName())
       .federatedUserId(createAccountRequest.getFederatedUserId())
       .emp(createAccountRequest.getEmp())
       .symphonyUserId(accountSession.getUserId())
@@ -156,8 +158,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     adminUserSystemInfo.setId(2L);
     AdminUserAttributes adminUserAttributes = new AdminUserAttributes();
     adminUserAttributes.setUserName("username");
-    adminUserAttributes.setUserName("firstName");
-    adminUserAttributes.setUserName("lastName");
+    adminUserAttributes.setFirstName("firstName");
+    adminUserAttributes.setLastName("lastName");
+    adminUserAttributes.setCompanyName("companyName");
     AdminUserInfo adminUserInfo = new AdminUserInfo();
     adminUserInfo.setUserSystemInfo(adminUserSystemInfo);
     adminUserInfo.setUserAttributes(adminUserAttributes);
@@ -201,6 +204,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
+      .companyName("companyName")
       .federatedUserId("federatedUserId")
       .emp("WHATSAPP")
       .advisors(Collections.singletonList("2"));
@@ -269,6 +273,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
+      .companyName("companyName")
       .federatedUserId("federatedUserId")
       .emp("WHATSAPP")
       .advisors(Collections.singletonList("2"));
@@ -317,6 +322,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
+      .companyName("companyName")
       .federatedUserId("federatedUserId")
       .emp("WHATSAPP")
       .symphonyUserId("userId")
@@ -329,6 +335,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber(existingAccount.getPhoneNumber())
       .firstName(existingAccount.getFirstName())
       .lastName(existingAccount.getLastName())
+      .companyName(existingAccount.getCompanyName())
       .federatedUserId(existingAccount.getFederatedUserId())
       .emp(existingAccount.getEmp());
 

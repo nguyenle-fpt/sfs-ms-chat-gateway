@@ -10,13 +10,11 @@ import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
-import com.symphony.sfs.ms.starter.service.MicroServiceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -54,7 +52,10 @@ public class DefaultEmpClient implements EmpClient {
     SendMessageRequest request = new SendMessageRequest()
       .streamId(streamId)
       .messageId(messageId)
-      .channelMembers(toChannelMembers(toFederatedAccounts, fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser)));
+      .channelMembers(toChannelMembers(toFederatedAccounts, fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser)))
+      .fromSymphonyUserId(fromSymphonyUser.getId().toString())
+      .timestamp(timestamp)
+      .text(message);
 
     // TODO async result too?
     return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getId);
@@ -68,6 +69,7 @@ public class DefaultEmpClient implements EmpClient {
       .phoneNumber(account.getPhoneNumber())
       .firstName(account.getFirstName())
       .lastName(account.getLastName())
+      .companyName(account.getCompanyName())
       .federatedUserId(account.getFederatedUserId())
       .symphonyId(account.getSymphonyUserId())
       .isFederatedUser(true)
@@ -78,6 +80,7 @@ public class DefaultEmpClient implements EmpClient {
       .symphonyId(user.getId().toString())
       .firstName(user.getFirstName())
       .lastName(user.getSurname())
+      .companyName(user.getCompany())
       .isFederatedUser(false)
       .isInitiator(initiatorUserId.equals(user.getId().toString()))
     ));

@@ -235,6 +235,7 @@ public class FederatedAccountService implements DatafeedListener {
     federatedServiceAccount.setPhoneNumber(account.getPhoneNumber());
     federatedServiceAccount.setFirstName(account.getFirstName());
     federatedServiceAccount.setLastName(account.getLastName());
+    federatedServiceAccount.setCompanyName(account.getCompanyName());
     federatedServiceAccount.setFederatedUserId(account.getFederatedUserId());
 
     federatedServiceAccount.setSymphonyUserId(String.valueOf(symphonyUser.getUserSystemInfo().getId()));

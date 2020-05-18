@@ -5,10 +5,12 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
+@Service
 @RequiredArgsConstructor
 public class RoomService {
 
