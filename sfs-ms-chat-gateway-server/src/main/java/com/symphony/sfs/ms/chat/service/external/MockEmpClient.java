@@ -42,4 +42,9 @@ public class MockEmpClient implements EmpClient {
     }
     return Optional.of(operationId);
   }
+
+  @Override
+  public void deleteChannelsBySymphonyId(String emp, String federatedUserId) {
+    // No implementation for now
+  }
 }

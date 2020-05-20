@@ -43,4 +43,10 @@ public interface EmpClient {
    * @return
    */
   Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message);
+
+  /**
+   * Internal usage for QA
+   * @param federatedUserId
+   */
+  void deleteChannelsBySymphonyId(String emp, String federatedUserId);
 }

@@ -27,3 +27,29 @@ channels:
                 - $ref: '../errors/channels.yaml#/federated-account-not-found'
                 - $ref: '../errors/accounts.yaml#/create-channel-failed'
 
+delete-by-symphonyId:
+  delete:
+    tags:
+      - Channels
+    summary: Delete all channels for a symphony Id.
+    operationId: deleteBySymphonyId
+    description: >
+      => Delete all channels for a symphony Id.
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: symphonyId
+        schema:
+          type: string
+        required: true
+        description: The federated user symphonyId
+      - in: path
+        name: emp
+        schema:
+          type: string
+        required: true
+        description: The EMP to send the deletion to
+    responses:
+      '200':
+        description: The user has been successfully deleted

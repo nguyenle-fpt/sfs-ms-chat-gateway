@@ -61,8 +61,13 @@ public class DefaultEmpClient implements EmpClient {
     return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getId);
   }
 
-  private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
+  @Override
+  public void deleteChannelsBySymphonyId(String emp, String symphonyId) {
+    EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
+    client.getChannelApi().deleteChannelBySymphonyId(symphonyId);
+  }
 
+  private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
     List<ChannelMember> members = new ArrayList<>();
     federatedUsers.forEach(account -> members.add(new ChannelMember()
       .emailAddress(account.getEmailAddress())

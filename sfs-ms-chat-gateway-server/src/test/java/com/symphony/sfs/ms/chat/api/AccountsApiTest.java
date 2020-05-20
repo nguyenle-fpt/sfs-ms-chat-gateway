@@ -16,6 +16,7 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserSystemAttributes;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import com.symphony.sfs.ms.starter.symphony.stream.StringId;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import model.AdminUserAttributes;
@@ -76,7 +77,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       forwarderQueueConsumer,
       adminClient,
       streamService,
-      symphonyMessageService);
+      symphonyMessageService,
+      new UsersInfoService(webClient));
     federatedAccountService.registerAsDatafeedListener();
 
     accountsApi = new AccountsApi(federatedAccountService);

@@ -31,17 +31,19 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import model.AdminUserInfo;
 import model.UserInfo;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -69,7 +71,7 @@ public class FederatedAccountService implements DatafeedListener {
   private final AdminClient adminClient;
   private final StreamService streamService;
   private final SymphonyMessageService symphonyMessageService;
-
+  private final UsersInfoService usersInfoService;
   @PostConstruct
   @VisibleForTesting
   public void registerAsDatafeedListener() {
@@ -246,12 +248,17 @@ public class FederatedAccountService implements DatafeedListener {
   }
 
   private IUser getCustomerInfo(String symphonyId, UserSession botSession) {
-    AdminUserInfo info = adminUserManagementService.getUserInfo(symphonyId, podConfiguration.getUrl(), botSession).get(); // TODO better exception
+    List<UserInfo> info = usersInfoService.getUsersFromIds(Collections.singletonList(symphonyId), podConfiguration.getUrl(), botSession);
+    if(info.size() != 1) {
+      throw new IllegalStateException(String.format("Error retrieving customer info, got %s instead of 1 user info", info.size()));
+    }
+    UserInfo userInfo = info.get(0);
     return new User.Builder()
-      .withId(PodAndUserId.newBuilder().build(info.getUserSystemInfo().getId()))
-      .withUsername(info.getUserAttributes().getUserName())
-      .withFirstName(info.getUserAttributes().getFirstName())
-      .withSurname(info.getUserAttributes().getLastName())
+      .withId(PodAndUserId.newBuilder().build(Long.parseLong(symphonyId)))
+      .withUsername(userInfo.getUsername())
+      .withFirstName(userInfo.getFirstName())
+      .withSurname(userInfo.getLastName())
+      .withCompany(userInfo.getCompany())
       .build();
   }
 
