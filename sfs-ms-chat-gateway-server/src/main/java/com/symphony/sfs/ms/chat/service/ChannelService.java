@@ -41,7 +41,7 @@ public class ChannelService implements DatafeedListener {
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
-  private final RoomService roomService;
+  private final SymphonyService symphonyService;
 
   @PostConstruct
   @VisibleForTesting
@@ -162,7 +162,7 @@ public class ChannelService implements DatafeedListener {
           // Send message to alert it is impossible to add WhatsApp user into a room
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a chat room."));
 
-          userSessions.forEach(session -> roomService.removeMemberFromRoom(streamId, session));
+          userSessions.forEach(session -> symphonyService.removeMemberFromRoom(streamId, session));
         } else {
           // Send message to alert it is impossible to add WhatsApp user into a MIM
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));

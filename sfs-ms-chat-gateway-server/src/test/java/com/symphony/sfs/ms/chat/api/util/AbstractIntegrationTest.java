@@ -13,8 +13,8 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
-import com.symphony.sfs.ms.chat.service.RoomService;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
+import com.symphony.sfs.ms.chat.service.SymphonyService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
@@ -71,7 +71,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     this.mockServer = mockServer;
     webClient = buildTestClient();
-    RoomService roomService = mock(RoomService.class);
+    SymphonyService symphonyService = mock(SymphonyService.class);
 
     dynamoConfiguration = provisionTestTable(db);
     objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
@@ -116,10 +116,10 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // services
     streamService = spy(new StreamService(webClient));
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
-    symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor));
+    symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, symphonyService, datafeedSessionPool));
     connectionsServices = new ConnectionsService(webClient);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
-    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, roomService);
+    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, symphonyService);
     channelService.registerAsDatafeedListener();
   }
 

@@ -16,9 +16,48 @@ send-message-request:
       type: boolean
       default: false
 
+retrieve-messages-request:
+  type: object
+  required:
+    - fromSymphonyUserId
+  properties:
+    fromSymphonyUserId:
+      type: string
+    messages-ids:
+      type: array
+      description: List of messages ids
+      items:
+        $ref: '#/message-id'
+
+message-id:
+  type: object
+  required:
+    - messageId
+  properties:
+    messageId:
+      type: string
+
+
 #Responses
 send-message-response:
   type: object
   properties:
     id:
       type: string
+
+retrieve-messages-response:
+  type: object
+  properties:
+    messages:
+      type: array
+      items:
+        $ref: '#/message-info'
+
+message-info:
+  type: object
+  properties:
+    message-id:
+      type: string
+    message:
+      type: string
+

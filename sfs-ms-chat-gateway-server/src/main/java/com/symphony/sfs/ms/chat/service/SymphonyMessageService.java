@@ -1,6 +1,13 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
+import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
+import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.generated.model.MessageId;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
+import com.symphony.sfs.ms.chat.generated.model.MessageSenderNotFoundProblem;
+import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonySendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -14,6 +21,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -25,6 +35,8 @@ public class SymphonyMessageService {
   private final FederatedAccountRepository federatedAccountRepository;
   private final StreamService streamService;
   private final SymphonySystemMessageTemplateProcessor templateProcessor;
+  private final SymphonyService symphonyService;
+  private final DatafeedSessionPool datafeedSessionPool;
 
   public static final String USER_WAITING_CONFIRMATION = "user.waiting.confirmation";
   public static final String USER_JOINED_GROUP = "user.joined.group";
@@ -82,6 +94,23 @@ public class SymphonyMessageService {
 
   public void sendAlertMessage(UserSession userSession, String streamId, String messageContent) {
     sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
+  }
+
+  public RetrieveMessagesResponse retrieveMessages(List<MessageId> messageIds, String symphonyUserId) {
+    try {
+      List<MessageInfo> messageInfos = new ArrayList<>();
+
+      UserSession userSession = datafeedSessionPool.refreshSession(symphonyUserId);
+      for (MessageId id : messageIds) {
+        MessageInfo message = symphonyService.getMessage(id.getMessageId(), userSession, podConfiguration.getUrl()).orElseThrow(RetrieveMessageFailedProblem::new);
+        messageInfos.add(message);
+      }
+
+      return new RetrieveMessagesResponse().messages(messageInfos);
+    } catch (UnknownDatafeedUserException e) {
+      LOG.error("Session not found from symphony user {}", symphonyUserId);
+      throw new MessageSenderNotFoundProblem();
+    }
   }
 
   // TODO i18n?

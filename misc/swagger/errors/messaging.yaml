@@ -39,3 +39,31 @@ message-send-failed:
     status:
       type: integer
       format: 500
+
+message-sender-not-found:
+  type: object
+  description: 'Message sender not found'
+  properties:
+    type:
+      type: string
+      format: 'message.sender.not.found'
+    title:
+      type: string
+      format: 'Message sender not found'
+    status:
+      type: integer
+      format: 400
+
+retrieve-message-failed:
+  type: object
+  description: 'Retrieve message failed'
+  properties:
+    type:
+      type: string
+      format: 'retrieve.message.failed'
+    title:
+      type: string
+      format: 'Retrieve message failed'
+    status:
+      type: integer
+      format: 400

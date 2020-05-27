@@ -1,6 +1,11 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
+import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
+import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.generated.model.MessageId;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
+import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
@@ -19,6 +24,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -28,6 +35,7 @@ import static com.symphony.sfs.ms.chat.service.SymphonyMessageService.SYSTEM_MES
 import static com.symphony.sfs.ms.chat.service.SymphonyMessageService.SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.chat.service.SymphonyMessageService.SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -50,6 +58,8 @@ class SymphonyMessageServiceTest {
   private SymphonySystemMessageTemplateProcessor templateProcessor;
 
   private SymphonyMessageService symphonyMessageService;
+  private SymphonyService symphonyService;
+  private DatafeedSessionPool datafeedSessionPool;
 
   @BeforeEach
   public void setUp() {
@@ -66,11 +76,14 @@ class SymphonyMessageServiceTest {
     streamService = mock(StreamService.class);
     templateProcessor = mock(SymphonySystemMessageTemplateProcessor.class);
 
+    symphonyMessageService = mock(SymphonyMessageService.class);
+    datafeedSessionPool = mock(DatafeedSessionPool.class);
+    symphonyService = mock(SymphonyService.class);
 
     userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor));
+    symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, symphonyService, datafeedSessionPool));
   }
 
   @Test
@@ -118,6 +131,25 @@ class SymphonyMessageServiceTest {
   void sendRawMessage_FromSymphonyUserNotFound() {
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.empty());
     assertThrows(SendMessageFailedProblem.class, () -> symphonyMessageService.sendRawMessage("streamId", "fromSymphonyUserId", "text"));
+  }
+
+  @Test
+  public void retrieveMessagesTest() throws UnknownDatafeedUserException {
+    MessageId messageId = new MessageId().messageId("messageId");
+
+    List<MessageId> messagesIds = Collections.singletonList(messageId);
+    String fromSymphonyUserId = "fromSymphonyUserId";
+    UserSession userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    DatafeedSessionPool.DatafeedSession session = new DatafeedSessionPool.DatafeedSession(userSession, "fromSymphonyUserId");
+    MessageInfo messageInfo = new MessageInfo().message("message").messageId("messageId");
+
+    when(datafeedSessionPool.refreshSession("fromSymphonyUserId")).thenReturn(session);
+    when(symphonyService.getMessage("messageId", session, "podUrl")).thenReturn(Optional.of(messageInfo));
+
+    RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(messagesIds, fromSymphonyUserId);
+    assertEquals(1, response.getMessages().size());
+    assertEquals("message", response.getMessages().get(0).getMessage());
+    assertEquals("messageId", response.getMessages().get(0).getMessageId());
   }
 
   @FunctionalInterface

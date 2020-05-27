@@ -15,7 +15,7 @@ messages:
             $ref: '../components/messaging.yaml#/send-message-request'
     responses:
       '200':
-        description: Messge successfully sent
+        description: Message successfully sent
         content:
           application/json:
             schema:
@@ -34,3 +34,31 @@ messages:
           application/json:
             schema:
               $ref: '../errors/messaging.yaml#/message-send-failed'
+
+  get:
+    tags:
+      - Symphony Messaging
+    summary: Retrieve messages from ids
+    operationId: retrieveMessages
+    descrption: >
+      => Retrieves messages from ids
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/messaging.yaml#/retrieve-messages-request'
+    responses:
+      '200':
+        description: Messages successfully retrieved
+        content:
+          application/json:
+            schema:
+              $ref: '../components/messaging.yaml#/retrieve-messages-response'
+      '400':
+        description: User not found
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/messaging.yaml#/message-sender-not-found'
+                - $ref: '../errors/messaging.yaml#/retrieve-message-failed'
