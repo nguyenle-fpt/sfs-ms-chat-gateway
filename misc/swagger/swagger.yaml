@@ -11,7 +11,7 @@ paths:
     $ref: './paths/accounts.yaml#/accounts'
   /api/v1/internal/channels:
     $ref: './paths/channels.yaml#/channels'
-  /api/v1/channels/{symphonyId}/emp/{emp}:
+  /api/v1/internal/channels/{symphonyId}/emp/{emp}:
     $ref: './paths/channels.yaml#/delete-by-symphonyId'
   /api/v1/internal/messages:
     $ref: './paths/messaging.yaml#/messages'
@@ -20,4 +20,4 @@ components:
     sfsAuthentication:
       type: http
       scheme: bearer
-      bearerFormat: '{"jwt":"<jwt>","podId":"<podId>"}'
+      bearerFormat: jwt

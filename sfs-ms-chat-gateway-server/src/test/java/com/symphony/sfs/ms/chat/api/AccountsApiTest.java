@@ -7,7 +7,6 @@ import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
-import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
@@ -19,11 +18,9 @@ import com.symphony.sfs.ms.starter.symphony.stream.StringId;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import io.fabric8.mockwebserver.DefaultMockServer;
-import model.AdminUserAttributes;
-import model.AdminUserInfo;
-import model.AdminUserSystemInfo;
 import model.InboundConnectionRequest;
 import model.UserInfo;
+import model.UserInfoList;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,24 +30,19 @@ import org.springframework.http.MediaType;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Optional;
 
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
 import static clients.symphony.api.constants.PodConstants.GETCONNECTIONSTATUS;
 import static clients.symphony.api.constants.PodConstants.GETIM;
-import static clients.symphony.api.constants.PodConstants.GETUSERADMIN;
+import static clients.symphony.api.constants.PodConstants.GETUSERSV3;
 import static clients.symphony.api.constants.PodConstants.SENDCONNECTIONREQUEST;
 import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
-import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class AccountsApiTest extends AbstractIntegrationTest {
@@ -155,22 +147,20 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
+    UserInfo userInfo = new UserInfo();
+    userInfo.setId(2L);
+    userInfo.setUsername("username");
+    userInfo.setFirstName("firstName");
+    userInfo.setLastName("lastName");
+    userInfo.setCompany("companyName");
 
-    AdminUserSystemInfo adminUserSystemInfo = new AdminUserSystemInfo();
-    adminUserSystemInfo.setId(2L);
-    AdminUserAttributes adminUserAttributes = new AdminUserAttributes();
-    adminUserAttributes.setUserName("username");
-    adminUserAttributes.setFirstName("firstName");
-    adminUserAttributes.setLastName("lastName");
-    adminUserAttributes.setCompanyName("companyName");
-    AdminUserInfo adminUserInfo = new AdminUserInfo();
-    adminUserInfo.setUserSystemInfo(adminUserSystemInfo);
-    adminUserInfo.setUserAttributes(adminUserAttributes);
+    UserInfoList userInfoList = new UserInfoList();
+    userInfoList.setUsers(Collections.singletonList(userInfo));
 
     mockServer.expect()
       .get()
-      .withPath(GETUSERADMIN.replace("{uid}", "2"))
-      .andReturn(HttpStatus.OK.value(), adminUserInfo)
+      .withPath(GETUSERSV3 + "?local=false&uid=" + userInfo.getId())
+      .andReturn(HttpStatus.OK.value(), userInfoList)
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
@@ -348,137 +338,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .post(CREATEACCOUNT_ENDPOINT)
       .then()
       .statusCode(HttpStatus.CONFLICT.value());
-  }
-
-  @Test
-  public void onConnectionRequestedFederatedAccount_RequesterIsNotAdvisor_ConnectionRequestFromBotUserRefused() {
-    UserInfo requester = new UserInfo();
-    requester.setId(1L);
-
-    FederatedAccount requested = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP")
-      .symphonyUserId("2")
-      .symphonyUsername("username")
-      .build();
-    federatedAccountRepository.save(requested);
-
-    UserInfo requestedUser = new UserInfo();
-    requester.setId(2L);
-
-    UserSession botSession = getSession(botConfiguration.getUsername());
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
-    when(authenticationService.getUserInfo(any(), any(), eq(true))).thenReturn(Optional.of(requestedUser));
-    when(connectionRequestManager.sendConnectionRequest(botSession, "2")).thenReturn(Optional.of(ConnectionRequestStatus.REJECTED));
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getConnectionRequestMaestroMessage(
-      requester,
-      requested
-    )));
-
-    assertThrows(IllegalStateException.class, () -> forwarderQueueConsumer.consume(notification));
-
-    verify(connectionRequestManager, times(1)).refuseConnectionRequest(any(), eq(String.valueOf(requester.getId())));
-  }
-
-
-  @Test
-  public void onConnectionRequestedFederatedAccount_RequesterIsNotAdvisor_ConnectionRequestFromBotUserAccepted() throws IOException {
-    UserInfo requester = new UserInfo();
-    requester.setId(1L);
-
-    FederatedAccount requested = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP")
-      .symphonyUserId("2")
-      .symphonyUsername("username")
-      .build();
-    federatedAccountRepository.save(requested);
-
-    UserInfo requestedUser = new UserInfo();
-    requester.setId(2L);
-
-    UserSession botSession = getSession(botConfiguration.getUsername());
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
-    when(authenticationService.getUserInfo(any(), any(), eq(true))).thenReturn(Optional.of(requestedUser));
-    when(connectionRequestManager.sendConnectionRequest(botSession, "2")).thenReturn(Optional.of(ConnectionRequestStatus.ACCEPTED));
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getConnectionRequestMaestroMessage(
-      requester,
-      requested
-    )));
-
-    forwarderQueueConsumer.consume(notification);
-
-    verify(connectionRequestManager, times(1)).refuseConnectionRequest(any(), eq(String.valueOf(requester.getId())));
-    verify(symphonyMessageService, once()).sendAlertMessage(botSession, "streamId", "Connection request to emailAddress@symphony.com/WHATSAPP has been automatically declined because you are not authorized: advisor rights are needed");
-
-  }
-
-
-  @Test
-  public void onConnectionRequestedFederatedAccount_RequesterIsAdvisor() throws IOException {
-    UserInfo requester = new UserInfo();
-    requester.setId(1L);
-
-    FederatedAccount requested = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP")
-      .symphonyUserId("2")
-      .symphonyUsername("username")
-      .build();
-    federatedAccountRepository.save(requested);
-
-    UserInfo requestedUser = new UserInfo();
-    requester.setId(2L);
-
-    UserSession botSession = getSession(botConfiguration.getUsername());
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
-    when(authenticationService.getUserInfo(any(), any(), eq(true))).thenReturn(Optional.of(requestedUser));
-
-    ((MockAdminClient) adminClient).mockAdvisor(requester);
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getConnectionRequestMaestroMessage(
-      requester,
-      requested
-    )));
-
-    forwarderQueueConsumer.consume(notification);
-
-    verify(connectionRequestManager, times(1)).acceptConnectionRequest(any(), eq(String.valueOf(requester.getId())));
   }
 
   private String getAcceptedConnectionRequestMaestroMessage(FederatedAccount requester, FederatedAccount requested) {

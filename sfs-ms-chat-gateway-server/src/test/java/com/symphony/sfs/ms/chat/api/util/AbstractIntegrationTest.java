@@ -83,7 +83,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     // configurations
     podConfiguration = new PodConfiguration();
-    podConfiguration.setUrl(mockServer.getHostName() + ":" + mockServer.getPort());
+    podConfiguration.setUrl("https://" + mockServer.getHostName() + ":" + mockServer.getPort());
     podConfiguration.setKeyAuth(podConfiguration.getUrl());
     podConfiguration.setSessionAuth(podConfiguration.getUrl());
 

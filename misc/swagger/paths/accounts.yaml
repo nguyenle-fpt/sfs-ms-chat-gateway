@@ -6,6 +6,8 @@ accounts:
     operationId: createAccount
     description: >
       => Create a new account managed by the gateway.
+    security:
+      - sfsAuthentication: []
     requestBody:
       content:
         application/json:

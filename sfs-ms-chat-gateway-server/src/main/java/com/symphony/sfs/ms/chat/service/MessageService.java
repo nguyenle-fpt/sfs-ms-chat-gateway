@@ -75,7 +75,7 @@ public class MessageService implements DatafeedListener {
     }
   }
 
-  private void handleFromSymphonyIMorMIM(String streamId, String messageId, IUser fromSymphonyUser, List<String> toUserIds, Long timestamp, String message ) {
+  private void handleFromSymphonyIMorMIM(String streamId, String messageId, IUser fromSymphonyUser, List<String> toUserIds, Long timestamp, String message) {
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
     List<IUser> symphonyUsers = new ArrayList<>();
 
@@ -115,9 +115,9 @@ public class MessageService implements DatafeedListener {
           empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, message);
         }
       }
-    } catch(UnknownDatafeedUserException e){
-        // should never happen, as we have a FederatedAccount
-        throw new IllegalStateException(e);
+    } catch (UnknownDatafeedUserException e) {
+      // should never happen, as we have a FederatedAccount
+      throw new IllegalStateException(e);
     }
   }
 

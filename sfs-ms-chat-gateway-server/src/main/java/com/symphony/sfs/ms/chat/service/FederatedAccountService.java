@@ -10,15 +10,11 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
-import com.symphony.sfs.ms.chat.exception.AdvisorNotFoundException;
-import com.symphony.sfs.ms.chat.exception.CannotRetrieveAdvisorException;
-import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
-import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
-import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
+import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -72,6 +68,7 @@ public class FederatedAccountService implements DatafeedListener {
   private final StreamService streamService;
   private final SymphonyMessageService symphonyMessageService;
   private final UsersInfoService usersInfoService;
+
   @PostConstruct
   @VisibleForTesting
   public void registerAsDatafeedListener() {
@@ -124,7 +121,7 @@ public class FederatedAccountService implements DatafeedListener {
       return channelService.createIMChannel(session, federatedAccount.get(), getCustomerInfo(advisorSymphonyId, botSession));
     }
 
-   return null;
+    return null;
   }
 
   @Override
@@ -133,50 +130,6 @@ public class FederatedAccountService implements DatafeedListener {
       .ifPresent(account -> {
         channelService.createIMChannel(account, requested);
       });
-  }
-
-  @Override
-  public void onConnectionRequested(IUser requesting, IUser requested) {
-    // 1. When a user send connection request to a federated user
-    String requestedUserId = requested.getId().toString();
-    try {
-      Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findBySymphonyId(requestedUserId);
-      if (federatedAccount.isPresent()) {
-        // 2.OK If the requesting is an advisor, accept the connection
-        String requestingUserId = requesting.getId().toString();
-        try {
-          UserInfo advisor = adminClient.getAdvisor(requestingUserId).orElseThrow(CannotRetrieveAdvisorException::new);
-
-          // TODO: implements auto accept connection request only for wechat (see https://perzoinc.atlassian.net/browse/CES-755)
-          DatafeedSession session = datafeedSessionPool.refreshSession(requestedUserId);
-          connectionRequestManager.acceptConnectionRequest(session, requestingUserId);
-
-        } catch (AdvisorNotFoundException e) {
-          // 2.KO If the requesting is a normal user, refuse the connection
-          DatafeedSession session = datafeedSessionPool.refreshSession(requestedUserId);
-          connectionRequestManager.refuseConnectionRequest(session, requestingUserId);
-          // ... and send a message with federated bot
-          UserSession federatedBotSession = authenticationService.authenticate(
-            podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-
-          if (connectionRequestManager.sendConnectionRequest(federatedBotSession, requestingUserId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
-            String streamId = streamService.getIM(podConfiguration.getUrl(), requestingUserId, federatedBotSession)
-              .orElseThrow(CannotRetrieveStreamIdProblem::new);
-            String message = String.format("Connection request to %s/%s has been automatically declined because you are not authorized: advisor rights are needed",
-              federatedAccount.get().getEmailAddress(),
-              federatedAccount.get().getEmp());
-            symphonyMessageService.sendAlertMessage(federatedBotSession, streamId, message);
-          } else {
-            // TODO better exception?
-            // with this exception we make sure that the queue will reprocess regularly the message
-            throw new IllegalStateException("No connection request accepted between the federated bot and " + requestingUserId);
-          }
-        }
-      }
-    } catch (UnknownDatafeedUserException e) {
-      // should never happen, as we have a valid FederatedAccount
-      throw new IllegalStateException(e);
-    }
   }
 
   public SymphonyUser createSymphonyUser(String firstName, String lastName, String emp, UserSession botSession) {
@@ -249,7 +202,7 @@ public class FederatedAccountService implements DatafeedListener {
 
   private IUser getCustomerInfo(String symphonyId, UserSession botSession) {
     List<UserInfo> info = usersInfoService.getUsersFromIds(Collections.singletonList(symphonyId), podConfiguration.getUrl(), botSession);
-    if(info.size() != 1) {
+    if (info.size() != 1) {
       throw new IllegalStateException(String.format("Error retrieving customer info, got %s instead of 1 user info", info.size()));
     }
     UserInfo userInfo = info.get(0);

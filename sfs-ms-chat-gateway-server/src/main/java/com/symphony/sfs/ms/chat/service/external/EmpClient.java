@@ -46,6 +46,7 @@ public interface EmpClient {
 
   /**
    * Internal usage for QA
+   *
    * @param federatedUserId
    */
   void deleteChannelsBySymphonyId(String emp, String federatedUserId);

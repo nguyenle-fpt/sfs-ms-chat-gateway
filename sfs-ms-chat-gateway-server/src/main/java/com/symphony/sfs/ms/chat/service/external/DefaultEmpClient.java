@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.EmpMicroserviceResolver;
+import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
 import com.symphony.sfs.ms.emp.EmpMicroserviceClient;
 import com.symphony.sfs.ms.emp.generated.model.AsyncResult;
 import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
@@ -28,6 +29,7 @@ public class DefaultEmpClient implements EmpClient {
   private final WebClient webClient;
   private final ObjectMapper objectMapper;
   private final EmpMicroserviceResolver empMicroserviceResolver;
+  private final JwtTokenGenerator jwtTokenGenerator;
 
   @Override
   public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
@@ -37,6 +39,7 @@ public class DefaultEmpClient implements EmpClient {
       .streamId(streamId)
       .members(toChannelMembers(federatedUsers, initiatorUserId, symphonyUsers));
 
+    client.getChannelApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return client.getChannelApi().createChannel(request).map(AsyncResult::getOperationId);
   }
 
@@ -58,12 +61,14 @@ public class DefaultEmpClient implements EmpClient {
       .text(message);
 
     // TODO async result too?
+    client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getId);
   }
 
   @Override
   public void deleteChannelsBySymphonyId(String emp, String symphonyId) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
+    client.getChannelApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     client.getChannelApi().deleteChannelBySymphonyId(symphonyId);
   }
 

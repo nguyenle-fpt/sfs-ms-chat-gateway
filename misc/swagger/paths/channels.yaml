@@ -6,6 +6,8 @@ channels:
     operationId: createChannel
     description: >
       => Create a new Channel
+    security:
+      - sfsAuthentication: []
     requestBody:
       content:
         application/json:

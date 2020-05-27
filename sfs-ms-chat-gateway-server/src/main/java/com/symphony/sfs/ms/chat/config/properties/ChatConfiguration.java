@@ -22,4 +22,7 @@ public class ChatConfiguration {
 
   @NotNull
   private Key sharedPrivateKey;
+
+  @NotNull
+  private Key privateKey;
 }

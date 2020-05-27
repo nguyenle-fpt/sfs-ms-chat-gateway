@@ -6,6 +6,8 @@ messages:
     operationId: sendMessage
     description: >
       => Send a message from EMP to Symphony.
+    security:
+      - sfsAuthentication: []
     requestBody:
       content:
         application/json:
