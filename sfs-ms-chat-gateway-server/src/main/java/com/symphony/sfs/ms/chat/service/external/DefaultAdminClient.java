@@ -23,7 +23,7 @@ public class DefaultAdminClient implements AdminClient {
 
   @Override
   public EmpList getEmpList() {
-    adminClient.getInternalApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return adminClient.getInternalApi().getEmpList().orElse(new EmpList());
+    adminClient.getEmpApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    return adminClient.getEmpApi().getEmpList().orElse(new EmpList());
   }
 }
