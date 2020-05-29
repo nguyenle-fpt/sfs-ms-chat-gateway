@@ -12,6 +12,7 @@ import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelFailedProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
@@ -41,6 +42,7 @@ public class ChannelService implements DatafeedListener {
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
+  private final AdminClient adminClient;
   private final SymphonyService symphonyService;
 
   @PostConstruct
@@ -178,9 +180,20 @@ public class ChannelService implements DatafeedListener {
     members.remove(initiator.getId().toString());
     if (members.size() == 1) {
       String toFederatedAccountId = members.get(0);
+      //check canChat, we assume the initiator is not a federated user
+
       Optional<FederatedAccount> toFederatedAccount = federatedAccountRepository.findBySymphonyId(toFederatedAccountId);
       if (toFederatedAccount.isPresent()) {
-        createIMChannel(streamId, initiator, toFederatedAccount.get());
+        if(adminClient.getAdvisorAccess(initiator.getId().toString(), toFederatedAccount.get().getEmp()).isPresent()) {
+          createIMChannel(streamId, initiator, toFederatedAccount.get());
+        } else {
+          // send error message
+          try {
+            symphonyMessageService.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, "You are not entitled to send messages to " + toFederatedAccount.get().getEmp() + " users");
+          } catch (UnknownDatafeedUserException e) {
+            throw new IllegalStateException();
+          }
+        }
       } else {
         LOG.warn("onIMCreated towards a non-federated account {}", toFederatedAccountId);
       }

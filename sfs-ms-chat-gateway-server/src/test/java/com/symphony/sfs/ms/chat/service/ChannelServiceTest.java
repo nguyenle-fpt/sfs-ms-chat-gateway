@@ -9,6 +9,7 @@ import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
+import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.Key;
@@ -48,6 +49,7 @@ class ChannelServiceTest {
   private BotConfiguration botConfiguration;
   private AuthenticationService authenticationService;
   private UserSession userSession;
+  private MockAdminClient mockAdminClient;
 
   private SymphonyService symphonyService;
 
@@ -76,7 +78,7 @@ class ChannelServiceTest {
     userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, symphonyService);
+    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, symphonyService);
   }
 
   @Test

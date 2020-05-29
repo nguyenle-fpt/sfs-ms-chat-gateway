@@ -11,6 +11,7 @@ import com.symphony.sfs.ms.chat.exception.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class MessageService implements DatafeedListener {
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final DatafeedSessionPool datafeedSessionPool;
   private final SymphonyMessageService symphonyMessageService;
+  private final AdminClient adminClient;
 
   @PostConstruct
   @VisibleForTesting
@@ -95,9 +97,9 @@ public class MessageService implements DatafeedListener {
           //  Do we check first all sessions are ok?
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
-
-        // Check there are only 2 users
-        if (toUserIds.size() > 1) {
+        if (adminClient.getAdvisorAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
+          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + entry.getKey() + " users"));
+        } else if (toUserIds.size() > 1) { // Check there are only 2 users
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + entry.getKey() + " contact in a MIM."));
         } else {
 
