@@ -19,9 +19,9 @@ send-message-request:
 retrieve-messages-request:
   type: object
   required:
-    - fromSymphonyUserId
+    - symphonyUserId
   properties:
-    fromSymphonyUserId:
+    symphonyUserId:
       type: string
     messages-ids:
       type: array

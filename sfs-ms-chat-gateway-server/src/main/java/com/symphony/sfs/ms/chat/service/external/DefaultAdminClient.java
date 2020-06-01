@@ -31,6 +31,7 @@ public class DefaultAdminClient implements AdminClient {
   }
   @Override
   public Optional<AdvisorResponse> getAdvisorAccess(String symphonyId, String emp) {
+    adminClient.getAdvisorsApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return adminClient.getAdvisorsApi().getAdvisorBySymphonyIdAndEmp(symphonyId, emp);
   }
 }

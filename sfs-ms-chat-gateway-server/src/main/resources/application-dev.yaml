@@ -30,14 +30,14 @@ pod:
 bot:
   username: sfs-admin
   emailAddress: sfs-admin@symphony.com
-  privateKey: file:../misc/certs/sfs-admin-bot_privatekey.pem
+  privateKey: file:certs/sfs-admin-bot_privatekey.pem
 
 agent:
   url: https://ces3-dev.symphony.com
 
 microservice:
   chat:
-    privateKey: file:../misc/certs/sfs-ms-chat-gateway_privatekey.pem
+    privateKey: file:certs/sfs-ms-chat-gateway_privatekey.pem
     msAdminUrl: 'https://federation-dev.symphony.com:9600'
     sharedPublicKey: file:certs/sa_publickey.pem
     sharedPrivateKey: file:certs/sa_privatekey.pem

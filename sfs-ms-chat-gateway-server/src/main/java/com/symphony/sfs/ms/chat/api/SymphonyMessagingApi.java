@@ -30,7 +30,7 @@ public class SymphonyMessagingApi implements com.symphony.sfs.ms.chat.generated.
 
   @Override
   public ResponseEntity<RetrieveMessagesResponse> retrieveMessages(@Valid RetrieveMessagesRequest body) {
-    RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getMessagesIds(), body.getFromSymphonyUserId());
+    RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getMessagesIds(), body.getSymphonyUserId());
     return ResponseEntity.ok(response);
   }
 }

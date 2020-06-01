@@ -40,8 +40,10 @@ messages:
       - Symphony Messaging
     summary: Retrieve messages from ids
     operationId: retrieveMessages
-    descrption: >
+    description: >
       => Retrieves messages from ids
+    security:
+      - sfsAuthentication: []
     requestBody:
       content:
         application/json:
