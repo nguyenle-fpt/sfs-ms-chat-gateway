@@ -1,3 +1,39 @@
+import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.oss.models.core.canon.facade.PodAndUserId;
+import com.symphony.sfs.ms.admin.generated.model.AdvisorResponse;
+import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
+import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.MessageService;
+import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
+import com.symphony.sfs.ms.chat.service.external.AdminClient;
+import com.symphony.sfs.ms.chat.service.external.EmpClient;
+import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
+import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
+import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+
+import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 //package com.symphony.sfs.ms.chat.service;
 //
 //import com.symphony.oss.models.chat.canon.facade.IUser;
@@ -35,45 +71,77 @@
 //import static org.mockito.Mockito.verify;
 //import static org.mockito.Mockito.when;
 //
-//class MessageServiceTest {
-//
-//  private MessageService messageService;
-//
-//  private EmpClient empClient;
-//  private AuthenticationService authenticationService;
-//  private PodConfiguration podConfiguration;
-//  private BotConfiguration botConfiguration;
-//  private FederatedAccountRepository federatedAccountRepository;
-//  private DatafeedSessionPool datafeedSessionPool;
-//  private StreamService streamService;
-//
-//  private UserSession userSession;
-//
-//  @BeforeEach
-//  public void setUp() {
-//
-//    empClient = mock(EmpClient.class);
-//    federatedAccountRepository = mock(FederatedAccountRepository.class);
-//    datafeedSessionPool = mock(DatafeedSessionPool.class);
-//    authenticationService = mock(AuthenticationService.class);
-//
-//    botConfiguration = new BotConfiguration();
-//    botConfiguration.setUsername("username");
-//    botConfiguration.setEmailAddress("emailAddress");
-//    botConfiguration.setPrivateKey(new Key("-----botConfigurationPrivateKey"));
-//
-//    podConfiguration = new PodConfiguration();
-//    podConfiguration.setUrl("podUrl");
-//    podConfiguration.setSessionAuth("sessionAuth");
-//    podConfiguration.setKeyAuth("keyAuth");
-//
-//    streamService = mock(StreamService.class);
-//
-//    userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
-//    when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
-//
-//    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, streamService, podConfiguration);
-//  }
+class MessageServiceTest {
+
+  private MessageService messageService;
+
+  private EmpClient empClient;
+  private AuthenticationService authenticationService;
+  private PodConfiguration podConfiguration;
+  private BotConfiguration botConfiguration;
+  private FederatedAccountRepository federatedAccountRepository;
+  private DatafeedSessionPool datafeedSessionPool;
+  private SymphonyMessageService symphonyMessageService;
+  private AdminClient adminClient;
+
+  private UserSession userSession;
+
+  @BeforeEach
+  public void setUp() {
+
+    empClient = mock(EmpClient.class);
+    federatedAccountRepository = mock(FederatedAccountRepository.class);
+    datafeedSessionPool = mock(DatafeedSessionPool.class);
+    authenticationService = mock(AuthenticationService.class);
+
+    botConfiguration = new BotConfiguration();
+    botConfiguration.setUsername("username");
+    botConfiguration.setEmailAddress("emailAddress");
+    botConfiguration.setPrivateKey(new Key("-----botConfigurationPrivateKey"));
+
+    podConfiguration = new PodConfiguration();
+    podConfiguration.setUrl("podUrl");
+    podConfiguration.setSessionAuth("sessionAuth");
+    podConfiguration.setKeyAuth("keyAuth");
+
+    symphonyMessageService = mock(SymphonyMessageService.class);
+
+    userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
+
+    adminClient = mock(AdminClient.class);
+
+    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageService, adminClient);
+  }
+
+  @Test
+  public void testMessageWithDisclaimer() {
+    IUser fromSymphonyUser = newIUser("1");
+    List<String> members = Arrays.asList("1", "101");
+    FederatedAccount federatedAccount101 =  newFederatedAccount("emp", "101");
+
+    when(federatedAccountRepository.findBySymphonyId("101")).thenReturn(Optional.of(federatedAccount101));
+    // fromSymphonyUser is advisor
+    when(adminClient.getAdvisorAccess("1", "emp")).thenReturn(Optional.of(new AdvisorResponse()));
+
+    long now  = new Date().getTime();
+
+
+    // Without disclaimer
+    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", null);
+
+    InOrder orderVerifier =  inOrder(empClient);
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "disclaimer");
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message");
+    orderVerifier.verifyNoMoreInteractions();
+
+    // With disclaimer
+    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", "disclaimer");
+
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "disclaimer");
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message");
+    orderVerifier.verifyNoMoreInteractions();
+  }
 //
 //  @Test
 //  void onIMMessage() {
@@ -336,20 +404,20 @@
 //    orderVerifier.verifyNoMoreInteractions();
 //  }
 //
-//  private IUser newIUser(String symphonyUserId) {
-//
-//    PodAndUserId id = PodAndUserId.newBuilder().build(Long.valueOf(symphonyUserId));
-//    IUser mockIUser = mock(IUser.class);
-//    when(mockIUser.getId()).thenReturn(id);
-//
-//    return mockIUser;
-//
-//  }
-//
-//  private FederatedAccount newFederatedAccount(String emp, String symphonyUserId) {
-//    return FederatedAccount.builder()
-//      .emp(emp)
-//      .symphonyUserId(symphonyUserId)
-//      .build();
-//  }
-//}
+  private IUser newIUser(String symphonyUserId) {
+
+    PodAndUserId id = PodAndUserId.newBuilder().build(Long.valueOf(symphonyUserId));
+    IUser mockIUser = mock(IUser.class);
+    when(mockIUser.getId()).thenReturn(id);
+
+    return mockIUser;
+
+  }
+
+  private FederatedAccount newFederatedAccount(String emp, String symphonyUserId) {
+    return FederatedAccount.builder()
+      .emp(emp)
+      .symphonyUserId(symphonyUserId)
+      .build();
+  }
+}

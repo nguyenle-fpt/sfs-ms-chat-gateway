@@ -149,7 +149,8 @@ public class ForwarderQueueConsumer {
       LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
 
       String text = messageDecryptor.decrypt(socialMessage, managedSession.getUserId());
-      datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text);
+      String disclaimer = socialMessage.getDisclaimer();
+      datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text, disclaimer);
     } catch (UnknownDatafeedUserException e) {
       LOG.debug("Unmanaged user {}", e.getMessage());
     }
