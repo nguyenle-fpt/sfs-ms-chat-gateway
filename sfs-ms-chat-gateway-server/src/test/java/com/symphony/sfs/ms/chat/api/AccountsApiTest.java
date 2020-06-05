@@ -198,8 +198,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .lastName("lastName")
       .companyName("companyName")
       .federatedUserId("federatedUserId")
-      .emp("WHATSAPP")
-      .advisors(Collections.singletonList("2"));
+      .emp("WHATSAPP");
 
     CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -267,8 +266,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .lastName("lastName")
       .companyName("companyName")
       .federatedUserId("federatedUserId")
-      .emp("WHATSAPP")
-      .advisors(Collections.singletonList("2"));
+      .emp("WHATSAPP");
 
     CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)

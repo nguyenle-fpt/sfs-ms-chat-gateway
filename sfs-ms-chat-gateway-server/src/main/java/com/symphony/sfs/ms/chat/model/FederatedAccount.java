@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_PK;
 import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.GSI1_SK;
+import static com.symphony.sfs.ms.chat.config.DynamoConfiguration.TYPE_PREFIX;
 import static com.symphony.sfs.ms.chat.model.FederatedAccountMapper.federatedAccountGsi1Pk;
 import static com.symphony.sfs.ms.chat.model.FederatedAccountMapper.federatedAccountGsi1Sk;
 import static com.symphony.sfs.ms.chat.model.FederatedAccountMapper.federatedAccountPk;
@@ -24,7 +25,7 @@ import static com.symphony.sfs.ms.starter.dynamo.DynamoConstants.SORT_KEY;
 @EqualsAndHashCode(callSuper = true)
 public class FederatedAccount extends DynamoDocument {
 
-  public static final String TYPE = "sfs:chat:FEDERATED_ACCOUNT";
+  public static final String TYPE = TYPE_PREFIX + "FEDERATED_ACCOUNT";
 
   private String federatedUserId;
   private String firstName;

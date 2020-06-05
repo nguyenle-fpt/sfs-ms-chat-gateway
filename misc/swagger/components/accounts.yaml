@@ -26,10 +26,6 @@ create-account-request:
       type: string
     emp:
       type: string
-    advisors:
-      type: array
-      items:
-        type: string
 
 #Responses
 create-account-response:

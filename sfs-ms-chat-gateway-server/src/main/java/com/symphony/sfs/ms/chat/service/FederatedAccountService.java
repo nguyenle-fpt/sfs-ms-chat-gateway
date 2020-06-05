@@ -87,14 +87,7 @@ public class FederatedAccountService implements DatafeedListener {
       SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmp(), botSession);
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
-      DatafeedSession session = datafeedSessionPool.listenDatafeed(federatedAccount);
-
-      if (request.getAdvisors() != null && !request.getAdvisors().isEmpty()) {
-        String advisorSymphonyId = request.getAdvisors().get(0);
-        if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
-          channelService.createIMChannel(session, federatedAccount, getCustomerInfo(advisorSymphonyId, botSession));
-        }
-      }
+      datafeedSessionPool.listenDatafeed(federatedAccount);
 
       return federatedAccount;
     } catch (ConditionalCheckFailedException e) {

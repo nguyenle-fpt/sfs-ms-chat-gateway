@@ -14,23 +14,23 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.zalando.problem.DefaultProblem;
 
-import static com.symphony.sfs.ms.chat.generated.api.SymphonyMessagingApi.SENDMESSAGE_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.SENDMESSAGE_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
-class SymphonyMessagingApiTest extends AbstractIntegrationTest {
+class MessagingApiTest extends AbstractIntegrationTest {
 
   private SymphonyMessageService symphonyMessageService;
 
-  protected SymphonyMessagingApi symphonyMessagingApi;
+  protected MessagingApi symphonyMessagingApi;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     super.setUp(db, mockServer);
 
     symphonyMessageService = mock(SymphonyMessageService.class);
-    symphonyMessagingApi = new SymphonyMessagingApi(symphonyMessageService);
+    symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
 
   @Test

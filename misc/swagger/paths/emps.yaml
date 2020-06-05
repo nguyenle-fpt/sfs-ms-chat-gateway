@@ -1,0 +1,13 @@
+internal-reload-emps:
+  get:
+    tags:
+      - EMP
+    summary: Reload EMP schemas from the admin microservice
+    operationId: reloadEmps
+    description: >
+      => Reload EMP schemas from the admin microservice
+    security:
+      - sfsAuthentication: []
+    responses:
+      '204':
+        description: Reloaded properly

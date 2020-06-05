@@ -13,6 +13,8 @@ import java.util.Map;
 public class DynamoConfiguration extends BaseDynamoConfiguration {
   private final AwsDynamoConfiguration awsDynamoConfiguration;
 
+  public static final String TYPE_PREFIX = "sfs:chat:";
+
   public static String GSI1_IDX = "gsi1";
   public static String GSI1_PK = "gsi1pk";
   public static String GSI1_SK = "gsi1sk";

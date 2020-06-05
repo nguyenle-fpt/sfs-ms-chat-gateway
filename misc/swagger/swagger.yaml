@@ -6,6 +6,12 @@ info:
 tags:
   - name: Accounts
     description: Accounts API
+  - name: Channels
+    description: Channels API
+  - name: Messaging
+    description: Messaging API
+  - name: EMP
+    description: EMP API
 paths:
   /api/v1/internal/accounts:
     $ref: './paths/accounts.yaml#/accounts'
@@ -15,6 +21,8 @@ paths:
     $ref: './paths/channels.yaml#/delete-by-symphonyId'
   /api/v1/internal/messages:
     $ref: './paths/messaging.yaml#/messages'
+  /api/v1/internal/emps/reload:
+    $ref: './paths/emps.yaml#/internal-reload-emps'
 components:
   securitySchemes:
     sfsAuthentication:

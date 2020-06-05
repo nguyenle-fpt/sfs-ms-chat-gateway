@@ -15,7 +15,7 @@ import javax.validation.Valid;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-public class SymphonyMessagingApi implements com.symphony.sfs.ms.chat.generated.api.SymphonyMessagingApi {
+public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.MessagingApi {
 
   private final SymphonyMessageService symphonyMessageService;
 

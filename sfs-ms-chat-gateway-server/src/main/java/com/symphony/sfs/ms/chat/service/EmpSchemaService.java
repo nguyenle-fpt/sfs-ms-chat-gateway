@@ -31,7 +31,7 @@ public class EmpSchemaService {
     return Optional.ofNullable(empDefinitions.get(emp));
   }
 
-  private EmpList loadEmpDefinitions() {
+  public EmpList loadEmpDefinitions() {
     EmpList emps = adminClient.getEmpList();
 
     LOG.info("Loaded {} EMP definitions: {}", emps.size(), emps.keySet());
