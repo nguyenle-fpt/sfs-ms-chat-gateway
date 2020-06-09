@@ -98,7 +98,7 @@ public class MessageService implements DatafeedListener {
           //  Do we check first all sessions are ok?
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
-        if (adminClient.getAdvisorAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
+        if (adminClient.getEntitlementAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + entry.getKey() + " users"));
         } else if (toUserIds.size() > 1) { // Check there are only 2 users
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + entry.getKey() + " contact in a MIM."));

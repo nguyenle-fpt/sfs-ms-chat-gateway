@@ -184,7 +184,7 @@ public class ChannelService implements DatafeedListener {
 
       Optional<FederatedAccount> toFederatedAccount = federatedAccountRepository.findBySymphonyId(toFederatedAccountId);
       if (toFederatedAccount.isPresent()) {
-        if(adminClient.getAdvisorAccess(initiator.getId().toString(), toFederatedAccount.get().getEmp()).isPresent()) {
+        if (adminClient.getEntitlementAccess(initiator.getId().toString(), toFederatedAccount.get().getEmp()).isPresent()) {
           createIMChannel(streamId, initiator, toFederatedAccount.get());
         } else {
           // send error message

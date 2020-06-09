@@ -1,6 +1,8 @@
+package com.symphony.sfs.ms.chat.service;
+
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
-import com.symphony.sfs.ms.admin.generated.model.AdvisorResponse;
+import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -14,12 +16,10 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.Key;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
-import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -31,46 +31,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-//package com.symphony.sfs.ms.chat.service;
-//
-//import com.symphony.oss.models.chat.canon.facade.IUser;
-//import com.symphony.oss.models.core.canon.facade.PodAndUserId;
-//import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
-//import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
-//import com.symphony.sfs.ms.chat.exception.FederatedAccountNotFoundProblem;
-//import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
-//import com.symphony.sfs.ms.chat.model.FederatedAccount;
-//import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-//import com.symphony.sfs.ms.chat.service.external.EmpClient;
-//import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
-//import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-//import com.symphony.sfs.ms.starter.config.properties.common.Key;
-//import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-//import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
-//import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
-//import org.junit.jupiter.api.BeforeEach;
-//import org.junit.jupiter.api.Test;
-//import org.mockito.InOrder;
-//
-//import java.time.OffsetDateTime;
-//import java.util.Arrays;
-//import java.util.Collections;
-//import java.util.List;
-//import java.util.Optional;
-//
-//import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
-//import static org.junit.jupiter.api.Assertions.assertEquals;
-//import static org.junit.jupiter.api.Assertions.assertThrows;
-//import static org.mockito.ArgumentMatchers.anyString;
-//import static org.mockito.Mockito.inOrder;
-//import static org.mockito.Mockito.mock;
-//import static org.mockito.Mockito.never;
-//import static org.mockito.Mockito.verify;
-//import static org.mockito.Mockito.when;
-//
 class MessageServiceTest {
 
   private MessageService messageService;
@@ -122,7 +84,7 @@ class MessageServiceTest {
 
     when(federatedAccountRepository.findBySymphonyId("101")).thenReturn(Optional.of(federatedAccount101));
     // fromSymphonyUser is advisor
-    when(adminClient.getAdvisorAccess("1", "emp")).thenReturn(Optional.of(new AdvisorResponse()));
+    when(adminClient.getEntitlementAccess("1", "emp")).thenReturn(Optional.of(new EntitlementResponse()));
 
     long now  = new Date().getTime();
 

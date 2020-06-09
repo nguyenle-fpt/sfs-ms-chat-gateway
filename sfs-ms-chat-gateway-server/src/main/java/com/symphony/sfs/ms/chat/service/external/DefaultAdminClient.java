@@ -2,8 +2,8 @@ package com.symphony.sfs.ms.chat.service.external;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.SfsAdminClient;
-import com.symphony.sfs.ms.admin.generated.model.AdvisorResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
+import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
 import lombok.extern.slf4j.Slf4j;
@@ -30,8 +30,8 @@ public class DefaultAdminClient implements AdminClient {
     return adminClient.getEmpApi().getEmpList().orElse(new EmpList());
   }
   @Override
-  public Optional<AdvisorResponse> getAdvisorAccess(String symphonyId, String emp) {
-    adminClient.getAdvisorsApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return adminClient.getAdvisorsApi().getAdvisorBySymphonyIdAndEmp(symphonyId, emp);
+  public Optional<EntitlementResponse> getEntitlementAccess(String symphonyId, String entitlementType) {
+    adminClient.getEntitlementsApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    return adminClient.getEntitlementsApi().getEntitlementBySymphonyIdAndEntitlementType(symphonyId, entitlementType);
   }
 }
