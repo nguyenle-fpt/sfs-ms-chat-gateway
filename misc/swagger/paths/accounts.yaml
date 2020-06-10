@@ -20,6 +20,12 @@ accounts:
           application/json:
             schema:
               $ref: '../components/accounts.yaml#/create-account-response'
+      '404':
+        description: Emp not found
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/accounts.yaml#/emp-not-found'
       '409':
         description: Conflict
         content:

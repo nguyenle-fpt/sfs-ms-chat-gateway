@@ -54,3 +54,17 @@ create-user-failed:
     status:
       type: integer
       format: 500
+
+emp-not-found:
+  type: object
+  description: 'EMP not found'
+  properties:
+    type:
+      type: string
+      format: 'emp.not.found'
+    title:
+      type: string
+      format: 'EMP not found'
+    status:
+      type: integer
+      format: 404

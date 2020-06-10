@@ -5,6 +5,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -13,6 +14,7 @@ import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.EmpNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -68,6 +70,7 @@ public class FederatedAccountService implements DatafeedListener {
   private final StreamService streamService;
   private final SymphonyMessageService symphonyMessageService;
   private final UsersInfoService usersInfoService;
+  private final EmpSchemaService empSchemaService;
 
   @PostConstruct
   @VisibleForTesting
@@ -157,8 +160,9 @@ public class FederatedAccountService implements DatafeedListener {
       .orElseThrow(CreateUserFailedProblem::new);
   }
 
-  private String displayName(String firstName, String lastName, String emp) {
-    return firstName + ' ' + lastName + " [" + emp + "]";
+  private String displayName(String firstName, String lastName, String empName) {
+    EmpEntity emp = empSchemaService.getEmpDefinition(empName).orElseThrow(EmpNotFoundProblem::new);
+    return firstName + ' ' + lastName + " [" + emp.getServiceAccountSuffix() + "]";
   }
 
   /**

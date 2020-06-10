@@ -1,11 +1,13 @@
 package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
@@ -31,6 +33,7 @@ import org.springframework.http.MediaType;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Optional;
 
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
 import static clients.symphony.api.constants.PodConstants.GETCONNECTIONSTATUS;
@@ -44,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class AccountsApiTest extends AbstractIntegrationTest {
@@ -51,10 +55,13 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   protected FederatedAccountRepository federatedAccountRepository;
   protected FederatedAccountService federatedAccountService;
   protected AccountsApi accountsApi;
+  protected EmpSchemaService empSchemaService;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     super.setUp(db, mockServer);
+
+    empSchemaService = mock(EmpSchemaService.class);
 
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
     federatedAccountService = new FederatedAccountService(
@@ -71,7 +78,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       adminClient,
       streamService,
       symphonyMessageService,
-      new UsersInfoService(webClient));
+      new UsersInfoService(webClient),
+      empSchemaService);
     federatedAccountService.registerAsDatafeedListener();
 
     accountsApi = new AccountsApi(federatedAccountService);
@@ -82,6 +90,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     UserSession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
+    EmpEntity empEntity = new EmpEntity()
+      .name("WHATSAPP")
+      .serviceAccountSuffix("WHATSAPP");
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
@@ -146,6 +158,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     UserSession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
+    EmpEntity empEntity = new EmpEntity()
+      .name("WHATSAPP")
+      .serviceAccountSuffix("WHATSAPP");
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
@@ -224,6 +240,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     UserSession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
+    EmpEntity empEntity = new EmpEntity()
+      .name("WHATSAPP")
+      .serviceAccountSuffix("WHATSAPP");
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
