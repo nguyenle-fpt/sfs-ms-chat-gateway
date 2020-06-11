@@ -19,10 +19,9 @@
   </modules>
 
   <properties>
-    <allegro.model.version>0.0.16</allegro.model.version>
-    <chat.model.version>0.3.9</chat.model.version>
-    <canon.runtime.version>0.2.18</canon.runtime.version>
-    <symphony.client.version>1.0.30</symphony.client.version>
+    <allegro.model.version>0.4.4</allegro.model.version>
+    <canon.runtime.version>0.0.3</canon.runtime.version>
+    <symphony.client.version>1.0.32</symphony.client.version>
     <handlebars.version>4.1.2</handlebars.version>
   </properties>
 

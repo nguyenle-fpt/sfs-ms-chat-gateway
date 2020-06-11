@@ -49,7 +49,7 @@
     <dependency>
       <groupId>com.symphony.oss.models</groupId>
       <artifactId>chat-model</artifactId>
-      <version>${chat.model.version}</version>
+      <version>${allegro.model.version}</version>
       <exclusions>
         <exclusion>
           <groupId>org.eclipse.jetty</groupId>
@@ -68,10 +68,10 @@
     <dependency>
       <groupId>com.symphony.s2.model</groupId>
       <artifactId>chat-model-impl</artifactId>
-      <version>${chat.model.version}</version>
+      <version>${allegro.model.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.symphonyoss.s2.canon</groupId>
+      <groupId>com.symphony.oss.canon</groupId>
       <artifactId>canon-runtime-java</artifactId>
       <version>${canon.runtime.version}</version>
     </dependency>

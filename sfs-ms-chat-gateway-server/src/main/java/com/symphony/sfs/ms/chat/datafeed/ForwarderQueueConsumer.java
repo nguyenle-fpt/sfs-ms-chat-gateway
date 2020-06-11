@@ -2,6 +2,12 @@ package com.symphony.sfs.ms.chat.datafeed;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.symphony.oss.canon.runtime.IEntityFactory;
+import com.symphony.oss.canon.runtime.ModelRegistry;
+import com.symphony.oss.commons.dom.json.IJsonObject;
+import com.symphony.oss.commons.dom.json.ImmutableJsonList;
+import com.symphony.oss.commons.dom.json.jackson.JacksonAdaptor;
+import com.symphony.oss.commons.immutable.ImmutableByteArray;
 import com.symphony.oss.models.chat.canon.ChatModel;
 import com.symphony.oss.models.chat.canon.IMaestroMessage;
 import com.symphony.oss.models.chat.canon.ISNSSQSWireObject;
@@ -16,7 +22,6 @@ import com.symphony.oss.models.core.canon.facade.Envelope;
 import com.symphony.oss.models.core.canon.facade.IEnvelope;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.oss.models.crypto.canon.CryptoModel;
-import com.symphony.oss.models.fundamental.FundamentalModelRegistry;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import lombok.Getter;
@@ -25,12 +30,6 @@ import org.apache.commons.codec.binary.Base64;
 import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
 import org.springframework.cloud.aws.messaging.listener.annotation.SqsListener;
 import org.springframework.stereotype.Service;
-import org.symphonyoss.s2.canon.runtime.IEntityFactory;
-import org.symphonyoss.s2.canon.runtime.ModelRegistry;
-import org.symphonyoss.s2.common.dom.json.IJsonObject;
-import org.symphonyoss.s2.common.dom.json.ImmutableJsonList;
-import org.symphonyoss.s2.common.dom.json.jackson.JacksonAdaptor;
-import org.symphonyoss.s2.common.immutable.ImmutableByteArray;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -73,7 +72,7 @@ public class ForwarderQueueConsumer {
       .orElseGet(Stream::empty)
       .toArray(IEntityFactory<?, ?, ?>[]::new);
 
-    modelRegistry = new FundamentalModelRegistry().withFactories(factories);
+    modelRegistry = new ModelRegistry().withFactories(factories);
   }
 
   public void registerDatafeedListener(DatafeedListener listener) {
@@ -87,15 +86,20 @@ public class ForwarderQueueConsumer {
   @SqsListener(value = {"${aws.sqs.ingestion}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
   public void consume(String notification) throws IOException {
     ISNSSQSWireObject sqsObject = SNSSQSWireObjectEntity.FACTORY.newInstance(JacksonAdaptor.adaptObject((ObjectNode) objectMapper.readTree(notification)).immutify(), modelRegistry);
-    String payloadType = sqsObject.getJsonObject().getObject("MessageAttributes").getObject("payloadType").get("Value").toString();
+    // String payloadType = sqsObject.getJsonObject().getObject("MessageAttributes").getObject("payloadType").get("Value").toString();
+
+    IEnvelope envelope = parseEnvelope(sqsObject);
+    String payloadType = envelope.getPayload().getCanonType();
+
+    LOG.debug("Message received: {} {}", payloadType, notification);
 
     System.out.println(payloadType);
     switch (payloadType) {
       case SocialMessage.TYPE_ID:
-        notifySocialMessage(sqsObject);
+        notifySocialMessage(envelope);
         break;
       case MaestroMessage.TYPE_ID:
-        notifyMaestroMessage(sqsObject);
+        notifyMaestroMessage(envelope);
         break;
       default:
         LOG.debug("Unsupported payload type {}", payloadType);
@@ -104,9 +108,7 @@ public class ForwarderQueueConsumer {
     rawListeners.accept(notification);
   }
 
-  private void notifySocialMessage(ISNSSQSWireObject sqsObject) throws IOException {
-    IEnvelope envelope = parseEnvelope(sqsObject);
-
+  private void notifySocialMessage(IEnvelope envelope) throws IOException {
     // getting the SocialMessage from the envelope
     ISocialMessage socialMessage = SocialMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
 
@@ -117,7 +119,7 @@ public class ForwarderQueueConsumer {
 
     IJsonObject<?> attributes = envelope.getPayload().getJsonObject().getObject("attributes");
     if (attributes == null) {
-      LOG.debug("No attributes in social message: object={}, envelope={}, payload={}", sqsObject, envelope, envelope.getPayload());
+      LOG.debug("No attributes in social message: envelope={}, payload={}", envelope, envelope.getPayload());
       return;
     }
     ImmutableJsonList memberJsonList = ((ImmutableJsonList) attributes.get("dist"));
@@ -156,9 +158,7 @@ public class ForwarderQueueConsumer {
     }
   }
 
-  private void notifyMaestroMessage(ISNSSQSWireObject sqsObject) throws IOException {
-    IEnvelope envelope = parseEnvelope(sqsObject);
-
+  private void notifyMaestroMessage(IEnvelope envelope) throws IOException {
     // getting the MaestroMessage from the envelope
     IMaestroMessage maestroMessage = MaestroMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
 
@@ -179,7 +179,7 @@ public class ForwarderQueueConsumer {
       case LEAVE_ROOM:
         // TODO implement these events
         System.out.println("==== RAW ====");
-        System.out.println(sqsObject);
+        System.out.println(envelope);
         System.out.println("==== PAY ====");
         System.out.println(maestroMessage);
         System.out.println("=============");
