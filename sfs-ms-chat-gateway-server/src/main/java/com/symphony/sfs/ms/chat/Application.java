@@ -1,9 +1,12 @@
 package com.symphony.sfs.ms.chat;
 
 import com.symphony.sfs.ms.starter.SfsApplication;
+import io.swagger.configuration.SwaggerDocumentationConfig;
 import org.springframework.boot.SpringApplication;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.env.Environment;
 
+@ComponentScan(basePackageClasses = { Application.class, SwaggerDocumentationConfig.class })
 public class Application extends SfsApplication {
 
   public Application(Environment env) {

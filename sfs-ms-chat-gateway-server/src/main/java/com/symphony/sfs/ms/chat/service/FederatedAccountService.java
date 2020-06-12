@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.hash.Hashing;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
@@ -38,12 +39,15 @@ import model.UserInfo;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUser.ROLE_INDIVIDUAL;
 import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUserAttributes.ACCOUNT_TYPE_SYSTEM;
@@ -53,8 +57,6 @@ import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUserKeyRequest.A
 @Service
 @RequiredArgsConstructor
 public class FederatedAccountService implements DatafeedListener {
-
-  public static final String EMAIL_DOMAIN = "ces.symphony.com";
 
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
@@ -66,9 +68,6 @@ public class FederatedAccountService implements DatafeedListener {
   private final ConnectionRequestManager connectionRequestManager;
   private final ChannelService channelService;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
-  private final AdminClient adminClient;
-  private final StreamService streamService;
-  private final SymphonyMessageService symphonyMessageService;
   private final UsersInfoService usersInfoService;
   private final EmpSchemaService empSchemaService;
 
@@ -87,7 +86,7 @@ public class FederatedAccountService implements DatafeedListener {
     UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
     try {
-      SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmp(), botSession);
+      SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmailAddress(), request.getEmp(), botSession);
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
       datafeedSessionPool.listenDatafeed(federatedAccount);
@@ -128,7 +127,7 @@ public class FederatedAccountService implements DatafeedListener {
       });
   }
 
-  public SymphonyUser createSymphonyUser(String firstName, String lastName, String emp, UserSession botSession) {
+  public SymphonyUser createSymphonyUser(String firstName, String lastName, String emailAddress, String emp, UserSession botSession) {
     String publicKey = null;
     try {
       publicKey = RsaUtils.encodeRSAKey(RsaUtils.parseRSAPublicKey(chatConfiguration.getSharedPublicKey().getData()));
@@ -146,7 +145,7 @@ public class FederatedAccountService implements DatafeedListener {
     SymphonyUserAttributes userAttributes = SymphonyUserAttributes.builder()
       .displayName(displayName(firstName, lastName, emp))
       .userName(userName(emp, uuid))
-      .emailAddress(emailAddress(emp, uuid))
+      .emailAddress(emailAddress(emailAddress, emp, uuid, botSession))
       .currentKey(userKey)
       .accountType(ACCOUNT_TYPE_SYSTEM)
       .build();
@@ -173,10 +172,21 @@ public class FederatedAccountService implements DatafeedListener {
   }
 
   /**
-   * Returns an email address with pattern: {emp}_{random uuid}@{EMAIL_DOMAIN}
+   * Returns an email address with pattern: {emp}_{random uuid}|{originalEmail}
    */
-  private String emailAddress(String emp, String uuid) {
-    return emp + '_' + uuid + '@' + EMAIL_DOMAIN;
+  private String emailAddress(String emailAddress, String emp, String uuid, UserSession botSession) {
+    List<String> candidates = IntStream.range(0, 5)
+      .mapToObj(i -> Hashing.murmur3_32().hashString(UUID.randomUUID().toString() + emailAddress, StandardCharsets.UTF_8).toString() + '|' + emailAddress)
+      .collect(Collectors.toList());
+
+    List<UserInfo> userInfos = usersInfoService.getUsersFromEmails(candidates, podConfiguration.getUrl(), botSession);
+    userInfos.forEach(info -> candidates.remove(info.getEmailAddress()));
+
+    if (candidates.isEmpty()) { // all emails are conflicting
+      throw new IllegalStateException("Conflict while allocating email");
+    }
+
+    return candidates.get(0);
   }
 
   private FederatedAccount newFederatedServiceAccount(CreateAccountRequest account, SymphonyUser symphonyUser) {
