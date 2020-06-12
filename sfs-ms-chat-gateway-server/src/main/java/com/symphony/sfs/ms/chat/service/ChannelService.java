@@ -82,12 +82,9 @@ public class ChannelService implements DatafeedListener {
 
     Optional<String> channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
 
-    if (channelId.isPresent()) {
-      symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I'm ready to discuss with you");
-    } else {
+    if (channelId.isEmpty()) {
       symphonyMessageService.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
     }
-
     return streamId;
   }
 

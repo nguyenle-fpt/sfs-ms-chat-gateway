@@ -79,13 +79,26 @@ public class SymphonyMessageService {
     sendRawMessage(userSession, streamId, messageContent);
   }
 
+  public void sendSimpleMessage(String streamId, String fromSymphonyUserId, String messageContent) {
+    String detemplatized = templateProcessor.process(messageContent, SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE);
+    sendRawMessage(streamId, fromSymphonyUserId, detemplatized);
+  }
+
   public void sendSimpleMessage(UserSession userSession, String streamId, String messageContent) {
     String detemplatized = templateProcessor.process(messageContent, SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE);
     sendRawMessage(userSession, streamId, detemplatized);
   }
 
+  public void sendNotificationMessage(String streamId, String fromSymphonyUserId, String messageContent) {
+    sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE));
+  }
+
   public void sendNotificationMessage(UserSession userSession, String streamId, String messageContent) {
     sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE));
+  }
+
+  public void sendInfoMessage(String streamId, String fromSymphonyUserId, String messageContent) {
+    sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
   public void sendInfoMessage(UserSession userSession, String streamId, String messageContent) {
@@ -94,6 +107,10 @@ public class SymphonyMessageService {
 
   public void sendAlertMessage(UserSession userSession, String streamId, String messageContent) {
     sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
+  }
+
+  public void sendAlertMessage(String streamId, String fromSymphonyUserId, String messageContent) {
+    sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
   }
 
   public RetrieveMessagesResponse retrieveMessages(List<MessageId> messageIds, String symphonyUserId) {

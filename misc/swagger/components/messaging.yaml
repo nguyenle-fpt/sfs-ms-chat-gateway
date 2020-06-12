@@ -15,6 +15,13 @@ send-message-request:
     appendTags:
       type: boolean
       default: false
+    formatting:
+      type: string
+      enum:
+        - simple
+        - notification
+        - info
+        - alert
 
 retrieve-messages-request:
   type: object

@@ -21,9 +21,27 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
 
   @Override
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
-
-    symphonyMessageService.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), "<messageML>" + request.getText() + "</messageML>");
-
+    String messageContent = "<messageML>" + request.getText() + "</messageML>";
+    if (request.getFormatting() == null) {
+      symphonyMessageService.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+    } else {
+      messageContent = request.getText();
+      switch (request.getFormatting()) {
+        case SIMPLE:
+          symphonyMessageService.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
+        case NOTIFICATION:
+          symphonyMessageService.sendNotificationMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
+        case INFO:
+          symphonyMessageService.sendInfoMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
+        case ALERT:
+          symphonyMessageService.sendAlertMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
+      }
+    }
+    
     SendMessageResponse response = new SendMessageResponse();
     return ResponseEntity.ok(response);
   }
