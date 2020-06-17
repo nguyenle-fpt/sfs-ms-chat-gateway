@@ -5,17 +5,17 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import lombok.Getter;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Getter
 public class MockEmpClient implements EmpClient {
 
-  private Map<String, String> channels = new HashMap<>();
-  private Map<String, String> messages = new HashMap<>();
+  private Map<String, String> channels = new ConcurrentHashMap<>();
+  private Map<String, String> messages = new ConcurrentHashMap<>();
 
   @Override
   public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {

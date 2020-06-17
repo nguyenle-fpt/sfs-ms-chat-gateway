@@ -13,9 +13,9 @@ import lombok.RequiredArgsConstructor;
 import model.UserInfo;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +26,7 @@ public class DatafeedSessionPool {
   private final ChatConfiguration chatConfiguration;
   private final FederatedAccountSessionService federatedAccountSessionService;
 
-  private Map<String, DatafeedSession> sessions = new HashMap<>();
+  private Map<String, DatafeedSession> sessions = new ConcurrentHashMap<>();
 
   public DatafeedSession listenDatafeed(String symphonyId) throws UnknownDatafeedUserException {
     FederatedAccount account = federatedAccountSessionService.findBySymphonyIdOrFail(symphonyId);
