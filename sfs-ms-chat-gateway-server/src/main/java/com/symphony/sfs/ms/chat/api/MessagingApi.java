@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
 
+import static org.jsoup.nodes.Entities.escape;
+
 @Slf4j
 @RestController
 @RequiredArgsConstructor
@@ -21,11 +23,12 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
 
   @Override
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
-    String messageContent = "<messageML>" + request.getText() + "</messageML>";
+    String messageContent = formatMessageMLV2(request.getText());
+
     if (request.getFormatting() == null) {
-      symphonyMessageService.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+      String message = "<messageML>" + messageContent + "</messageML>";
+      symphonyMessageService.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), message);
     } else {
-      messageContent = request.getText();
       switch (request.getFormatting()) {
         case SIMPLE:
           symphonyMessageService.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
@@ -41,7 +44,6 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
           break;
       }
     }
-    
     SendMessageResponse response = new SendMessageResponse();
     return ResponseEntity.ok(response);
   }
@@ -50,5 +52,20 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   public ResponseEntity<RetrieveMessagesResponse> retrieveMessages(@Valid RetrieveMessagesRequest body) {
     RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getMessagesIds(), body.getSymphonyUserId());
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Escape special characters before sending to Symphony.
+   *
+   * @param text The text to send
+   * @return The text well formatted
+   */
+  private String formatMessageMLV2(String text) {
+    String res = escape(text);
+    res = res.replace("\"", "&quot;");
+    res = res.replace("#", "&#35;");
+    res = res.replace("$", "&#36;");
+
+    return res;
   }
 }

@@ -7,7 +7,7 @@
   <parent>
     <artifactId>sfs-ms-chat-gateway</artifactId>
     <groupId>com.symphony.sfs</groupId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>sfs-ms-chat-gateway-server</artifactId>
@@ -74,6 +74,20 @@
       <groupId>com.symphony.oss.canon</groupId>
       <artifactId>canon-runtime-java</artifactId>
       <version>${canon.runtime.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-http</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-util</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.symphony</groupId>
@@ -101,6 +115,13 @@
     <dependency>
       <groupId>net.sourceforge.argparse4j</groupId>
       <artifactId>argparse4j</artifactId>
+    </dependency>
+
+    <!-- TODO put in chassis -->
+    <dependency>
+      <groupId>org.jsoup</groupId>
+      <artifactId>jsoup</artifactId>
+      <version>${jsoup.version}</version>
     </dependency>
   </dependencies>
 
