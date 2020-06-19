@@ -1,5 +1,6 @@
 package com.symphony.security.cache;
 
+import com.google.common.primitives.Longs;
 import com.gs.ti.wpt.lc.security.cryptolib.AES;
 import com.gs.ti.wpt.lc.security.cryptolib.SHA;
 import com.symphony.security.exceptions.SymphonyEncryptionException;
@@ -8,6 +9,7 @@ import com.symphony.security.exceptions.SymphonyNativeException;
 
 import org.bouncycastle.util.Arrays;
 
+import java.security.SecureRandom;
 import java.util.Random;
 
 public class SecurePersister implements IPersister {
@@ -28,7 +30,7 @@ public class SecurePersister implements IPersister {
     seed = new byte[KEY_SIZE];
 
     // DO NOT REORDER NEXT 4 LINES.
-    Random sr = new Random(randSeed);
+    SecureRandom sr = new SecureRandom(Longs.toByteArray(randSeed));
     sr.nextBytes(keySeed);
     sr.nextBytes(ivSeed);
     sr.nextBytes(seed);
