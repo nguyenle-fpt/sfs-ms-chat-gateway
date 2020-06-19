@@ -67,4 +67,6 @@ message-info:
       type: string
     message:
       type: string
+    disclaimer:
+      type: string
 

@@ -57,7 +57,8 @@ public class SymphonyService {
       return Optional.ofNullable(response)
         .map(r -> new MessageInfo()
           .message(r.getMessageText(symMessageParser))
-          .messageId(r.getMessageId()));
+          .messageId(r.getMessageId())
+          .disclaimer(r.getDisclaimer()));
     } catch (Exception e) {
       logWebClientError(LOG, "/agent/v1/message/" + messageId, e);
       return Optional.empty();
