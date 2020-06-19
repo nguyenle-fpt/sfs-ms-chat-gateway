@@ -8,7 +8,6 @@ import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnu
 import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
-import com.symphony.sfs.ms.starter.testing.MockitoUtils;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,6 @@ import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.SENDMESSAGE_EN
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 class MessagingApiTest extends AbstractIntegrationTest {
 
@@ -53,34 +51,6 @@ class MessagingApiTest extends AbstractIntegrationTest {
     SendMessageRequest sendMessageRequest = this.createTestMessage("streamId", "wrongSymphonyUserId", "text", null);
     doThrow(new SendMessageFailedProblem()).when(symphonyMessageService).sendRawMessage("streamId", "wrongSymphonyUserId", "<messageML>text</messageML>");
     DefaultProblem response = this.verifyRequest(sendMessageRequest, HttpStatus.BAD_REQUEST, DefaultProblem.class);
-  }
-
-  @Test
-  public void sendMessageWithSpecialsCharacters() {
-    SendMessageRequest sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "message &", null);
-    verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
-    verify(symphonyMessageService, MockitoUtils.once()).sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>message &amp;</messageML>");
-
-    sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "message #", null);
-    verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
-    verify(symphonyMessageService, MockitoUtils.once()).sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>message &#35;</messageML>");
-
-    sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "message <", null);
-    verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
-    verify(symphonyMessageService, MockitoUtils.once()).sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>message &lt;</messageML>");
-
-    sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "message $", null);
-    verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
-    verify(symphonyMessageService, MockitoUtils.once()).sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>message &#36;</messageML>");
-
-    sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "message \"", null);
-    verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
-    verify(symphonyMessageService, MockitoUtils.once()).sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>message &quot;</messageML>");
-
-
-    sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "message &$#<\"", null);
-    verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
-    verify(symphonyMessageService, MockitoUtils.once()).sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>message &amp;&#36;&#35;&lt;&quot;</messageML>");
   }
 
   private <RESPONSE> RESPONSE verifyRequest(SendMessageRequest sendMessageRequest, HttpStatus expectedStatus, Class<RESPONSE> response) {
