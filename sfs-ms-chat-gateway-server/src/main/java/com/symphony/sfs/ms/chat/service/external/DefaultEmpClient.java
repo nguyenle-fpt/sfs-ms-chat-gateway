@@ -13,12 +13,14 @@ import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Component
@@ -90,7 +92,7 @@ public class DefaultEmpClient implements EmpClient {
       .symphonyId(user.getId().toString())
       .firstName(user.getFirstName())
       .lastName(user.getSurname())
-      .companyName(user.getCompany())
+      .companyName(Objects.requireNonNullElse(user.getCompany(), "Guest"))
       .isFederatedUser(false)
       .isInitiator(initiatorUserId.equals(user.getId().toString()))
     ));
