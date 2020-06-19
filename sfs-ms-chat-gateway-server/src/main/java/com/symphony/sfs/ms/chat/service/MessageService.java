@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
@@ -47,7 +48,7 @@ public class MessageService implements DatafeedListener {
   }
 
   @Override
-  public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer) {
+  public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
 
     if (members.size() < 2) {
       LOG.warn("(M)IM with streamId {} and messageId {} has less than 2 members", streamId, messageId);
@@ -69,12 +70,11 @@ public class MessageService implements DatafeedListener {
       if (toUserIds.size() > 1) {
         LOG.info("More than one recipient {} --> We are in MIM", toUserIds);
       }
-
-      handleFromSymphonyIMorMIM(streamId, messageId, fromSymphonyUser, toUserIds, timestamp, message, disclaimer);
+      handleFromSymphonyIMorMIM(streamId, messageId, fromSymphonyUser, toUserIds, timestamp, message, disclaimer, attachments);
     }
   }
 
-  private void handleFromSymphonyIMorMIM(String streamId, String messageId, IUser fromSymphonyUser, List<String> toUserIds, Long timestamp, String message, String disclaimer) {
+  private void handleFromSymphonyIMorMIM(String streamId, String messageId, IUser fromSymphonyUser, List<String> toUserIds, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
     List<IUser> symphonyUsers = new ArrayList<>();
 
@@ -100,8 +100,11 @@ public class MessageService implements DatafeedListener {
         }
         if (adminClient.getEntitlementAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + entry.getKey() + " users"));
-        } else if (toUserIds.size() > 1) { // Check there are only 2 users
+        } else if (toUserIds.size() > 1) {// Check there are only 2 users
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + entry.getKey() + " contact in a MIM."));
+        } else if (attachments != null && !attachments.isEmpty()) {
+          // If there are some attachments, warn the advisor and block the message
+          symphonyMessageService.sendAlertMessage(streamId, fromSymphonyUser.getId().toString(), "This message was not delivered. Attachments are not supported (messageId : " + messageId + ")");
         } else {
 
           // TODO Define the behavior in case of message not correctly sent to all EMPs

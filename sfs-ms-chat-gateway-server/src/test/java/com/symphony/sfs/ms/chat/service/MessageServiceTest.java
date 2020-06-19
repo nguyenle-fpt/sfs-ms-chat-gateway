@@ -7,8 +7,6 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-import com.symphony.sfs.ms.chat.service.MessageService;
-import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
@@ -90,7 +88,7 @@ class MessageServiceTest {
 
 
     // Without disclaimer
-    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", null);
+    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", null, null);
 
     InOrder orderVerifier =  inOrder(empClient);
     orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "disclaimer");
@@ -98,7 +96,7 @@ class MessageServiceTest {
     orderVerifier.verifyNoMoreInteractions();
 
     // With disclaimer
-    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", "disclaimer");
+    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", "disclaimer", null);
 
     orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "disclaimer");
     orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message");

@@ -44,6 +44,7 @@ public class SymphonyService {
    */
   public Optional<MessageInfo> getMessage(String messageId, UserSession botSession, String podUrl) {
     try {
+      //TODO put /agent/v1/message/{id} in a constant
       SymphonyInboundMessage response = webClient.get()
         .uri(podUrl + "/agent/v1/message/" + messageId)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)

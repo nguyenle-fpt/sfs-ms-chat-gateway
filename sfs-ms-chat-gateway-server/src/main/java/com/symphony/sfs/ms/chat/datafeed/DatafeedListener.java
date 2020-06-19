@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
+import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 
 import java.util.List;
@@ -21,7 +22,7 @@ public interface DatafeedListener {
   default void onConnectionDeleted(IUser requesting, IUser requested) {
   }
 
-  default void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer) {
+  default void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
   }
 
   /*default void onRoomMessage(InboundMessage inboundMessage) {
