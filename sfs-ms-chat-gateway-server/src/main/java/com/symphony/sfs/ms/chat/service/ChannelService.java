@@ -14,6 +14,7 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
+import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
@@ -138,7 +139,7 @@ public class ChannelService implements DatafeedListener {
     List<IUser> symphonyUsers = new ArrayList<>();
 
     for (String symphonyId : members) {
-      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(newIUser(symphonyId)));
+      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(SymphonyUserUtils.newIUser(symphonyId)));
     }
 
     refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, true);
@@ -204,21 +205,11 @@ public class ChannelService implements DatafeedListener {
     List<IUser> symphonyUsers = new ArrayList<>();
 
     for (String symphonyId : members) {
-      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(newIUser(symphonyId)));
+      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(SymphonyUserUtils.newIUser(symphonyId)));
     }
 
     refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, false);
 
     // createMIMChannel(streamId, initiator, federatedAccountsByEmp, symphonyUsers);
-  }
-
-  private IUser newIUser(String symphonyId) {
-    // TODO resolve firstName and lastName
-    UserEntity.Builder builder = new UserEntity.Builder()
-      .withId(Long.valueOf(symphonyId))
-      .withFirstName(symphonyId + "_firstName")
-      .withSurname(symphonyId + "_lastName");
-    return new User(builder);
-
   }
 }
