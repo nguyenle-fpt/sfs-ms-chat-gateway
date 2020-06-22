@@ -32,8 +32,8 @@ import java.util.Optional;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -43,42 +43,35 @@ import static org.mockito.Mockito.when;
 public class PreventMIMRoomCreationTest {
 
   protected ForwarderQueueConsumer forwarderQueueConsumer;
-  private ChannelService channelService;
-  private MessageService messageService;
-  private StreamService streamService;
   private SymphonyMessageService symphonyMessageService;
-  private PodConfiguration podConfiguration;
   private EmpClient empClient;
   private DatafeedSessionPool datafeedSessionPool;
   private FederatedAccountRepository federatedAccountRepository;
-  private BotConfiguration botConfiguration;
-  private AuthenticationService authenticationService;
-  private UserSession userSession;
   private SymphonyService symphonyService;
   private AdminClient adminClient;
 
   @BeforeEach
   public void setUp() throws Exception {
     symphonyService = mock(SymphonyService.class);
-    streamService = mock(StreamService.class);
+    StreamService streamService = mock(StreamService.class);
     symphonyMessageService = mock(SymphonyMessageService.class);
     empClient = new MockEmpClient();
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
 
-    authenticationService = mock(AuthenticationService.class);
+    AuthenticationService authenticationService = mock(AuthenticationService.class);
 
-    botConfiguration = new BotConfiguration();
+    BotConfiguration botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
     botConfiguration.setPrivateKey(new Key("-----botConfigurationPrivateKey"));
 
-    podConfiguration = new PodConfiguration();
+    PodConfiguration podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
 
-    userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    UserSession userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
 
@@ -99,10 +92,10 @@ public class PreventMIMRoomCreationTest {
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool);
 
 
-    messageService = new MessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageService, adminClient);
+    MessageService messageService = new MessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageService, adminClient);
     messageService.registerAsDatafeedListener();
 
-    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
+    ChannelService channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
     channelService.registerAsDatafeedListener();
   }
 
@@ -136,7 +129,7 @@ public class PreventMIMRoomCreationTest {
 
     forwarderQueueConsumer.consume(notification);
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-    verify(streamService, times(1)).sendMessage("podUrl", "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.", session);
+    verify(symphonyMessageService, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.");
 
   }
 
@@ -166,8 +159,8 @@ public class PreventMIMRoomCreationTest {
 
     forwarderQueueConsumer.consume(notification);
 
-    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
-    verify(streamService, times(0)).sendMessage("podUrl", "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.", session);
+    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
+    verify(symphonyMessageService, times(0)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite WHATSAPP contacts in a MIM.");
 
   }
 
@@ -199,7 +192,7 @@ public class PreventMIMRoomCreationTest {
     forwarderQueueConsumer.consume(notification);
 
     verify(symphonyService, times(1)).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", session);
-    verify(streamService, times(1)).sendMessage("podUrl", "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a chat room.", session);
+    verify(symphonyMessageService, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a chat room.");
   }
 
   @Test
@@ -215,9 +208,6 @@ public class PreventMIMRoomCreationTest {
       .symphonyUsername("username")
       .build();
 
-    UserInfo symphonyUser = new UserInfo();
-    symphonyUser.setId(2L);
-
     UserInfo sender = new UserInfo();
     sender.setId(1L);
 
@@ -226,13 +216,12 @@ public class PreventMIMRoomCreationTest {
 
     String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
       whatsAppUser,
-      symphonyUser,
       sender
     )));
 
     forwarderQueueConsumer.consume(notification);
 
-    verify(streamService, times(1)).sendMessage("podUrl", "8X5mO8CM2ziF4QiFSy0FxX___pwsItagdA", "You are not allowed to send a message to a WHATSAPP contact in a MIM.", session);
+    verify(symphonyMessageService, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
   }
 
   @Test
@@ -249,25 +238,22 @@ public class PreventMIMRoomCreationTest {
       .symphonyUsername("username")
       .build();
 
-    UserInfo symphonyUser = new UserInfo();
-    symphonyUser.setId(2L);
-
     UserInfo sender = new UserInfo();
     sender.setId(1L);
 
-    UserSession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
     when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUser));
 
     String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
       whatsAppUser,
-      symphonyUser,
       sender
     )));
 
     forwarderQueueConsumer.consume(notification);
 
+    UserSession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
+
     String alertMessage = "This message was not delivered. Attachments are not supported (messageId : ";
-    verify(symphonyMessageService, once()).sendAlertMessage(anyString(), eq("1"), contains(alertMessage));
+    verify(symphonyMessageService, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), startsWith(alertMessage));
   }
 
 
@@ -571,7 +557,7 @@ public class PreventMIMRoomCreationTest {
       "    \"roomType\":\"CHATROOM\"," +
       "    \"senderAnonymous\":false," +
       "    \"shareHistoryEnabled\":true," +
-      "    \"threadId\":\"YfcFczp2whItkr5R/BMdvH///pIhbtk7dA==\"," +
+      "    \"threadId\":\"KdO82B8UMTU7og2M4vOFqn///pINMV/OdA==\"," +
       "    \"typingEventEnabled\":true," +
       "    \"userId\":" + inviter.getId() + "," +
       "    \"userIsOwner\":true," +
@@ -622,13 +608,13 @@ public class PreventMIMRoomCreationTest {
       "  }," +
       "  \"schemaVersion\":1," +
       "  \"semVersion\":\"1.55.3-SNAPSHOT\"," +
-      "  \"threadId\":\"YfcFczp2whItkr5R/BMdvH///pIhbtk7dA==\"," +
+      "  \"threadId\":\"KdO82B8UMTU7og2M4vOFqn///pINMV/OdA==\"," +
       "  \"traceId\":\"yRu0c3\"," +
       "  \"version\":\"MAESTRO\"" +
       "}";
   }
 
-  private String getMIMMessageMaestroMessage(FederatedAccount whatsAppUser, UserInfo symphonyUser, UserInfo sender) {
+  private String getMIMMessageMaestroMessage(FederatedAccount whatsAppUser, UserInfo sender) {
     return "{" +
       "  \"_type\":\"com.symphony.s2.model.chat.SocialMessage\"," +
       "  \"attributes\":{" +
@@ -643,10 +629,9 @@ public class PreventMIMRoomCreationTest {
       "  \"copyDisabled\":false," +
       "  \"encrypted\":true," +
       "  \"attachments\":[" +
-
       " {" +
-      "        \"messageId\": \"PYLHNm/1K6ppeOpj+FbQ\"," +
-      "        \"userId\": \"USER_ID\"," +
+      "        \"messageId\": \"GUrHhnXNMHd9OBIJzyciiX///pu5qv1FbQ==\"," +
+      "        \"userId\": \"" + sender + "\"," +
       "        \"ingestionDate\": 1548089933946," +
       "        \"fileId\": \"internal_14362370637825%2FT2vTuh%2BgWTtZFQtI%2FHDXYg%3D%3D\"," +
       "        \"name\": \"butterfly.jpg\"," +
@@ -659,8 +644,6 @@ public class PreventMIMRoomCreationTest {
       "            }" +
       "        ]" +
       "    }" +
-
-
       "  ]," +
       "  \"encryptedEntities\":\"AgAAAKcAAAAAAAAAAJ6O1SMRXgf68fdt6/pZaSHQvxIWpgq2hbHDhAiuAbnQow8SgdSrv4WAFYyUIHqT3EFBYK6AC4ZG/YfxEAVM9IJfKZ5pU5dXxoTjxU5VmpASlXY=\"," +
       "  \"encryptedMedia\":\"AgAAAKcAAAAAAAAAAP5fS7NnNyx1o+gq5kzQQ2XshB3EF3nTsDxvM2uD6yMebqWOnRdUSRCbz/dfMQ0UBVHpYBy7CxuXJm6g3bhJ2glBdl3VO9Kmn+gzn7EpJ1todA==\"," +
@@ -703,7 +686,7 @@ public class PreventMIMRoomCreationTest {
       "  \"sendingApp\":\"lc\"," +
       "  \"suppressed\":false," +
       "  \"text\":\"AgAAAKcAAAAAAAAAAJBTMg39Qo3WEfLEe+AqSjW7o44NYr5RY0X0q2jk1+13mL5CNQZs5gNdrJv8gv54W88=\"," +
-      "  \"threadId\":\"8X5mO8CM2ziF4QiFSy0FxX///pwsItagdA==\"," +
+      "  \"threadId\":\"KdO82B8UMTU7og2M4vOFqn///pINMV/OdA==\"," +
       "  \"tokenIds\":[" +
       "    \"Ggi5HWXF/7Ao+XP7TW18NNxtAGZx21M1YYM18QFxZuM=\"" +
       "  ]," +
