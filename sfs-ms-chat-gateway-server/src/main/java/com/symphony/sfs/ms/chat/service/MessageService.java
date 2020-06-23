@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static org.jsoup.nodes.Entities.escape;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -117,7 +119,7 @@ public class MessageService implements DatafeedListener {
           if (StringUtils.isNotBlank(disclaimer)) {
             message = disclaimer + "\n-- end of disclaimer\n\n" + message;
           }
-          empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, message);
+          empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message));
         }
       }
     } catch (UnknownDatafeedUserException e) {
