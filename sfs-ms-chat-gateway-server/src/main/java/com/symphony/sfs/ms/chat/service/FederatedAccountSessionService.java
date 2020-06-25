@@ -4,7 +4,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,12 +27,12 @@ public class FederatedAccountSessionService implements DatafeedListener {
       .orElseThrow(() -> new UnknownDatafeedUserException("Unmanaged datafeed")); // TODO better exception;
   }
 
-  public FederatedAccount updateSession(String symphonyId, UserSession session) throws UnknownDatafeedUserException {
+  public FederatedAccount updateSession(String symphonyId, SymphonySession session) throws UnknownDatafeedUserException {
     FederatedAccount federatedAccount = findBySymphonyIdOrFail(symphonyId);
     return updateSession(federatedAccount, session);
   }
 
-  public FederatedAccount updateSession(FederatedAccount federatedAccount, UserSession session) {
+  public FederatedAccount updateSession(FederatedAccount federatedAccount, SymphonySession session) {
     federatedAccount.setSessionToken(session.getSessionToken());
     federatedAccount.setKmToken(session.getKmToken());
     return federatedAccountRepository.save(federatedAccount);

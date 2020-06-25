@@ -1,6 +1,6 @@
 package com.symphony.sfs.ms.chat.config.properties;
 
-import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -18,11 +18,11 @@ public class ChatConfiguration {
   private String msAdminUrl;
 
   @NotNull
-  private Key sharedPublicKey;
+  private PemResource sharedPublicKey;
 
   @NotNull
-  private Key sharedPrivateKey;
+  private PemResource sharedPrivateKey;
 
   @NotNull
-  private Key privateKey;
+  private PemResource privateKey;
 }

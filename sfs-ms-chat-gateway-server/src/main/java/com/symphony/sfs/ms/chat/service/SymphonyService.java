@@ -3,7 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import clients.symphony.api.constants.PodConstants;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.SymMessageParser;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ public class SymphonyService {
   private final PodConfiguration podConfiguration;
   private final SymMessageParser symMessageParser;
 
-  public void removeMemberFromRoom(String streamId, UserSession session) {
+  public void removeMemberFromRoom(String streamId, SymphonySession session) {
     webClient.post()
       .uri(podConfiguration.getUrl() + PodConstants.REMOVEMEMBER, streamId)
       .header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON_VALUE)
@@ -42,7 +42,7 @@ public class SymphonyService {
    * @param messageId The message id
    * @return The message text
    */
-  public Optional<MessageInfo> getMessage(String messageId, UserSession botSession, String podUrl) {
+  public Optional<MessageInfo> getMessage(String messageId, SymphonySession botSession, String podUrl) {
     try {
       //TODO put /agent/v1/message/{id} in a constant
       SymphonyInboundMessage response = webClient.get()

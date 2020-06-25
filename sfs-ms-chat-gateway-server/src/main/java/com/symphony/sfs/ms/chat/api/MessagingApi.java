@@ -14,8 +14,9 @@ import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import lombok.RequiredArgsConstructor;
@@ -24,10 +25,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
-import java.time.OffsetDateTime;
 import java.util.Date;
-import java.util.Objects;
-import java.util.Optional;
+
+// TODO full refactor, too much code in this API class
 
 @Slf4j
 @RestController
@@ -91,7 +91,6 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   }
 
   /**
-   *
    * @param request
    * @return Optional with emp if everyone is entitled otherwise Optional.empty()
    */
@@ -100,12 +99,12 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
     String emp = fromFederatedAccount.getEmp();
     String fromSymphonyId = fromFederatedAccount.getSymphonyUserId();
 
-    UserSession userSession = authenticationService.authenticate(
+    SymphonySession botSession = authenticationService.authenticate(
       podConfiguration.getSessionAuth(),
       podConfiguration.getKeyAuth(),
       botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
-    StreamInfo streamInfo = streamService.getStreamInfo(podConfiguration.getUrl(), request.getStreamId(), userSession).orElseThrow(CannotRetrieveStreamIdProblem::new);
+    StreamInfo streamInfo = streamService.getStreamInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), request.getStreamId()).orElseThrow(CannotRetrieveStreamIdProblem::new);
 
     // ALL non-Federated users must be entitled (advisors)
     return streamInfo.getStreamAttributes().getMembers()

@@ -1,7 +1,10 @@
 package com.symphony.sfs.ms.chat.service.symphony;
 
 import clients.symphony.api.constants.PodConstants;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.security.SessionManager;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.AdminUserInfo;
 import org.apache.commons.lang3.StringUtils;
@@ -25,49 +28,46 @@ import static com.symphony.sfs.ms.starter.util.WebClientUtils.logWebClientError;
 @Service
 @Lazy
 @Slf4j
+@RequiredArgsConstructor
 public class AdminUserManagementService {
 
-  private final WebClient webClient;
+  private final SessionManager sessionManager;
 
-  public AdminUserManagementService(WebClient webClient) {
-    this.webClient = webClient;
-  }
-
-  public Optional<SymphonyUser> createUser(SymphonyUser user, String podUrl, UserSession botSession) {
+  public Optional<SymphonyUser> createUser(String podUrl, SessionSupplier<SymphonySession> session, SymphonyUser user) {
 
     if (StringUtils.isBlank(podUrl)) {
       throw new IllegalArgumentException("No URL provided for Create User");
     }
 
+    WebClient client = sessionManager.getWebClient(session);
     try {
-      SymphonyUser response = blockWithRetries(webClient.post()
+      SymphonyUser response = blockWithRetries(client.post()
         .uri(podUrl + PodConstants.ADMINCREATEUSER)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-        .header("sessionToken", botSession.getSessionToken())
         .body(BodyInserters.fromValue(user))
         .retrieve()
         .bodyToMono(SymphonyUser.class));
-      return Optional.of(response);
+      return Optional.ofNullable(response);
     } catch (Exception e) {
       logWebClientError(LOG, PodConstants.ADMINCREATEUSER, e);
     }
     return Optional.empty();
   }
 
-  public Optional<AdminUserInfo> getUserInfo(String userId, String podUrl, UserSession botSession) {
+  public Optional<AdminUserInfo> getUserInfo(String podUrl, SessionSupplier<SymphonySession> session, String userId) {
 
     if (StringUtils.isBlank(podUrl)) {
       throw new IllegalArgumentException("No URL provided for get user");
     }
 
+    WebClient client = sessionManager.getWebClient(session);
     try {
-      AdminUserInfo response = blockWithRetries(webClient.get()
+      AdminUserInfo response = blockWithRetries(client.get()
         .uri(podUrl + PodConstants.GETUSERADMIN, userId)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-        .header("sessionToken", botSession.getSessionToken())
         .retrieve()
         .bodyToMono(AdminUserInfo.class));
-      return Optional.of(response);
+      return Optional.ofNullable(response);
     } catch (Exception e) {
       logWebClientError(LOG, PodConstants.GETUSERADMIN, e);
     }

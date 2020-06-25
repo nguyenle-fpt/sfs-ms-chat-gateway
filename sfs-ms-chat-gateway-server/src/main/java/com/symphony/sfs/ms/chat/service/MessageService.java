@@ -14,7 +14,7 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
@@ -92,7 +92,7 @@ public class MessageService implements DatafeedListener {
     try {
       for (Map.Entry<String, List<FederatedAccount>> entry : federatedAccountsByEmp.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
-        List<UserSession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
+        List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
 
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
           // TODO The process stops at first UnknownDatafeedUserException

@@ -6,7 +6,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.env.Environment;
 
-@ComponentScan(basePackageClasses = { Application.class, SwaggerDocumentationConfig.class })
+@ComponentScan(basePackageClasses = {Application.class, SwaggerDocumentationConfig.class})
 public class Application extends SfsApplication {
 
   public Application(Environment env) {

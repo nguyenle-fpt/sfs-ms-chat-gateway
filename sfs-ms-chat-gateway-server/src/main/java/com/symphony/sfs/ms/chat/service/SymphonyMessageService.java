@@ -14,8 +14,9 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,10 +56,11 @@ public class SymphonyMessageService {
   public static final String SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE = "system_message_notification";
   public static final String SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE = "system_message_simple";
 
-  public void sendRawMessage(UserSession session, String streamId, String messageContent) {
+  public void sendRawMessage(SymphonySession session, String streamId, String messageContent) {
     try {
       LOG.debug("Send message to symphony: {} - {}", streamId, messageContent);
-      streamService.sendMessage(podConfiguration.getUrl(), streamId, messageContent, session).orElseThrow(SymphonySendMessageFailedProblem::new);
+      streamService.sendMessage(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), streamId, messageContent)
+        .orElseThrow(SymphonySendMessageFailedProblem::new);
     } catch (Exception e) {
       LOG.error("Cannot send message on stream {}", streamId, e);
     }
@@ -70,7 +72,7 @@ public class SymphonyMessageService {
       return new SendMessageFailedProblem();
     });
 
-    UserSession userSession = authenticationService.authenticate(
+    SymphonySession userSession = authenticationService.authenticate(
       podConfiguration.getSessionAuth(),
       podConfiguration.getKeyAuth(),
       federatedAccount.getSymphonyUsername(),
@@ -84,7 +86,7 @@ public class SymphonyMessageService {
     sendRawMessage(streamId, fromSymphonyUserId, detemplatized);
   }
 
-  public void sendSimpleMessage(UserSession userSession, String streamId, String messageContent) {
+  public void sendSimpleMessage(SymphonySession userSession, String streamId, String messageContent) {
     String detemplatized = templateProcessor.process(messageContent, SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE);
     sendRawMessage(userSession, streamId, detemplatized);
   }
@@ -93,7 +95,7 @@ public class SymphonyMessageService {
     sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE));
   }
 
-  public void sendNotificationMessage(UserSession userSession, String streamId, String messageContent) {
+  public void sendNotificationMessage(SymphonySession userSession, String streamId, String messageContent) {
     sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE));
   }
 
@@ -101,11 +103,11 @@ public class SymphonyMessageService {
     sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
-  public void sendInfoMessage(UserSession userSession, String streamId, String messageContent) {
+  public void sendInfoMessage(SymphonySession userSession, String streamId, String messageContent) {
     sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
-  public void sendAlertMessage(UserSession userSession, String streamId, String messageContent) {
+  public void sendAlertMessage(SymphonySession userSession, String streamId, String messageContent) {
     sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
   }
 
@@ -117,7 +119,7 @@ public class SymphonyMessageService {
     try {
       List<MessageInfo> messageInfos = new ArrayList<>();
 
-      UserSession userSession = datafeedSessionPool.refreshSession(symphonyUserId);
+      SymphonySession userSession = datafeedSessionPool.refreshSession(symphonyUserId);
       for (MessageId id : messageIds) {
         MessageInfo message = symphonyService.getMessage(id.getMessageId(), userSession, podConfiguration.getUrl()).orElseThrow(RetrieveMessageFailedProblem::new);
         messageInfos.add(message);

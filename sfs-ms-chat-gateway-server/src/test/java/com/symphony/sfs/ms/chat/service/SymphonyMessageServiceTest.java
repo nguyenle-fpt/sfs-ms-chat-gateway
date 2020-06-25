@@ -12,8 +12,10 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -48,7 +50,7 @@ import static org.mockito.Mockito.when;
 
 class SymphonyMessageServiceTest {
 
-  private UserSession userSession;
+  private SymphonySession userSession;
   private AuthenticationService authenticationService;
   private PodConfiguration podConfiguration;
   private ChatConfiguration chatConfiguration;
@@ -69,7 +71,7 @@ class SymphonyMessageServiceTest {
     podConfiguration.setKeyAuth("keyAuth");
 
     chatConfiguration = new ChatConfiguration();
-    chatConfiguration.setSharedPrivateKey(new Key("-----sharedPrivateKey"));
+    chatConfiguration.setSharedPrivateKey(new PemResource("-----sharedPrivateKey"));
 
     authenticationService = mock(AuthenticationService.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
@@ -80,7 +82,7 @@ class SymphonyMessageServiceTest {
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     symphonyService = mock(SymphonyService.class);
 
-    userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
     symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, symphonyService, datafeedSessionPool));
@@ -95,7 +97,7 @@ class SymphonyMessageServiceTest {
 
     symphonyMessageService.sendRawMessage("streamId", "fromSymphonyUserId", "text");
 
-    verify(streamService, once()).sendMessage(podConfiguration.getUrl(), "streamId", "text", userSession);
+    verify(streamService, once()).sendMessage(podConfiguration.getUrl(), new StaticSessionSupplier<>(userSession), "streamId", "text");
   }
 
   @TestInstance(PER_CLASS)
@@ -103,7 +105,7 @@ class SymphonyMessageServiceTest {
   class SystemMessagesTest {
     @ParameterizedTest
     @MethodSource("templateProvider")
-    public void sendSystemMessage(String templateName, String detemplatizedMessage, TriConsumer<UserSession, String, String> messageSender) {
+    public void sendSystemMessage(String templateName, String detemplatizedMessage, TriConsumer<SymphonySession, String, String> messageSender) {
 
       when(templateProcessor.process("templatizedText", templateName)).thenReturn(detemplatizedMessage);
 
@@ -117,10 +119,10 @@ class SymphonyMessageServiceTest {
     private Stream<Arguments> templateProvider() {
       return Stream.of(
         // arguments(<templateName>, <detemplatizedMessage>, <Method to send message as a TriConsumer>)
-        arguments(SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE, "simpleDetemplatizedText", (TriConsumer<UserSession, String, String>) (session, streamId, text) -> symphonyMessageService.sendSimpleMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE, "infoDetemplatizedText", (TriConsumer<UserSession, String, String>) (session, streamId, text) -> symphonyMessageService.sendInfoMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE, "alertDetemplatizedText", (TriConsumer<UserSession, String, String>) (session, streamId, text) -> symphonyMessageService.sendAlertMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE, "notificationDetemplatizedText", (TriConsumer<UserSession, String, String>) (session, streamId, text) -> symphonyMessageService.sendNotificationMessage(session, streamId, text))
+        arguments(SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE, "simpleDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendSimpleMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE, "infoDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendInfoMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE, "alertDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendAlertMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE, "notificationDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendNotificationMessage(session, streamId, text))
       );
     }
 
@@ -139,7 +141,7 @@ class SymphonyMessageServiceTest {
 
     List<MessageId> messagesIds = Collections.singletonList(messageId);
     String fromSymphonyUserId = "fromSymphonyUserId";
-    UserSession userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    SymphonySession userSession = new SymphonySession("username", "kmToken", "sessionToken");
     DatafeedSessionPool.DatafeedSession session = new DatafeedSessionPool.DatafeedSession(userSession, "fromSymphonyUserId");
     MessageInfo messageInfo = new MessageInfo().message("message").messageId("messageId");
 

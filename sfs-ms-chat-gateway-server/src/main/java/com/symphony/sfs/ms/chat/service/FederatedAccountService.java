@@ -20,16 +20,17 @@ import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsPro
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserAttributes;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserKeyRequest;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.security.Session;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
@@ -83,10 +84,10 @@ public class FederatedAccountService implements DatafeedListener {
       throw new FederatedAccountAlreadyExistsProblem();
     }
 
-    UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
     try {
-      SymphonyUser symphonyUser = createSymphonyUser(request.getFirstName(), request.getLastName(), request.getEmailAddress(), request.getEmp(), botSession);
+      SymphonyUser symphonyUser = createSymphonyUser(new StaticSessionSupplier<>(botSession), request.getFirstName(), request.getLastName(), request.getEmailAddress(), request.getEmp());
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
       datafeedSessionPool.listenDatafeed(federatedAccount);
@@ -105,7 +106,7 @@ public class FederatedAccountService implements DatafeedListener {
     }
 
     String advisorSymphonyId = request.getAdvisorUserId();
-    UserSession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
     DatafeedSession session = datafeedSessionPool.listenDatafeed(federatedAccount.get());
 
     // If for whatever reason the connection request is already accepted
@@ -127,7 +128,7 @@ public class FederatedAccountService implements DatafeedListener {
       });
   }
 
-  public SymphonyUser createSymphonyUser(String firstName, String lastName, String emailAddress, String emp, UserSession botSession) {
+  public SymphonyUser createSymphonyUser(SessionSupplier<SymphonySession> session, String firstName, String lastName, String emailAddress, String emp) {
     String publicKey = null;
     try {
       publicKey = RsaUtils.encodeRSAKey(RsaUtils.parseRSAPublicKey(chatConfiguration.getSharedPublicKey().getData()));
@@ -145,7 +146,7 @@ public class FederatedAccountService implements DatafeedListener {
     SymphonyUserAttributes userAttributes = SymphonyUserAttributes.builder()
       .displayName(displayName(firstName, lastName, emp))
       .userName(userName(emp, uuid))
-      .emailAddress(emailAddress(emailAddress, emp, uuid, botSession))
+      .emailAddress(emailAddress(emailAddress, emp, uuid, session))
       .currentKey(userKey)
       .accountType(ACCOUNT_TYPE_SYSTEM)
       .build();
@@ -155,7 +156,7 @@ public class FederatedAccountService implements DatafeedListener {
       .roles(Arrays.asList(ROLE_INDIVIDUAL))
       .build();
 
-    return adminUserManagementService.createUser(user, podConfiguration.getUrl(), botSession)
+    return adminUserManagementService.createUser(podConfiguration.getUrl(), session, user)
       .orElseThrow(CreateUserFailedProblem::new);
   }
 
@@ -174,12 +175,12 @@ public class FederatedAccountService implements DatafeedListener {
   /**
    * Returns an email address with pattern: {emp}_{random uuid}|{originalEmail}
    */
-  private String emailAddress(String emailAddress, String emp, String uuid, UserSession botSession) {
+  private String emailAddress(String emailAddress, String emp, String uuid, SessionSupplier<SymphonySession> session) {
     List<String> candidates = IntStream.range(0, 5)
       .mapToObj(i -> Hashing.murmur3_32().hashString(UUID.randomUUID().toString() + emailAddress, StandardCharsets.UTF_8).toString() + '|' + emailAddress)
       .collect(Collectors.toList());
 
-    List<UserInfo> userInfos = usersInfoService.getUsersFromEmails(candidates, podConfiguration.getUrl(), botSession);
+    List<UserInfo> userInfos = usersInfoService.getUsersFromEmails(podConfiguration.getUrl(), session, candidates);
     userInfos.forEach(info -> candidates.remove(info.getEmailAddress()));
 
     if (candidates.isEmpty()) { // all emails are conflicting
@@ -207,18 +208,16 @@ public class FederatedAccountService implements DatafeedListener {
     return federatedServiceAccount;
   }
 
-  private IUser getCustomerInfo(String symphonyId, UserSession botSession) {
-    List<UserInfo> info = usersInfoService.getUsersFromIds(Collections.singletonList(symphonyId), podConfiguration.getUrl(), botSession);
-    if (info.size() != 1) {
-      throw new IllegalStateException(String.format("Error retrieving customer info, got %s instead of 1 user info", info.size()));
-    }
-    UserInfo userInfo = info.get(0);
+  private IUser getCustomerInfo(String symphonyId, SymphonySession botSession) {
+    UserInfo info = usersInfoService.getUserFromId(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), symphonyId)
+      .orElseThrow(() -> new IllegalStateException("Error retrieving customer info"));
+
     return new User.Builder()
       .withId(PodAndUserId.newBuilder().build(Long.parseLong(symphonyId)))
-      .withUsername(userInfo.getUsername())
-      .withFirstName(userInfo.getFirstName())
-      .withSurname(userInfo.getLastName())
-      .withCompany(userInfo.getCompany())
+      .withUsername(info.getUsername())
+      .withFirstName(info.getFirstName())
+      .withSurname(info.getLastName())
+      .withCompany(info.getCompany())
       .build();
   }
 

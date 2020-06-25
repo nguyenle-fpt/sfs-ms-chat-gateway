@@ -15,9 +15,9 @@ import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import model.UserInfo;
@@ -36,7 +36,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,14 +63,14 @@ public class PreventMIMRoomCreationTest {
     BotConfiguration botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
-    botConfiguration.setPrivateKey(new Key("-----botConfigurationPrivateKey"));
+    botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
 
     PodConfiguration podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
 
-    UserSession userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    SymphonySession userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
 
@@ -80,8 +79,8 @@ public class PreventMIMRoomCreationTest {
     KeyPair keyPair = kpg.generateKeyPair();
 
     ChatConfiguration chatConfiguration = new ChatConfiguration();
-    chatConfiguration.setSharedPrivateKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
-    chatConfiguration.setSharedPublicKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPublic())));
+    chatConfiguration.setSharedPrivateKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
+    chatConfiguration.setSharedPublicKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPublic())));
 
     adminClient = mock(DefaultAdminClient.class);
     FederatedAccountSessionService federatedAccountSessionService = new FederatedAccountSessionService(federatedAccountRepository);
@@ -118,7 +117,7 @@ public class PreventMIMRoomCreationTest {
     UserInfo inviter = new UserInfo();
     inviter.setId(2L);
 
-    UserSession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
     when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUserInvited));
 
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getCreateMIMMaestroMessage(
@@ -148,7 +147,7 @@ public class PreventMIMRoomCreationTest {
     UserInfo inviter = new UserInfo();
     inviter.setId(2L);
 
-    UserSession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
     when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUserInvited));
 
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getCreateIMMaestroMessage(
@@ -179,7 +178,7 @@ public class PreventMIMRoomCreationTest {
     UserInfo inviter = new UserInfo();
     inviter.setId(2L);
 
-    UserSession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
     when(federatedAccountRepository.findBySymphonyId("1")).thenReturn(Optional.of(whatsAppUserInvited));
     doNothing().when(symphonyService).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn///pINMV/OdA==", session);
 
@@ -210,7 +209,7 @@ public class PreventMIMRoomCreationTest {
     UserInfo sender = new UserInfo();
     sender.setId(1L);
 
-    UserSession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
     when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUser));
 
     String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
@@ -249,7 +248,7 @@ public class PreventMIMRoomCreationTest {
 
     forwarderQueueConsumer.consume(notification);
 
-    UserSession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
 
     String alertMessage = "This message was not delivered. Attachments are not supported (messageId : ";
     verify(symphonyMessageService, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), startsWith(alertMessage));

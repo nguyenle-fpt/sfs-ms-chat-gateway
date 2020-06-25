@@ -22,7 +22,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -74,7 +74,7 @@ public class ContentKeyManager {
     return new SymphonyClientFactory().getClient(new ClientIdentifierFilter[0], clientConfig);
   }
 
-  private AuthProvider getAuthProvider(UserSession session) {
+  private AuthProvider getAuthProvider(SymphonySession session) {
     AuthProvider auth = new AuthProvider(authSecretPersister);
 
     // Challenge and response paths are required for SHARED_KEY authentication

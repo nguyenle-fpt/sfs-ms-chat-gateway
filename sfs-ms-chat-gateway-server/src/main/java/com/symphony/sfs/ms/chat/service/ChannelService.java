@@ -1,9 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -16,7 +14,8 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,7 +68,7 @@ public class ChannelService implements DatafeedListener {
 
   public String createIMChannel(FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
     try {
-      UserSession session = datafeedSessionPool.refreshSession(fromFederatedAccount.getSymphonyUserId());
+      SymphonySession session = datafeedSessionPool.refreshSession(fromFederatedAccount.getSymphonyUserId());
       return createIMChannel(session, fromFederatedAccount, toSymphonyUser);
     } catch (UnknownDatafeedUserException e) {
       // should never happen, as we have a FederatedAccount
@@ -77,8 +76,8 @@ public class ChannelService implements DatafeedListener {
     }
   }
 
-  public String createIMChannel(UserSession session, FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
-    String streamId = streamService.getIM(podConfiguration.getUrl(), toSymphonyUser.getId().toString(), session)
+  public String createIMChannel(SymphonySession session, FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
+    String streamId = streamService.getIM(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), toSymphonyUser.getId().toString())
       .orElseThrow(CannotRetrieveStreamIdProblem::new);
 
     Optional<String> channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
@@ -102,7 +101,7 @@ public class ChannelService implements DatafeedListener {
     try {
       for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
-        List<UserSession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
+        List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
           // TODO The process stops at first UnknownDatafeedUserException
           //  Some EMPs may have been called, others may have not
@@ -149,7 +148,7 @@ public class ChannelService implements DatafeedListener {
     try {
       for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
-        List<UserSession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
+        List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
           // TODO The process stops at first UnknownDatafeedUserException
           //  Some EMPs may have been called, others may have not

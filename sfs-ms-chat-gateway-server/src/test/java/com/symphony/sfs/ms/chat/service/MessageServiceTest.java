@@ -12,9 +12,9 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +48,7 @@ class MessageServiceTest {
   private SymphonyMessageService symphonyMessageService;
   private AdminClient adminClient;
 
-  private UserSession userSession;
+  private SymphonySession userSession;
 
   @BeforeEach
   public void setUp() {
@@ -61,7 +61,7 @@ class MessageServiceTest {
     botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
-    botConfiguration.setPrivateKey(new Key("-----botConfigurationPrivateKey"));
+    botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
 
     podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
@@ -70,7 +70,7 @@ class MessageServiceTest {
 
     symphonyMessageService = mock(SymphonyMessageService.class);
 
-    userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
     adminClient = mock(AdminClient.class);

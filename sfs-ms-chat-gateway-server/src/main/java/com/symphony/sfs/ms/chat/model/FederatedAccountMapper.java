@@ -1,6 +1,5 @@
 package com.symphony.sfs.ms.chat.model;
 
-import com.symphony.sfs.ms.starter.dynamo.util.AttributeUtils;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 

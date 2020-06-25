@@ -11,10 +11,9 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
-import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
@@ -23,14 +22,11 @@ import io.fabric8.mockwebserver.DefaultMockServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.zalando.problem.DefaultProblem;
 
 import java.util.Arrays;
 import java.util.Optional;
 
-import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.SENDMESSAGE_ENDPOINT;
-import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -39,6 +35,7 @@ import static org.mockito.Mockito.when;
 
 class MessagingApiTest extends AbstractIntegrationTest {
 
+  protected MessagingApi symphonyMessagingApi;
   private SymphonyMessageService symphonyMessageService;
   private StreamService streamService;
   private PodConfiguration podConfiguration;
@@ -47,8 +44,6 @@ class MessagingApiTest extends AbstractIntegrationTest {
   private AuthenticationService authenticationService;
   private AdminClient adminClient;
   private EmpClient empClient;
-
-  protected MessagingApi symphonyMessagingApi;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -60,7 +55,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
-    botConfiguration.setPrivateKey(new Key("-----botConfigurationPrivateKey"));
+    botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
 
     podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
@@ -78,12 +73,12 @@ class MessagingApiTest extends AbstractIntegrationTest {
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.of(federatedAccount));
 
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(StreamAttributes.builder().members(Arrays.asList(1L)).build()).build();
-    when(streamService.getStreamInfo(anyString(), anyString(), any())).thenReturn(Optional.of(streamInfo));
+    when(streamService.getStreamInfo(anyString(), any(), anyString())).thenReturn(Optional.of(streamInfo));
   }
 
   @Test
   void sendMessage() {
-    SendMessageRequest sendMessageRequest = this.createTestMessage("streamId","fromSymphonyUserId", "text", null);
+    SendMessageRequest sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "text", null);
     SendMessageResponse response = this.verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
   }
 
@@ -113,7 +108,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     return null;
   }
 
-  private SendMessageRequest createTestMessage(String streamId, String fromSymphonyUserId, String text, FormattingEnum formatting){
+  private SendMessageRequest createTestMessage(String streamId, String fromSymphonyUserId, String text, FormattingEnum formatting) {
     SendMessageRequest sendMessageRequest = new SendMessageRequest();
     sendMessageRequest.setStreamId(streamId);
     sendMessageRequest.setFromSymphonyUserId(fromSymphonyUserId);

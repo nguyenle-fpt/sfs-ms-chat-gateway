@@ -23,9 +23,11 @@ import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
 import com.symphony.sfs.ms.starter.testing.LocalProfileTest;
@@ -38,6 +40,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.util.Collections;
 import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
@@ -88,12 +91,12 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     podConfiguration.setSessionAuth(podConfiguration.getUrl());
 
     botConfiguration = new BotConfiguration();
-    botConfiguration.setPrivateKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
+    botConfiguration.setPrivateKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
     botConfiguration.setUsername("bot");
 
     chatConfiguration = new ChatConfiguration();
-    chatConfiguration.setSharedPrivateKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
-    chatConfiguration.setSharedPublicKey(new Key(RsaUtils.encodeRSAKey(keyPair.getPublic())));
+    chatConfiguration.setSharedPrivateKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
+    chatConfiguration.setSharedPublicKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPublic())));
 
     handlebarsConfiguration = new HandlebarsConfiguration();
 
@@ -113,11 +116,14 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager);
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool);
 
+    SymphonyAuthFactory symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
+    SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
+
     // services
-    streamService = spy(new StreamService(webClient));
+    streamService = spy(new StreamService(sessionManager));
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
     symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, symphonyService, datafeedSessionPool));
-    connectionsServices = new ConnectionsService(webClient);
+    connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
     channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
     channelService.registerAsDatafeedListener();
@@ -128,7 +134,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     deleteTestTable(db);
   }
 
-  public UserSession getSession(String username) {
-    return new UserSession(username, "jwt", UUID.randomUUID().toString(), UUID.randomUUID().toString());
+  public SymphonySession getSession(String username) {
+    return new SymphonySession(username, UUID.randomUUID().toString(), UUID.randomUUID().toString());
   }
 }

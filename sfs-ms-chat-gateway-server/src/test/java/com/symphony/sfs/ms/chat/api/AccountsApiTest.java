@@ -15,7 +15,8 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserAttributes;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserSystemAttributes;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.security.SessionManager;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StringId;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
@@ -63,11 +64,13 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
     empSchemaService = mock(EmpSchemaService.class);
 
+    SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
+
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
     federatedAccountService = new FederatedAccountService(
       datafeedSessionPool,
       federatedAccountRepository,
-      new AdminUserManagementService(webClient),
+      new AdminUserManagementService(sessionManager),
       authenticationService,
       podConfiguration,
       botConfiguration,
@@ -75,7 +78,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       connectionRequestManager,
       channelService,
       forwarderQueueConsumer,
-      new UsersInfoService(webClient),
+      new UsersInfoService(sessionManager),
       empSchemaService);
     federatedAccountService.registerAsDatafeedListener();
 
@@ -84,7 +87,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
   @Test
   public void createAccountWithoutAdvisors() {
-    UserSession botSession = getSession(botConfiguration.getUsername());
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
     EmpEntity empEntity = new EmpEntity()
@@ -152,7 +155,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   // TODO Fix test when management decides that quality matters
   @Disabled
   public void createAccountWithAdvisor_AlreadyConnected() {
-    UserSession botSession = getSession(botConfiguration.getUsername());
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
     EmpEntity empEntity = new EmpEntity()
@@ -234,7 +237,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
   @Test
   public void createAccountWithAdvisor_NeedConnectionRequest() throws IOException {
-    UserSession botSession = getSession(botConfiguration.getUsername());
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
     EmpEntity empEntity = new EmpEntity()
@@ -323,7 +326,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
   @Test
   public void createAccountWithoutAdvisors_AlreadyExists() {
-    UserSession botSession = getSession(botConfiguration.getUsername());
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
 
     FederatedAccount existingAccount = FederatedAccount.builder()

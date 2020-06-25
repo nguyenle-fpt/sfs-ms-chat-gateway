@@ -24,7 +24,7 @@ public class MockEmpClient implements EmpClient {
       operationId = UUID.randomUUID().toString();
       channels.putIfAbsent(emp + ":" + streamId, operationId);
     }
-    return Optional.of(operationId);
+    return Optional.ofNullable(operationId);
   }
 
   @Override
@@ -40,7 +40,7 @@ public class MockEmpClient implements EmpClient {
       operationId = UUID.randomUUID().toString();
       messages.putIfAbsent(emp + ":" + streamId + ":" + messageId + ":" + fromSymphonyUser.getId().toString(), operationId);
     }
-    return Optional.of(operationId);
+    return Optional.ofNullable(operationId);
   }
 
   @Override

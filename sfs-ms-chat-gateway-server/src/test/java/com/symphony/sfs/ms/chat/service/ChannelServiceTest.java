@@ -12,9 +12,9 @@ import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.common.Key;
+import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.UserSession;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +48,7 @@ class ChannelServiceTest {
 
   private BotConfiguration botConfiguration;
   private AuthenticationService authenticationService;
-  private UserSession userSession;
+  private SymphonySession userSession;
   private MockAdminClient mockAdminClient;
 
   private SymphonyService symphonyService;
@@ -67,7 +67,7 @@ class ChannelServiceTest {
     botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
-    botConfiguration.setPrivateKey(new Key("-----botConfigurationPrivateKey"));
+    botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
 
     podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
@@ -75,7 +75,7 @@ class ChannelServiceTest {
     podConfiguration.setKeyAuth("keyAuth");
 
 
-    userSession = new UserSession("username", "jwt", "kmToken", "sessionToken");
+    userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
     channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, symphonyService);
@@ -91,7 +91,7 @@ class ChannelServiceTest {
 
     DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
     when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
-    doNothing().when(symphonyMessageService).sendInfoMessage(any(UserSession.class), eq("streamId"), anyString());
+    doNothing().when(symphonyMessageService).sendInfoMessage(any(SymphonySession.class), eq("streamId"), anyString());
 
     String streamId = channelService.createIMChannel(
       "streamId",

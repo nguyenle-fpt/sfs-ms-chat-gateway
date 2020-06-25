@@ -29,6 +29,7 @@ public class DefaultAdminClient implements AdminClient {
     adminClient.getEmpApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return adminClient.getEmpApi().getEmpList().orElse(new EmpList());
   }
+
   @Override
   public Optional<EntitlementResponse> getEntitlementAccess(String symphonyId, String entitlementType) {
     adminClient.getEntitlementsApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
