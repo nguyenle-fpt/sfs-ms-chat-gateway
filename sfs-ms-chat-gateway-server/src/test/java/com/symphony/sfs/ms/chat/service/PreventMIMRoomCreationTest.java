@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -48,6 +49,7 @@ public class PreventMIMRoomCreationTest {
   private FederatedAccountRepository federatedAccountRepository;
   private SymphonyService symphonyService;
   private AdminClient adminClient;
+  private EmpSchemaService empSchemaService;
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -90,8 +92,10 @@ public class PreventMIMRoomCreationTest {
     MessageDecryptor messageDecryptor = mock(MessageDecryptor.class);
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool);
 
+    when(adminClient.getEmpList()).thenReturn(new EmpList());
+    empSchemaService = new EmpSchemaService(adminClient);
 
-    MessageService messageService = new MessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageService, adminClient);
+    MessageService messageService = new MessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageService, adminClient, empSchemaService);
     messageService.registerAsDatafeedListener();
 
     ChannelService channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);

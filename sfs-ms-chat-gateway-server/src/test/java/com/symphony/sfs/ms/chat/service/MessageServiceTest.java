@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
+import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -47,6 +48,7 @@ class MessageServiceTest {
   private DatafeedSessionPool datafeedSessionPool;
   private SymphonyMessageService symphonyMessageService;
   private AdminClient adminClient;
+  private EmpSchemaService empSchemaService;
 
   private SymphonySession userSession;
 
@@ -74,8 +76,10 @@ class MessageServiceTest {
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
     adminClient = mock(AdminClient.class);
+    when(adminClient.getEmpList()).thenReturn(new EmpList());
 
-    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageService, adminClient);
+    empSchemaService = new EmpSchemaService(adminClient);
+    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageService, adminClient, empSchemaService);
   }
 
   @Test

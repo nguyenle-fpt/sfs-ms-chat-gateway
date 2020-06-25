@@ -5,6 +5,7 @@ import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -42,6 +43,7 @@ public class MessageService implements DatafeedListener {
   private final DatafeedSessionPool datafeedSessionPool;
   private final SymphonyMessageService symphonyMessageService;
   private final AdminClient adminClient;
+  private final EmpSchemaService empSchemaService;
 
   @PostConstruct
   @VisibleForTesting
@@ -101,9 +103,9 @@ public class MessageService implements DatafeedListener {
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
         if (adminClient.getEntitlementAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
-          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + entry.getKey() + " users."));
+          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + getEmp(entry.getKey()).getDisplayName() + " users."));
         } else if (toUserIds.size() > 1) {// Check there are only 2 users
-          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + entry.getKey() + " contact in a MIM."));
+          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + getEmp(entry.getKey()).getDisplayName() + " contact in a MIM."));
         } else if (attachments != null && !attachments.isEmpty()) {
           // If there are some attachments, warn the advisor and block the message
           userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "This message was not delivered. Attachments are not supported (messageId : " + messageId + ")."));
@@ -136,5 +138,10 @@ public class MessageService implements DatafeedListener {
       .withSurname(symphonyId + "_lastName");
     return new User(builder);
 
+  }
+
+  private EmpEntity getEmp(String emp) {
+    // Should not happen: Return emp key if emp definition not found
+    return empSchemaService.getEmpDefinition(emp).orElse(new EmpEntity().displayName(emp));
   }
 }
