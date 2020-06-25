@@ -55,7 +55,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
 
       // We do not have messageId and fromSymphonyUser here
       // This specific case has to be handled in the the EMPs
-      empClient.sendMessage(federatedAccount.getEmp(), request.getStreamId(), fakeMessageId, SymphonyUserUtils.newIUser(fakeFromSymphonyUser), federatedAccount, new Date().getTime(), "Sorry, your contact is no longer available");
+      empClient.sendMessage(federatedAccount.getEmp(), request.getStreamId(), fakeMessageId, SymphonyUserUtils.newIUser(fakeFromSymphonyUser), federatedAccount, new Date().getTime(), "Sorry, your contact is no longer available", null);
 
     } else {
       String messageContent = "<messageML>" + request.getText() + "</messageML>";

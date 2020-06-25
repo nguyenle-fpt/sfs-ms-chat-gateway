@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service.external;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,12 +27,15 @@ public interface EmpClient {
    * @param toFederatedAccount
    * @param timestamp
    * @param message
+   * @param disclaimer
    * @return
    */
-  Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message);
+  public default Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message, String disclaimer) {
+    return sendMessage(emp, streamId, messageId, fromSymphonyUser, Collections.singletonList(toFederatedAccount), timestamp, message, disclaimer);
+  }
 
   /**
-   * MIM/Room
+   * MIM/Room with disclaimer
    *
    * @param emp
    * @param streamId
@@ -40,9 +44,10 @@ public interface EmpClient {
    * @param toFederatedAccounts
    * @param timestamp
    * @param message
+   * @param disclaimer
    * @return
    */
-  Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message);
+  Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer);
 
   /**
    * Internal usage for QA

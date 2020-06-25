@@ -99,16 +99,16 @@ class MessageServiceTest {
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", null, null);
 
     InOrder orderVerifier = inOrder(empClient);
-    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "disclaimer");
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message");
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer");
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", null);
     orderVerifier.verifyNoMoreInteractions();
 
     // With disclaimer
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", "disclaimer", null);
 
-//    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "disclaimer");
-//    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message");
-//    orderVerifier.verifyNoMoreInteractions();
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer");
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", null);
+    orderVerifier.verifyNoMoreInteractions();
   }
 
   @Test
@@ -126,12 +126,12 @@ class MessageServiceTest {
 
 
     when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text")).thenReturn(Optional.of("leaseId"));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null)).thenReturn(Optional.of("leaseId"));
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null);
 
     verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
     verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text");
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", null);
   }
 
   @Test
