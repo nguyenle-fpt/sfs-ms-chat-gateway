@@ -11,6 +11,8 @@ import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -60,6 +62,21 @@ public class DefaultEmpClient implements EmpClient {
     // TODO async result too?
     client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getId);
+  }
+
+  @Override
+  public Optional<String> sendSystemMessage(String emp, String streamId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type) {
+    EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
+
+    SendSystemMessageRequest request = new SendSystemMessageRequest()
+      .streamId(streamId)
+      .timestamp(timestamp)
+      .text(message)
+      .type(type);
+
+    // TODO async result too?
+    client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    return client.getMessagingApi().sendSystemMessage(request).map(SendSystemMessageResponse::getId);
   }
 
   @Override

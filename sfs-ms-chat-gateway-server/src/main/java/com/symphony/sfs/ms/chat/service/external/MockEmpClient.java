@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import lombok.Getter;
 
 import java.util.Collections;
@@ -36,6 +37,17 @@ public class MockEmpClient implements EmpClient {
       messages.putIfAbsent(emp + ":" + streamId + ":" + messageId + ":" + fromSymphonyUser.getId().toString(), operationId);
     }
     return Optional.ofNullable(operationId);
+  }
+
+  @Override
+  public Optional<String> sendSystemMessage(String emp, String streamId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type) {
+    // For now use the same mock implementation as channels
+    String operationId = messages.get(emp + ":" + streamId + ":" + message + ":" + type);
+    if (operationId == null) {
+      operationId = UUID.randomUUID().toString();
+      messages.putIfAbsent(emp + ":" + streamId + ":" + message + ":" + type, operationId);
+    }
+    return Optional.of(operationId);
   }
 
   @Override

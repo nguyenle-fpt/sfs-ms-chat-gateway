@@ -41,7 +41,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -97,7 +99,7 @@ class SymphonyMessageServiceTest {
 
     symphonyMessageService.sendRawMessage("streamId", "fromSymphonyUserId", "text");
 
-    verify(streamService, once()).sendMessage(podConfiguration.getUrl(), new StaticSessionSupplier<>(userSession), "streamId", "text");
+    verify(streamService, once()).sendMessage(eq(podConfiguration.getUrl()), any(StaticSessionSupplier.class), eq("streamId"), eq("text"));
   }
 
   @TestInstance(PER_CLASS)

@@ -18,6 +18,7 @@ import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   private AuthenticationService authenticationService;
   private AdminClient adminClient;
   private EmpClient empClient;
+  private UsersInfoService usersInfoService;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -66,8 +68,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
     authenticationService = mock(AuthenticationService.class);
     adminClient = mock(AdminClient.class);
     empClient = mock(EmpClient.class);
+    usersInfoService = mock(UsersInfoService.class);
 
-    symphonyMessagingApi = new MessagingApi(symphonyMessageService, streamService, podConfiguration, botConfiguration, federatedAccountRepository, authenticationService, adminClient, empClient);
+    symphonyMessagingApi = new MessagingApi(symphonyMessageService, streamService, podConfiguration, botConfiguration, federatedAccountRepository, authenticationService, adminClient, empClient, usersInfoService);
 
     FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUserId("fromSymphonyUserId").build();
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.of(federatedAccount));

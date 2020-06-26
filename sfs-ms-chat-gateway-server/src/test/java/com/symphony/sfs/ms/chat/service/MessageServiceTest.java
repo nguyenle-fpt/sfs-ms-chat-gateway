@@ -100,7 +100,7 @@ class MessageServiceTest {
 
     InOrder orderVerifier = inOrder(empClient);
     orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer");
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", null);
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "");
     orderVerifier.verifyNoMoreInteractions();
 
     // With disclaimer
@@ -131,7 +131,7 @@ class MessageServiceTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
     verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "");
   }
 
   @Test

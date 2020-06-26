@@ -89,14 +89,15 @@ public class ChannelService implements DatafeedListener {
   }
 
   public String createIMChannel(String streamId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount) {
-    return createMIMChannel(
+    return createChannel(
       streamId,
       fromSymphonyUser,
       Collections.singletonMap(toFederatedAccount.getEmp(), Collections.singletonList(toFederatedAccount)),
       Collections.singletonList(fromSymphonyUser));
   }
 
-  public String createMIMChannel(String streamId, IUser fromSymphonyUser, Map<String, List<FederatedAccount>> toFederatedAccounts, List<IUser> toSymphonyUsers) {
+  // CES-1292 - As part of the cleanup, I let this method as it is but put it in private. Some questions are still interesting when we decide to properly support MIM/Rooms
+  private String createChannel(String streamId, IUser fromSymphonyUser, Map<String, List<FederatedAccount>> toFederatedAccounts, List<IUser> toSymphonyUsers) {
 
     try {
       for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
@@ -195,20 +196,17 @@ public class ChannelService implements DatafeedListener {
         LOG.warn("onIMCreated towards a non-federated account {}", toFederatedAccountId);
       }
     } else {
-      LOG.warn("Member list does not contain initiation: list={} initiator={}", members, initiator.getId());
+      LOG.warn("Member list does not contain initiator: list={} initiator={}", members, initiator.getId());
     }
   }
 
   private void handleMIMCreation(String streamId, List<String> members, IUser initiator, boolean crosspod) {
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
-    List<IUser> symphonyUsers = new ArrayList<>();
 
     for (String symphonyId : members) {
-      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(SymphonyUserUtils.newIUser(symphonyId)));
+      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresent(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount));
     }
 
     refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, false);
-
-    // createMIMChannel(streamId, initiator, federatedAccountsByEmp, symphonyUsers);
   }
 }
