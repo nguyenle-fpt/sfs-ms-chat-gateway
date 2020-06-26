@@ -1,6 +1,5 @@
 package com.symphony.sfs.ms.chat.api;
 
-import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesRequest;
@@ -54,41 +53,10 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
     final FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(request.getFromSymphonyUserId()).orElseThrow(FederatedAccountNotFoundProblem::new);
 
-    // Assume IM --> only 1 advisor expected
-    Optional<String> advisorSymphonyUserId = findAdvisor(request.getStreamId(), federatedAccount);
-    if (!advisorSymphonyUserId.isPresent()) {
-      SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-      final List<UserInfo> usersFromIds = usersInfoService.getUsersFromIds(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), Collections.singletonList(advisorSymphonyUserId.get()));
-      String message;
-      if (usersFromIds.isEmpty()) {
-        LOG.warn("Advisor with symphonyUserId {} not found on Symphony side", advisorSymphonyUserId.get());
-        message = "Sorry, your contact is no longer available";
-      } else {
-        message = String.format("Sorry, your contact %s is no longer available", usersFromIds.get(0).getDisplayName());
-      }
-      empClient.sendSystemMessage(federatedAccount.getEmp(), request.getStreamId(), new Date().getTime(), message, SendSystemMessageRequest.TypeEnum.ALERT);
-    } else {
-      String messageContent = "<messageML>" + request.getText() + "</messageML>";
-      if (request.getFormatting() == null) {
-        symphonyMessageService.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-      } else {
-        messageContent = request.getText();
-        switch (request.getFormatting()) {
-          case SIMPLE:
-            symphonyMessageService.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-            break;
-          case NOTIFICATION:
-            symphonyMessageService.sendNotificationMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-            break;
-          case INFO:
-            symphonyMessageService.sendInfoMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-            break;
-          case ALERT:
-            symphonyMessageService.sendAlertMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-            break;
-        }
-      }
-    }
+    Optional<String> advisorSymphonyUserId = findAdvisor(request.getStreamId(), federatedAccount.getSymphonyUserId());
+    notEntitledMessage(advisorSymphonyUserId, federatedAccount.getEmp()).ifPresentOrElse(
+      notEntitledMessage -> blockIncomingMessage(federatedAccount.getEmp(), request.getStreamId(), notEntitledMessage),
+      () -> forwardIncomingMessageToSymphony(request));
 
     SendMessageResponse response = new SendMessageResponse();
     return ResponseEntity.ok(response);
@@ -104,17 +72,10 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
    * Pre-requisite: the stream is an IM between an advisor and an emp user
    *
    * @param streamId
-   * @param fromFederatedAccount
+   * @param fromFederatedAccountSymphonyUserId
    * @return Optional with found advisor symphonyUserId. Empty if no advisor found
    */
-  /**
-   *
-   * @return
-   */
-  private Optional<String> findAdvisor(String streamId, FederatedAccount fromFederatedAccount) {
-
-    String emp = fromFederatedAccount.getEmp();
-    String fromSymphonyId = fromFederatedAccount.getSymphonyUserId();
+  private Optional<String> findAdvisor(String streamId, String fromFederatedAccountSymphonyUserId) {
 
     SymphonySession botSession = authenticationService.authenticate(
       podConfiguration.getSessionAuth(),
@@ -132,19 +93,85 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
       // Nominal case of IM: We have a stream with exactly 2 members
       // - 1 user must an advisor
       // - 1 user must be a emp user
-      Optional<String> advisor = streamInfo.getStreamAttributes().getMembers()
+      return streamInfo.getStreamAttributes().getMembers()
         .parallelStream()
         .map(String::valueOf)
-        .filter(symphonyId -> !symphonyId.equals(fromSymphonyId)) // Remove federatedAccountUser
+        .filter(symphonyId -> !symphonyId.equals(fromFederatedAccountSymphonyUserId)) // Remove federatedAccountUser
         .findFirst();
+    }
+  }
 
-      if (advisor.isPresent()) {
-        return adminClient.getEntitlementAccess(advisor.get(), emp).map(EntitlementResponse::getSymphonyId);
-      } else {
-        LOG.error("Stream {} has only an EMP user", streamId);
-        return Optional.empty();
+  /**
+   *
+   * @param advisorSymphonyUserId
+   * @param emp
+   * @return If present, message indicating that advisor is NOT entitled.
+   */
+  private Optional<String> notEntitledMessage(Optional<String> advisorSymphonyUserId, String emp) {
+    final String CONTACT_NOT_AVAILABLE = "Sorry, your contact is no longer available";
+    final String CONTACT_WITH_DETAILS_NOT_AVAILABLE = "Sorry, your contact %s is no longer available";
+
+    // No advisor at all
+    if (advisorSymphonyUserId.isEmpty()) {
+      return Optional.of(CONTACT_NOT_AVAILABLE);
+    }
+
+    // Advisor entitled
+    if (adminClient.getEntitlementAccess(advisorSymphonyUserId.get(), emp).isPresent()) {
+      return Optional.empty();
+    }
+
+    // From here advisor is not entitled
+    // Get advisor details
+    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+    final List<UserInfo> usersFromIds = usersInfoService.getUsersFromIds(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), Collections.singletonList(advisorSymphonyUserId.get()));
+
+    String message;
+    if (usersFromIds.isEmpty()) {
+      LOG.warn("Advisor with symphonyUserId {} not found on Symphony side", advisorSymphonyUserId.get());
+      message = CONTACT_NOT_AVAILABLE;
+    } else {
+      // Message with advisor details
+      message = String.format(CONTACT_WITH_DETAILS_NOT_AVAILABLE, usersFromIds.get(0).getDisplayName());
+    }
+
+    return Optional.ofNullable(message);
+  }
+
+  /**
+   *
+   * @param request
+   */
+  private void forwardIncomingMessageToSymphony(SendMessageRequest request) {
+    String messageContent = "<messageML>" + request.getText() + "</messageML>";
+    if (request.getFormatting() == null) {
+      symphonyMessageService.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+    } else {
+      messageContent = request.getText();
+      switch (request.getFormatting()) {
+        case SIMPLE:
+          symphonyMessageService.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
+        case NOTIFICATION:
+          symphonyMessageService.sendNotificationMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
+        case INFO:
+          symphonyMessageService.sendInfoMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
+        case ALERT:
+          symphonyMessageService.sendAlertMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+          break;
       }
     }
   }
 
+  /**
+   *
+   * @param emp
+   * @param streamId
+   * @param reasonText
+   */
+  private void blockIncomingMessage(String emp, String streamId, String reasonText) {
+    empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, SendSystemMessageRequest.TypeEnum.ALERT);
+  }
 }
