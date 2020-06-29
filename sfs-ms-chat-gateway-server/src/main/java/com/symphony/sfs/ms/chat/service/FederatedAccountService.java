@@ -180,6 +180,9 @@ public class FederatedAccountService implements DatafeedListener {
       .mapToObj(i -> Hashing.murmur3_32().hashString(UUID.randomUUID().toString() + emailAddress, StandardCharsets.UTF_8).toString() + '|' + emailAddress)
       .collect(Collectors.toList());
 
+    // we also test if the unprefixed address is free, and we will use it if available
+    candidates.add(0, emailAddress);
+
     List<UserInfo> userInfos = usersInfoService.getUsersFromEmails(podConfiguration.getUrl(), session, candidates);
     userInfos.forEach(info -> candidates.remove(info.getEmailAddress()));
 
