@@ -1,4 +1,4 @@
-package com.symphony.sfs.ms.chat.service;
+package com.symphony.sfs.ms.chat.service.symphony;
 
 import clients.symphony.api.constants.PodConstants;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;

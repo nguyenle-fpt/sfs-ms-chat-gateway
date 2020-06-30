@@ -11,6 +11,7 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
+import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
@@ -38,7 +39,7 @@ import static org.mockito.Mockito.when;
 
 class MessageServiceTest {
 
-  private MessageService messageService;
+  private SymphonyMessageService messageService;
 
   private EmpClient empClient;
   private AuthenticationService authenticationService;
@@ -46,9 +47,10 @@ class MessageServiceTest {
   private BotConfiguration botConfiguration;
   private FederatedAccountRepository federatedAccountRepository;
   private DatafeedSessionPool datafeedSessionPool;
-  private SymphonyMessageService symphonyMessageService;
+  private SymphonyMessageSender symphonyMessageSender;
   private AdminClient adminClient;
   private EmpSchemaService empSchemaService;
+  private SymphonyService symphonyService;
 
   private SymphonySession userSession;
 
@@ -70,7 +72,8 @@ class MessageServiceTest {
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
 
-    symphonyMessageService = mock(SymphonyMessageService.class);
+    symphonyMessageSender = mock(SymphonyMessageSender.class);
+    symphonyService = mock(SymphonyService.class);
 
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
@@ -79,7 +82,8 @@ class MessageServiceTest {
     when(adminClient.getEmpList()).thenReturn(new EmpList());
 
     empSchemaService = new EmpSchemaService(adminClient);
-    messageService = new MessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageService, adminClient, empSchemaService);
+
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration);
   }
 
   @Test

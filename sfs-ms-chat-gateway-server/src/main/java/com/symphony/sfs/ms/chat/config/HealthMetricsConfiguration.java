@@ -55,4 +55,5 @@ public class HealthMetricsConfiguration {
     Duration timeout = healthMeterService.getTimeout();
     return new CachedHealthIndicator(cacheTtl, new TimeoutHealthIndicator(timeout, indicator));
   }
+
 }

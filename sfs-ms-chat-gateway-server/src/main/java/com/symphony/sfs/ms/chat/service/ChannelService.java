@@ -12,6 +12,7 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
+import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
@@ -36,7 +37,7 @@ import java.util.Optional;
 public class ChannelService implements DatafeedListener {
 
   private final StreamService streamService;
-  private final SymphonyMessageService symphonyMessageService;
+  private final SymphonyMessageSender symphonyMessageSender;
   private final PodConfiguration podConfiguration;
   private final EmpClient empClient;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -83,7 +84,7 @@ public class ChannelService implements DatafeedListener {
     Optional<String> channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
 
     if (channelId.isEmpty()) {
-      symphonyMessageService.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+      symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
     }
     return streamId;
   }
@@ -117,9 +118,9 @@ public class ChannelService implements DatafeedListener {
           empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers)
             .orElseThrow(CreateChannelFailedProblem::new);
 
-          userSessions.forEach(session -> symphonyMessageService.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
+          userSessions.forEach(session -> symphonyMessageSender.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
         } else {
-          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
         }
       }
     } catch (UnknownDatafeedUserException e) {
@@ -160,12 +161,11 @@ public class ChannelService implements DatafeedListener {
         // Remove all federated users
         if (isRoom) {
           // Send message to alert it is impossible to add WhatsApp user into a room
-          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a chat room."));
-
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a chat room."));
           userSessions.forEach(session -> symphonyService.removeMemberFromRoom(streamId, session));
         } else {
           // Send message to alert it is impossible to add WhatsApp user into a MIM
-          userSessions.forEach(session -> symphonyMessageService.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
         }
       }
     } catch (UnknownDatafeedUserException e) {
@@ -187,7 +187,7 @@ public class ChannelService implements DatafeedListener {
         } else {
           // send error message
           try {
-            symphonyMessageService.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, "You are not entitled to send messages to " + toFederatedAccount.get().getEmp() + " users");
+            symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, "You are not entitled to send messages to " + toFederatedAccount.get().getEmp() + " users");
           } catch (UnknownDatafeedUserException e) {
             throw new IllegalStateException();
           }

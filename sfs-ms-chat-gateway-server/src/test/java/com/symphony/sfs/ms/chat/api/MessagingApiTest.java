@@ -5,15 +5,16 @@ import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
-import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
@@ -37,6 +38,7 @@ import static org.mockito.Mockito.when;
 class MessagingApiTest extends AbstractIntegrationTest {
 
   protected MessagingApi symphonyMessagingApi;
+  private SymphonyMessageSender symphonyMessageSender;
   private SymphonyMessageService symphonyMessageService;
   private StreamService streamService;
   private PodConfiguration podConfiguration;
@@ -51,6 +53,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     super.setUp(db, mockServer);
 
+    symphonyMessageSender = mock(SymphonyMessageSender.class);
     symphonyMessageService = mock(SymphonyMessageService.class);
     streamService = mock(StreamService.class);
 
@@ -70,7 +73,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     empClient = mock(EmpClient.class);
     usersInfoService = mock(UsersInfoService.class);
 
-    symphonyMessagingApi = new MessagingApi(symphonyMessageService, streamService, podConfiguration, botConfiguration, federatedAccountRepository, authenticationService, adminClient, empClient, usersInfoService);
+    symphonyMessagingApi = new MessagingApi(symphonyMessageSender, symphonyMessageService, streamService, podConfiguration, botConfiguration, federatedAccountRepository, authenticationService, adminClient, empClient, usersInfoService, meterManager);
 
     FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUserId("fromSymphonyUserId").build();
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.of(federatedAccount));
@@ -81,21 +84,21 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void sendMessage() {
-    SendMessageRequest sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "text", null);
-    SendMessageResponse response = this.verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
+    SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null);
+    verifyRequest(sendMessageRequest, HttpStatus.NO_CONTENT, Void.class);
   }
 
   @Test
   void sendFormattedMessage() {
-    SendMessageRequest sendMessageRequest = this.createTestMessage("streamId", "fromSymphonyUserId", "text", FormattingEnum.INFO);
-    SendMessageResponse response = this.verifyRequest(sendMessageRequest, HttpStatus.OK, SendMessageResponse.class);
+    SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", FormattingEnum.INFO);
+    verifyRequest(sendMessageRequest, HttpStatus.NO_CONTENT, Void.class);
   }
 
   @Test
   void sendMessage_Error() {
-    SendMessageRequest sendMessageRequest = this.createTestMessage("streamId", "wrongSymphonyUserId", "text", null);
-    doThrow(new SendMessageFailedProblem()).when(symphonyMessageService).sendRawMessage("streamId", "wrongSymphonyUserId", "<messageML>text</messageML>");
-    DefaultProblem response = this.verifyRequest(sendMessageRequest, HttpStatus.BAD_REQUEST, DefaultProblem.class);
+    SendMessageRequest sendMessageRequest = createTestMessage("streamId", "wrongSymphonyUserId", "text", null);
+    doThrow(new SendMessageFailedProblem()).when(symphonyMessageSender).sendRawMessage("streamId", "wrongSymphonyUserId", "<messageML>text</messageML>");
+    DefaultProblem response = verifyRequest(sendMessageRequest, HttpStatus.BAD_REQUEST, DefaultProblem.class);
   }
 
   private <RESPONSE> RESPONSE verifyRequest(SendMessageRequest sendMessageRequest, HttpStatus expectedStatus, Class<RESPONSE> response) {

@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
+import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -13,6 +14,7 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.DefaultAdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
+import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -40,10 +42,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class PreventMIMRoomCreationTest {
+public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
   protected ForwarderQueueConsumer forwarderQueueConsumer;
-  private SymphonyMessageService symphonyMessageService;
+  private SymphonyMessageSender symphonyMessageSender;
   private EmpClient empClient;
   private DatafeedSessionPool datafeedSessionPool;
   private FederatedAccountRepository federatedAccountRepository;
@@ -55,7 +57,7 @@ public class PreventMIMRoomCreationTest {
   public void setUp() throws Exception {
     symphonyService = mock(SymphonyService.class);
     StreamService streamService = mock(StreamService.class);
-    symphonyMessageService = mock(SymphonyMessageService.class);
+    symphonyMessageSender = mock(SymphonyMessageSender.class);
     empClient = new MockEmpClient();
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
@@ -87,18 +89,18 @@ public class PreventMIMRoomCreationTest {
     adminClient = mock(DefaultAdminClient.class);
     FederatedAccountSessionService federatedAccountSessionService = new FederatedAccountSessionService(federatedAccountRepository);
 
-    datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService);
+    datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
     ObjectMapper objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
     MessageDecryptor messageDecryptor = mock(MessageDecryptor.class);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, meterManager);
 
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     empSchemaService = new EmpSchemaService(adminClient);
 
-    MessageService messageService = new MessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageService, adminClient, empSchemaService);
+    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration);
     messageService.registerAsDatafeedListener();
 
-    ChannelService channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
+    ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
     channelService.registerAsDatafeedListener();
   }
 
@@ -132,7 +134,7 @@ public class PreventMIMRoomCreationTest {
 
     forwarderQueueConsumer.consume(notification);
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-//    verify(symphonyMessageService, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.");
+//    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.");
   }
 
   @Test
@@ -162,7 +164,7 @@ public class PreventMIMRoomCreationTest {
     forwarderQueueConsumer.consume(notification);
 
 //    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-//    verify(symphonyMessageService, times(0)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite WHATSAPP contacts in a MIM.");
+//    verify(symphonyMessageSender, times(0)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite WHATSAPP contacts in a MIM.");
 
   }
 
@@ -194,7 +196,7 @@ public class PreventMIMRoomCreationTest {
     forwarderQueueConsumer.consume(notification);
 
 //    verify(symphonyService, times(1)).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", session);
-//    verify(symphonyMessageService, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a chat room.");
+//    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a chat room.");
   }
 
   @Test
@@ -223,7 +225,7 @@ public class PreventMIMRoomCreationTest {
 
     forwarderQueueConsumer.consume(notification);
 
-//    verify(symphonyMessageService, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
+//    verify(symphonyMessageSender, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
   }
 
   @Test
@@ -255,7 +257,7 @@ public class PreventMIMRoomCreationTest {
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
 
     String alertMessage = "This message was not delivered. Attachments are not supported (messageId : ";
-    verify(symphonyMessageService, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), startsWith(alertMessage));
+    verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), startsWith(alertMessage));
   }
 
 

@@ -13,8 +13,8 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
-import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
-import com.symphony.sfs.ms.chat.service.SymphonyService;
+import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
+import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
@@ -24,6 +24,7 @@ import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
@@ -34,6 +35,8 @@ import com.symphony.sfs.ms.starter.testing.LocalProfileTest;
 import com.symphony.sfs.ms.starter.testing.RestApiTest;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import io.fabric8.mockwebserver.DefaultMockServer;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -41,6 +44,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
@@ -59,7 +63,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected DefaultMockServer mockServer;
   protected WebClient webClient;
   protected StreamService streamService;
-  protected SymphonyMessageService symphonyMessageService;
+  protected SymphonyMessageSender symphonyMessageSender;
   protected SymphonySystemMessageTemplateProcessor symphonySystemMessageTemplateProcessor;
   protected ConnectionsService connectionsServices;
   protected ConnectionRequestManager connectionRequestManager;
@@ -69,6 +73,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected FederatedAccountRepository federatedAccountRepository;
   protected KeyPair keyPair;
   protected AdminClient adminClient;
+  protected MeterManager meterManager;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -78,6 +83,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     dynamoConfiguration = provisionTestTable(db);
     objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
+
+    meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
 
     // keys
     KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
@@ -110,11 +117,11 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // account and datafeed
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
     federatedAccountSessionService = new FederatedAccountSessionService(federatedAccountRepository);
-    datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService);
+    datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
 
     ContentKeyManager contentKeyManager = new ContentKeyManager(podConfiguration, datafeedSessionPool);
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, meterManager);
 
     SymphonyAuthFactory symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
@@ -122,10 +129,10 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // services
     streamService = spy(new StreamService(sessionManager));
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
-    symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, symphonyService, datafeedSessionPool));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor));
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
-    channelService = new ChannelService(streamService, symphonyMessageService, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
+    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
     channelService.registerAsDatafeedListener();
   }
 

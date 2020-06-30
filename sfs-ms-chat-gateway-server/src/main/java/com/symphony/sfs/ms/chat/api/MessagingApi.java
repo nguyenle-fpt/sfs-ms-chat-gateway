@@ -4,33 +4,42 @@ import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesRequest;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
+import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
+import io.micrometer.core.instrument.Counter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import org.zalando.problem.violations.Violation;
 
+import javax.annotation.PostConstruct;
 import javax.validation.Valid;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+
+import static com.symphony.sfs.ms.starter.util.ProblemUtils.newConstraintViolation;
 
 // TODO full refactor, too much code in this API class
 
@@ -39,6 +48,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.MessagingApi {
 
+  private final SymphonyMessageSender symphonyMessageSender;
   private final SymphonyMessageService symphonyMessageService;
   private final StreamService streamService;
   private final PodConfiguration podConfiguration;
@@ -49,17 +59,34 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   private final EmpClient empClient;
   private final UsersInfoService usersInfoService;
 
+  private final MeterManager meterManager;
+
+  private Counter messagesSent;
+  private Counter messagesBlocked;
+
+  @PostConstruct
+  public void initializeMetrics() {
+    messagesSent = meterManager.register(Counter.builder("sent.messages.to.symphony"));
+    messagesBlocked = meterManager.register(Counter.builder("blocked.messages.to.symphony"));
+  }
+
   @Override
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
-    final FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(request.getFromSymphonyUserId()).orElseThrow(FederatedAccountNotFoundProblem::new);
+    FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(request.getFromSymphonyUserId()).orElseThrow(FederatedAccountNotFoundProblem::new);
 
     Optional<String> advisorSymphonyUserId = findAdvisor(request.getStreamId(), federatedAccount.getSymphonyUserId());
-    notEntitledMessage(advisorSymphonyUserId, federatedAccount.getEmp()).ifPresentOrElse(
-      notEntitledMessage -> blockIncomingMessage(federatedAccount.getEmp(), request.getStreamId(), notEntitledMessage),
-      () -> forwardIncomingMessageToSymphony(request));
+    Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getEmp());
 
-    SendMessageResponse response = new SendMessageResponse();
-    return ResponseEntity.ok(response);
+    String symphonyMessageId = null;
+    if (notEntitled.isPresent()) {
+      messagesBlocked.increment();
+      blockIncomingMessage(federatedAccount.getEmp(), request.getStreamId(), notEntitled.get());
+    } else {
+      messagesSent.increment();
+      symphonyMessageId = forwardIncomingMessageToSymphony(request).orElseThrow(SendMessageFailedProblem::new);
+    }
+
+    return ResponseEntity.ok(new SendMessageResponse().id(symphonyMessageId));
   }
 
   @Override
@@ -102,7 +129,6 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   }
 
   /**
-   *
    * @param advisorSymphonyUserId
    * @param emp
    * @return If present, message indicating that advisor is NOT entitled.
@@ -139,34 +165,30 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   }
 
   /**
-   *
    * @param request
    */
-  private void forwardIncomingMessageToSymphony(SendMessageRequest request) {
+  private Optional<String> forwardIncomingMessageToSymphony(SendMessageRequest request) {
     String messageContent = "<messageML>" + request.getText() + "</messageML>";
     if (request.getFormatting() == null) {
-      symphonyMessageService.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-    } else {
-      messageContent = request.getText();
-      switch (request.getFormatting()) {
-        case SIMPLE:
-          symphonyMessageService.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-          break;
-        case NOTIFICATION:
-          symphonyMessageService.sendNotificationMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-          break;
-        case INFO:
-          symphonyMessageService.sendInfoMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-          break;
-        case ALERT:
-          symphonyMessageService.sendAlertMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
-          break;
-      }
+      return symphonyMessageSender.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+    }
+
+    messageContent = request.getText();
+    switch (request.getFormatting()) {
+      case SIMPLE:
+        return symphonyMessageSender.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+      case NOTIFICATION:
+        return symphonyMessageSender.sendNotificationMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+      case INFO:
+        return symphonyMessageSender.sendInfoMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+      case ALERT:
+        return symphonyMessageSender.sendAlertMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+      default:
+        throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(SendMessageRequest.FormattingEnum.values())));
     }
   }
 
   /**
-   *
    * @param emp
    * @param streamId
    * @param reasonText

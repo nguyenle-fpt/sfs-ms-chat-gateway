@@ -9,9 +9,9 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.common.Key;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
@@ -32,10 +32,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import static com.symphony.sfs.ms.chat.service.SymphonyMessageService.SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE;
-import static com.symphony.sfs.ms.chat.service.SymphonyMessageService.SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE;
-import static com.symphony.sfs.ms.chat.service.SymphonyMessageService.SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE;
-import static com.symphony.sfs.ms.chat.service.SymphonyMessageService.SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE;
+import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE;
+import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE;
+import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE;
+import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -61,6 +61,7 @@ class SymphonyMessageServiceTest {
   private StreamService streamService;
   private SymphonySystemMessageTemplateProcessor templateProcessor;
 
+  private SymphonyMessageSender symphonyMessageSender;
   private SymphonyMessageService symphonyMessageService;
   private SymphonyService symphonyService;
   private DatafeedSessionPool datafeedSessionPool;
@@ -80,6 +81,7 @@ class SymphonyMessageServiceTest {
     streamService = mock(StreamService.class);
     templateProcessor = mock(SymphonySystemMessageTemplateProcessor.class);
 
+    symphonyMessageSender = mock(SymphonyMessageSender.class);
     symphonyMessageService = mock(SymphonyMessageService.class);
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     symphonyService = mock(SymphonyService.class);
@@ -87,7 +89,7 @@ class SymphonyMessageServiceTest {
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    symphonyMessageService = spy(new SymphonyMessageService(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, symphonyService, datafeedSessionPool));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor));
   }
 
   @Test
@@ -97,7 +99,7 @@ class SymphonyMessageServiceTest {
       .build();
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.of(federatedAccount));
 
-    symphonyMessageService.sendRawMessage("streamId", "fromSymphonyUserId", "text");
+    symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text");
 
     verify(streamService, once()).sendMessage(eq(podConfiguration.getUrl()), any(StaticSessionSupplier.class), eq("streamId"), eq("text"));
   }
@@ -113,18 +115,18 @@ class SymphonyMessageServiceTest {
 
       messageSender.accept(userSession, "streamId", "templatizedText");
 
-      InOrder orderVerifier = inOrder(symphonyMessageService, templateProcessor);
+      InOrder orderVerifier = inOrder(symphonyMessageSender, templateProcessor);
       orderVerifier.verify(templateProcessor, once()).process("templatizedText", templateName);
-      orderVerifier.verify(symphonyMessageService, once()).sendRawMessage(userSession, "streamId", detemplatizedMessage);
+      orderVerifier.verify(symphonyMessageSender, once()).sendRawMessage(userSession, "streamId", detemplatizedMessage);
     }
 
     private Stream<Arguments> templateProvider() {
       return Stream.of(
         // arguments(<templateName>, <detemplatizedMessage>, <Method to send message as a TriConsumer>)
-        arguments(SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE, "simpleDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendSimpleMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE, "infoDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendInfoMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE, "alertDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendAlertMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE, "notificationDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageService.sendNotificationMessage(session, streamId, text))
+        arguments(SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE, "simpleDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendSimpleMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE, "infoDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendInfoMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE, "alertDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendAlertMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE, "notificationDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendNotificationMessage(session, streamId, text))
       );
     }
 
@@ -134,7 +136,7 @@ class SymphonyMessageServiceTest {
   @Test
   void sendRawMessage_FromSymphonyUserNotFound() {
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.empty());
-    assertThrows(SendMessageFailedProblem.class, () -> symphonyMessageService.sendRawMessage("streamId", "fromSymphonyUserId", "text"));
+    assertThrows(SendMessageFailedProblem.class, () -> symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text"));
   }
 
   @Test

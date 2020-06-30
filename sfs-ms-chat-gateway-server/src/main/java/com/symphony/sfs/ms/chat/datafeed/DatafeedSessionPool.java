@@ -5,15 +5,18 @@ import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import io.micrometer.core.instrument.Gauge;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import model.UserInfo;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,8 +29,14 @@ public class DatafeedSessionPool {
   private final PodConfiguration podConfiguration;
   private final ChatConfiguration chatConfiguration;
   private final FederatedAccountSessionService federatedAccountSessionService;
+  private final MeterManager meterManager;
 
   private Map<String, DatafeedSession> sessions = new ConcurrentHashMap<>();
+
+  @PostConstruct
+  public void initializeMetrics() {
+    meterManager.register(Gauge.builder("opened.datafeeds", sessions, Map::size));
+  }
 
   public DatafeedSession listenDatafeed(String symphonyId) throws UnknownDatafeedUserException {
     FederatedAccount account = federatedAccountSessionService.findBySymphonyIdOrFail(symphonyId);

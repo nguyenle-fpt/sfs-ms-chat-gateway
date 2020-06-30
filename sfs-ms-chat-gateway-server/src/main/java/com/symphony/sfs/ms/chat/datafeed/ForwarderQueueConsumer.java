@@ -23,7 +23,12 @@ import com.symphony.oss.models.core.canon.facade.IEnvelope;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.oss.models.crypto.canon.CryptoModel;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
+import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
+import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.starter.health.MeterManager;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base64;
@@ -50,14 +55,16 @@ public class ForwarderQueueConsumer {
   private final ModelRegistry modelRegistry;
 
   @Getter
-  private final MultiListener<String> rawListeners = new MultiListener<>();
-
+  private final MultiListener<String> rawListener = new MultiListener<>();
   private final MultiDatafeedListener datafeedListener = new MultiDatafeedListener();
 
-  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool) {
+  private final ForwarderQueueMetrics forwarderQueueMetrics;
+
+  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool, MeterManager meterManager) {
     this.objectMapper = objectMapper;
     this.messageDecryptor = messageDecryptor;
     this.datafeedSessionPool = datafeedSessionPool;
+    this.forwarderQueueMetrics = new ForwarderQueueMetrics(meterManager);
 
     // Hell...
     IEntityFactory<?, ?, ?>[] factories = Stream.of(
@@ -91,12 +98,13 @@ public class ForwarderQueueConsumer {
     IEnvelope envelope = parseEnvelope(sqsObject);
     String payloadType = envelope.getPayload().getCanonType();
 
+    forwarderQueueMetrics.incomingMessages.increment();
     LOG.debug("Message received: {} {}", payloadType, notification);
 
     System.out.println(payloadType);
     switch (payloadType) {
       case SocialMessage.TYPE_ID:
-        notifySocialMessage(envelope);
+        forwarderQueueMetrics.socialMessageProcessingTime.record(() -> notifySocialMessage(envelope));
         break;
       case MaestroMessage.TYPE_ID:
         notifyMaestroMessage(envelope);
@@ -105,12 +113,13 @@ public class ForwarderQueueConsumer {
         LOG.debug("Unsupported payload type {}", payloadType);
     }
 
-    rawListeners.accept(notification);
+    rawListener.accept(notification);
   }
 
-  private void notifySocialMessage(IEnvelope envelope) throws IOException {
+  private void notifySocialMessage(IEnvelope envelope) {
     // getting the SocialMessage from the envelope
     ISocialMessage socialMessage = SocialMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
+    forwarderQueueMetrics.incomingSocialMessages.increment();
 
     String messageId = socialMessage.getMessageId().toBase64UrlSafeString();
     String streamId = socialMessage.getThreadId().toBase64UrlSafeString();
@@ -152,15 +161,22 @@ public class ForwarderQueueConsumer {
 
       String text = messageDecryptor.decrypt(socialMessage, managedSession.getUserId());
       String disclaimer = socialMessage.getDisclaimer();
+
+      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
+
       datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text, disclaimer, socialMessage.getAttachments());
     } catch (UnknownDatafeedUserException e) {
       LOG.debug("Unmanaged user {}", e.getMessage());
+    } catch (ContentKeyRetrievalException | DecryptionException e) {
+      LOG.debug("Unable to decrypt social message: stream={} members={} initiator={}", streamId, members, fromUser.getId(), e);
+      throw new RuntimeException(e); // TODO better exception
     }
   }
 
-  private void notifyMaestroMessage(IEnvelope envelope) throws IOException {
+  private void notifyMaestroMessage(IEnvelope envelope) {
     // getting the MaestroMessage from the envelope
     IMaestroMessage maestroMessage = MaestroMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
+    forwarderQueueMetrics.incomingMaestroMessages.increment();
 
     MaestroEventType eventType = maestroMessage.getEvent();
     System.out.println(eventType);
@@ -269,5 +285,21 @@ public class ForwarderQueueConsumer {
     String b64Payload = objectMapper.readTree(sqsObject.getJsonObject().get("Message").toString()).get("payload").asText();
     ImmutableByteArray payload = ImmutableByteArray.newInstance(Base64.decodeBase64(b64Payload));
     return Envelope.FACTORY.newInstance(payload, modelRegistry);
+  }
+
+  private static class ForwarderQueueMetrics {
+    private final Counter incomingMessages;
+
+    private final Counter incomingSocialMessages;
+    private final Counter incomingMaestroMessages;
+
+    private final Timer socialMessageProcessingTime;
+
+    public ForwarderQueueMetrics(MeterManager meterManager) {
+      incomingMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "all"));
+      incomingSocialMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "social"));
+      incomingMaestroMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "maestro"));
+      socialMessageProcessingTime = meterManager.register(Timer.builder("social.message.processing.time").publishPercentileHistogram());
+    }
   }
 }
