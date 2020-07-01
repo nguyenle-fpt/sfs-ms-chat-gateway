@@ -38,6 +38,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -159,7 +160,7 @@ public class ForwarderQueueConsumer {
       LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
       LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
 
-      String text = messageDecryptor.decrypt(socialMessage, managedSession.getUserId());
+      String text = unescapeSepcialsCharacters(messageDecryptor.decrypt(socialMessage, managedSession.getUserId()));
       String disclaimer = socialMessage.getDisclaimer();
 
       LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
@@ -285,6 +286,15 @@ public class ForwarderQueueConsumer {
     String b64Payload = objectMapper.readTree(sqsObject.getJsonObject().get("Message").toString()).get("payload").asText();
     ImmutableByteArray payload = ImmutableByteArray.newInstance(Base64.decodeBase64(b64Payload));
     return Envelope.FACTORY.newInstance(payload, modelRegistry);
+  }
+
+  private String unescapeSepcialsCharacters(String text) {
+    List<String> specialsCharacters = Arrays.asList("+", "-", "_", "*", "`");
+    for (String specialCharacter : specialsCharacters) {
+      text = text.replace("\\" + specialCharacter, specialCharacter);
+    }
+
+    return text;
   }
 
   private static class ForwarderQueueMetrics {
