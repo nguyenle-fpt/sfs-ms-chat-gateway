@@ -20,15 +20,18 @@ import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsPro
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserAttributes;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserKeyRequest;
+import com.symphony.sfs.ms.chat.service.symphony.UserStatus;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
@@ -69,6 +72,8 @@ public class FederatedAccountService implements DatafeedListener {
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final UsersInfoService usersInfoService;
   private final EmpSchemaService empSchemaService;
+  private final EmpClient empClient;
+  private final SymphonyAuthFactory symphonyAuthFactory;
 
   @PostConstruct
   @VisibleForTesting
@@ -97,22 +102,39 @@ public class FederatedAccountService implements DatafeedListener {
     }
   }
 
+  public void deleteAccount(String emp, String federatedUserId) {
+    FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
+      .orElseThrow(FederatedAccountNotFoundProblem::new);
+
+    empClient.deleteAccount(emp, federatedUserId);
+
+    SymphonyUserAttributes attributes = new SymphonyUserAttributes();
+    attributes.setFirstName("DEACTIVATED");
+    attributes.setLastName("DEACTIVATED");
+    attributes.setDisplayName("DEACTIVATED");
+    attributes.setUserName(UUID.randomUUID().toString() + "[DEACTIVATED]");
+    attributes.setEmailAddress(UUID.randomUUID().toString() + "@deactivated.ces.symphony.com");
+
+    adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), attributes);
+    adminUserManagementService.updateUserStatus(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), UserStatus.DISABLED);
+  }
+
   public String createChannel(CreateChannelRequest request) {
-    Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp());
-    if (federatedAccount.isEmpty()) {
+    Optional<FederatedAccount> existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp());
+    if (existingAccount.isEmpty()) {
       throw new FederatedAccountNotFoundProblem();
     }
 
     String advisorSymphonyId = request.getAdvisorUserId();
     SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-    DatafeedSession session = datafeedSessionPool.listenDatafeed(federatedAccount.get());
+    DatafeedSession session = datafeedSessionPool.listenDatafeed(existingAccount.get());
 
     // If for whatever reason the connection request is already accepted
     // Maybe in case of offboarding and re-onboarding?
     //
     // Otherwise, the createIMChannel will be called when the ConnectionRequestStatus.ACCEPTED event is received from the forwarder queue
     if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
-      return channelService.createIMChannel(session, federatedAccount.get(), getCustomerInfo(advisorSymphonyId, botSession));
+      return channelService.createIMChannel(session, existingAccount.get(), getCustomerInfo(advisorSymphonyId, botSession));
     }
 
     return null;

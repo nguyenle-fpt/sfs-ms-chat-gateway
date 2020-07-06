@@ -130,10 +130,6 @@ public class ChannelService implements DatafeedListener {
     return streamId;
   }
 
-  public void deleteChannelByFederatedUserSymphonyIdAndEmp(String emp, String federatedUserId) {
-    empClient.deleteChannelsBySymphonyId(emp, federatedUserId);
-  }
-
   @Override
   public void onUserJoinedRoom(String streamId, List<String> members, IUser fromSymphonyUser) {
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();

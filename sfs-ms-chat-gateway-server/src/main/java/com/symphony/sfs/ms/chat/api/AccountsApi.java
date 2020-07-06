@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.validation.constraints.NotBlank;
+
 @Slf4j
 @RestController
 public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.AccountsApi {
@@ -25,5 +27,11 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
       .symphonyUserId(account.getSymphonyUserId())
       .symphonyUsername(account.getSymphonyUsername());
     return ResponseEntity.ok(response);
+  }
+
+  @Override
+  public ResponseEntity<Void> deleteFederatedAccount(String emp, String federatedUserId) {
+    federatedAccountService.deleteAccount(emp, federatedUserId);
+    return ResponseEntity.ok().build();
   }
 }

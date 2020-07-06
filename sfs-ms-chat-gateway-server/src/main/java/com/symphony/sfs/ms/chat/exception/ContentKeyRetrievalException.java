@@ -9,4 +9,8 @@ public class ContentKeyRetrievalException extends IOException {
   public ContentKeyRetrievalException(ThreadId threadId, String username, Long rotationId, Throwable cause) {
     super(String.format("Unable to retrieve key: threadId=%s username=%s rotation=%s", threadId, username, rotationId), cause);
   }
+
+  public ContentKeyRetrievalException(ThreadId threadId, String username, Long rotationId) {
+    super(String.format("Unable to retrieve key: threadId=%s username=%s rotation=%s, {}", threadId, username, rotationId));
+  }
 }

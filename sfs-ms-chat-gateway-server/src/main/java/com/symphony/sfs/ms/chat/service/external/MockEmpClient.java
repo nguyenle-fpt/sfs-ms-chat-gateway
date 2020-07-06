@@ -50,7 +50,7 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteChannelsBySymphonyId(String emp, String federatedUserId) {
+  public void deleteAccount(String emp, String federatedUserId) {
     // No implementation for now
   }
 }

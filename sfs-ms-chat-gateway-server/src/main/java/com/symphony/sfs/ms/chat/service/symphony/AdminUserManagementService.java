@@ -36,7 +36,7 @@ public class AdminUserManagementService {
   public Optional<SymphonyUser> createUser(String podUrl, SessionSupplier<SymphonySession> session, SymphonyUser user) {
 
     if (StringUtils.isBlank(podUrl)) {
-      throw new IllegalArgumentException("No URL provided for Create User");
+      throw new IllegalArgumentException("No pod URL provided");
     }
 
     WebClient client = sessionManager.getWebClient(session);
@@ -57,7 +57,7 @@ public class AdminUserManagementService {
   public Optional<AdminUserInfo> getUserInfo(String podUrl, SessionSupplier<SymphonySession> session, String userId) {
 
     if (StringUtils.isBlank(podUrl)) {
-      throw new IllegalArgumentException("No URL provided for get user");
+      throw new IllegalArgumentException("No pod URL provided");
     }
 
     WebClient client = sessionManager.getWebClient(session);
@@ -70,6 +70,47 @@ public class AdminUserManagementService {
       return Optional.ofNullable(response);
     } catch (Exception e) {
       logWebClientError(LOG, PodConstants.GETUSERADMIN, e);
+    }
+    return Optional.empty();
+  }
+
+  public Optional<SymphonyUser> updateUser(String podUrl, SessionSupplier<SymphonySession> session, String userId, SymphonyUserAttributes user) {
+
+    if (StringUtils.isBlank(podUrl)) {
+      throw new IllegalArgumentException("No pod URL provided");
+    }
+
+    WebClient client = sessionManager.getWebClient(session);
+    try {
+      SymphonyUser response = blockWithRetries(client.post()
+        .uri(podUrl + PodConstants.ADMINUPDATEUSER, userId)
+        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .body(BodyInserters.fromValue(user))
+        .retrieve()
+        .bodyToMono(SymphonyUser.class));
+      return Optional.ofNullable(response);
+    } catch (Exception e) {
+      logWebClientError(LOG, PodConstants.ADMINUPDATEUSER, e);
+    }
+    return Optional.empty();
+  }
+
+  public Optional<SymphonyUser> updateUserStatus(String podUrl, SessionSupplier<SymphonySession> session, String userId, UserStatus status) {
+
+    if (StringUtils.isBlank(podUrl)) {
+      throw new IllegalArgumentException("No pod URL provided");
+    }
+
+    WebClient client = sessionManager.getWebClient(session);
+    try {
+      blockWithRetries(client.post()
+        .uri(podUrl + PodConstants.UPDATEUSERSTATUSADMIN, userId)
+        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .body(BodyInserters.fromValue(status))
+        .retrieve()
+        .toBodilessEntity());
+    } catch (Exception e) {
+      logWebClientError(LOG, PodConstants.UPDATEUSERSTATUSADMIN, e);
     }
     return Optional.empty();
   }

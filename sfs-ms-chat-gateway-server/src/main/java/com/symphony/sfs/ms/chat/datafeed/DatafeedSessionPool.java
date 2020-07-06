@@ -90,8 +90,7 @@ public class DatafeedSessionPool {
 
     return session;
   }
-
-
+  
   @Getter
   @EqualsAndHashCode(callSuper = true)
   public static class DatafeedSession extends SymphonySession {

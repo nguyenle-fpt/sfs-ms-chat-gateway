@@ -79,7 +79,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       channelService,
       forwarderQueueConsumer,
       new UsersInfoService(sessionManager),
-      empSchemaService);
+      empSchemaService,
+      empClient,
+      symphonyAuthFactory);
     federatedAccountService.registerAsDatafeedListener();
 
     accountsApi = new AccountsApi(federatedAccountService);

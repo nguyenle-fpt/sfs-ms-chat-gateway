@@ -74,6 +74,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected KeyPair keyPair;
   protected AdminClient adminClient;
   protected MeterManager meterManager;
+  protected SymphonyAuthFactory symphonyAuthFactory;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -113,6 +114,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     // authentication
     authenticationService = mock(AuthenticationService.class);
+    symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
 
     // account and datafeed
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());

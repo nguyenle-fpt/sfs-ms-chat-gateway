@@ -108,12 +108,6 @@ class ChannelServiceTest {
 
   }
 
-  @Test
-  void testDeleteChannels() {
-    channelService.deleteChannelByFederatedUserSymphonyIdAndEmp("WHATSAPP", "1234567890");
-    verify(empClient).deleteChannelsBySymphonyId("WHATSAPP", "1234567890");
-  }
-
 //  @Test
 //  void createMIMChannel() throws UnknownDatafeedUserException {
 //

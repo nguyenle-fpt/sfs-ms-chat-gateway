@@ -80,10 +80,10 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteChannelsBySymphonyId(String emp, String symphonyId) {
+  public void deleteAccount(String emp, String symphonyId) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
-    client.getChannelApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    client.getChannelApi().deleteChannelBySymphonyId(symphonyId);
+    client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    client.getUserApi().deleteUser(symphonyId);
   }
 
   private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {

@@ -68,5 +68,5 @@ public interface EmpClient {
    *
    * @param federatedUserId
    */
-  void deleteChannelsBySymphonyId(String emp, String federatedUserId);
+  void deleteAccount(String emp, String federatedUserId);
 }

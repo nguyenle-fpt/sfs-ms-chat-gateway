@@ -41,3 +41,30 @@ accounts:
                 - $ref: '../errors/accounts.yaml#/cannot-retrieve-streamid'
                 - $ref: '../errors/accounts.yaml#/create-channel-failed'
                 - $ref: '../errors/accounts.yaml#/create-user-failed'
+
+delete-account:
+  delete:
+    tags:
+      - Accounts
+    summary: Delete a federated account.
+    operationId: deleteFederatedAccount
+    description: >
+      => Delete a federated account (including all channels, messages and directory data), given a federated user id and an emp.
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: federatedUserId
+        schema:
+          type: string
+        required: true
+        description: The federated user id
+      - in: path
+        name: emp
+        schema:
+          type: string
+        required: true
+        description: The EMP to send the deletion to
+    responses:
+      '200':
+        description: The account has been successfully deleted

@@ -8,6 +8,7 @@ import com.symphony.security.clientsdk.client.AuthProvider;
 import com.symphony.security.clientsdk.client.ClientIdentifierFilter;
 import com.symphony.security.clientsdk.client.SymphonyClient;
 import com.symphony.security.clientsdk.client.SymphonyClientConfig;
+import com.symphony.security.clientsdk.client.UnauthorizedException;
 import com.symphony.security.clientsdk.client.impl.SymphonyClientFactory;
 import com.symphony.security.clientsdk.core.ClientKeyRetrieverException;
 import com.symphony.security.clientsdk.core.ClientKeyRetrieverHandler;
@@ -53,16 +54,21 @@ public class ContentKeyManager {
     SymphonyClient client = getSymphonyClient(session.getUsername());
     AuthProvider auth = getAuthProvider(session);
 
-    try {
-      IClientKeyRetrieverHandler clientKeyRetriever = new ClientKeyRetrieverHandler(client, authSecretPersister);
-      clientKeyRetriever.init(auth, authSecretPersister, false);
+    for (int i = 0; i < 2; i++) { // TODO ugly, we need to align retry mechanism with the one in ms-admin
+      try {
+        IClientKeyRetrieverHandler clientKeyRetriever = new ClientKeyRetrieverHandler(client, authSecretPersister);
+        clientKeyRetriever.init(auth, authSecretPersister, false);
 
-      Long symphonyUserId = Long.valueOf(userId);
-      KeyIdentifier keyId = new KeyIdentifier(threadId.asImmutableByteArray().toByteArray(), symphonyUserId, rotationId);
-      return clientKeyRetriever.getKey(auth, keyId);
-    } catch (ClientKeyRetrieverException | SymphonyInputException | UnsupportedEncodingException | SymphonySignatureException | SymphonyPEMFormatException | SymphonyNativeException | SymphonyEncryptionException e) {
-      throw new ContentKeyRetrievalException(threadId, session.getUsername(), rotationId, e);
+        Long symphonyUserId = Long.valueOf(userId);
+        KeyIdentifier keyId = new KeyIdentifier(threadId.asImmutableByteArray().toByteArray(), symphonyUserId, rotationId);
+        return clientKeyRetriever.getKey(auth, keyId);
+      } catch (ClientKeyRetrieverException | SymphonyInputException | UnsupportedEncodingException | SymphonySignatureException | SymphonyPEMFormatException | SymphonyNativeException | SymphonyEncryptionException e) {
+        throw new ContentKeyRetrievalException(threadId, session.getUsername(), rotationId, e);
+      } catch (UnauthorizedException e) {
+        LOG.debug("getContentKey unauthorized, retry...", e);
+      }
     }
+    throw new ContentKeyRetrievalException(threadId, session.getUsername(), rotationId);
   }
 
   private SymphonyClient getSymphonyClient(String username) {
