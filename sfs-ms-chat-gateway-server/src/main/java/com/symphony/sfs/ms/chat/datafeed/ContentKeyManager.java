@@ -48,13 +48,12 @@ public class ContentKeyManager {
 
   @Cacheable(CachingConfiguration.CONTENT_KEY_CACHE)
   public byte[] getContentKey(ThreadId threadId, String userId, Long rotationId) throws UnknownDatafeedUserException, ContentKeyRetrievalException {
-    // make sure we have an up-to-date session
-    DatafeedSession session = datafeedSessionPool.refreshSession(userId);
-
-    SymphonyClient client = getSymphonyClient(session.getUsername());
-    AuthProvider auth = getAuthProvider(session);
-
     for (int i = 0; i < 2; i++) { // TODO ugly, we need to align retry mechanism with the one in ms-admin
+      DatafeedSession session = datafeedSessionPool.refreshSession(userId);
+
+      SymphonyClient client = getSymphonyClient(session.getUsername());
+      AuthProvider auth = getAuthProvider(session);
+
       try {
         IClientKeyRetrieverHandler clientKeyRetriever = new ClientKeyRetrieverHandler(client, authSecretPersister);
         clientKeyRetriever.init(auth, authSecretPersister, false);
@@ -63,12 +62,13 @@ public class ContentKeyManager {
         KeyIdentifier keyId = new KeyIdentifier(threadId.asImmutableByteArray().toByteArray(), symphonyUserId, rotationId);
         return clientKeyRetriever.getKey(auth, keyId);
       } catch (ClientKeyRetrieverException | SymphonyInputException | UnsupportedEncodingException | SymphonySignatureException | SymphonyPEMFormatException | SymphonyNativeException | SymphonyEncryptionException e) {
-        throw new ContentKeyRetrievalException(threadId, session.getUsername(), rotationId, e);
+        throw new ContentKeyRetrievalException(threadId, session.getUserId(), rotationId, e);
       } catch (UnauthorizedException e) {
+        datafeedSessionPool.listenDatafeed(userId);
         LOG.debug("getContentKey unauthorized, retry...", e);
       }
     }
-    throw new ContentKeyRetrievalException(threadId, session.getUsername(), rotationId);
+    throw new ContentKeyRetrievalException(threadId, userId, rotationId);
   }
 
   private SymphonyClient getSymphonyClient(String username) {
