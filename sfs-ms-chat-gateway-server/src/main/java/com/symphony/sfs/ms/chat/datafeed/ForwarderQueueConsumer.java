@@ -163,7 +163,7 @@ public class ForwarderQueueConsumer {
       String text = unescapeSepcialsCharacters(messageDecryptor.decrypt(socialMessage, managedSession.getUserId()));
       String disclaimer = socialMessage.getDisclaimer();
 
-      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
+      // LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
 
       datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text, disclaimer, socialMessage.getAttachments());
     } catch (UnknownDatafeedUserException e) {
