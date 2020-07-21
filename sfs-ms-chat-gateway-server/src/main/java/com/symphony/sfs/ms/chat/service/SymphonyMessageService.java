@@ -22,6 +22,7 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +53,6 @@ public class SymphonyMessageService implements DatafeedListener {
   private final EmpSchemaService empSchemaService;
   private final SymphonyService symphonyService;
   private final PodConfiguration podConfiguration;
-
   @PostConstruct
   @VisibleForTesting
   public void registerAsDatafeedListener() {
@@ -96,7 +96,9 @@ public class SymphonyMessageService implements DatafeedListener {
 
     if (federatedAccountsByEmp.isEmpty()) {
       // No federated account found
-      throw new FederatedAccountNotFoundProblem();
+      LOG.warn("Unexpected handleFromSymphonyIMorMIM towards non-federated accounts, in-memory session to be removed | toUsers={}", toUserIds);
+      toUserIds.forEach(datafeedSessionPool::removeSessionInMemory);
+      return;
     }
 
     try {

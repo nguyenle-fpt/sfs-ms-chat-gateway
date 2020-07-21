@@ -66,7 +66,8 @@ public interface EmpClient {
   /**
    * Internal usage for QA
    *
-   * @param federatedUserId
+   * @param symphonyId
+   * @param emailAddress
    */
-  void deleteAccount(String emp, String federatedUserId);
+  void deleteAccountOrFail(String emp, String symphonyId, String emailAddress);
 }

@@ -90,7 +90,11 @@ public class DatafeedSessionPool {
 
     return session;
   }
-  
+
+  public void removeSessionInMemory(String symphonyId) {
+    sessions.remove(symphonyId);
+  }
+
   @Getter
   @EqualsAndHashCode(callSuper = true)
   public static class DatafeedSession extends SymphonySession {

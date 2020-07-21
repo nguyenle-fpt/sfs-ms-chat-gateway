@@ -50,7 +50,7 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteAccount(String emp, String federatedUserId) {
+  public void deleteAccountOrFail(String emp, String federatedUserId, String email) {
     // No implementation for now
   }
 }

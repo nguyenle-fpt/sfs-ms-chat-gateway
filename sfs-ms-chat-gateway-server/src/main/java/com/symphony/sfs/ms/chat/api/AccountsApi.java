@@ -30,7 +30,8 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
   }
 
   @Override
-  public ResponseEntity<Void> deleteFederatedAccount(String emp, String federatedUserId) {
+  public ResponseEntity<Void> deleteFederatedAccount(String federatedUserId, String emp) {
+    LOG.info("Remove account | federatedUser={} emp={}", federatedUserId, emp);
     federatedAccountService.deleteAccount(emp, federatedUserId);
     return ResponseEntity.ok().build();
   }

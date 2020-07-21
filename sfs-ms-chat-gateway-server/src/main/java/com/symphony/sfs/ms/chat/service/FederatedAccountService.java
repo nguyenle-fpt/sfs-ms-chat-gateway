@@ -28,6 +28,7 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserKeyRequest;
 import com.symphony.sfs.ms.chat.service.symphony.UserStatus;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
@@ -35,6 +36,7 @@ import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
+import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -106,17 +108,18 @@ public class FederatedAccountService implements DatafeedListener {
     FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
       .orElseThrow(FederatedAccountNotFoundProblem::new);
 
-    empClient.deleteAccount(emp, federatedUserId);
+    empClient.deleteAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress());
+
 
     SymphonyUserAttributes attributes = new SymphonyUserAttributes();
-    attributes.setFirstName("DEACTIVATED");
-    attributes.setLastName("DEACTIVATED");
     attributes.setDisplayName("DEACTIVATED");
     attributes.setUserName(UUID.randomUUID().toString() + "[DEACTIVATED]");
     attributes.setEmailAddress(UUID.randomUUID().toString() + "@deactivated.ces.symphony.com");
-
     adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), attributes);
     adminUserManagementService.updateUserStatus(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), UserStatus.DISABLED);
+    federatedAccountRepository.delete(existingAccount);
+
+    datafeedSessionPool.removeSessionInMemory(existingAccount.getSymphonyUserId());
   }
 
   public String createChannel(CreateChannelRequest request) {
