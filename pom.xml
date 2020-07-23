@@ -16,6 +16,7 @@
   <modules>
     <module>sfs-ms-chat-gateway-client</module>
     <module>sfs-ms-chat-gateway-server</module>
+    <module>sfs-ms-chat-gateway-dal</module>
   </modules>
 
   <properties>

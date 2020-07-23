@@ -15,6 +15,11 @@
   <dependencies>
     <dependency>
       <groupId>com.symphony.sfs</groupId>
+      <artifactId>sfs-ms-chat-gateway-dal</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.symphony.sfs</groupId>
       <artifactId>sfs-ms-admin-client</artifactId>
       <version>${project.version}</version>
     </dependency>
