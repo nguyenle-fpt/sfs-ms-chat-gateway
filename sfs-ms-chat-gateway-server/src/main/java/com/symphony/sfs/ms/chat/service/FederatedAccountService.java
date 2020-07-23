@@ -95,6 +95,7 @@ public class FederatedAccountService implements DatafeedListener {
 
     try {
       SymphonyUser symphonyUser = createSymphonyUser(new StaticSessionSupplier<>(botSession), request.getFirstName(), request.getLastName(), request.getEmailAddress(), request.getEmp());
+      LOG.info("created symphony user | federatedUser={} symphonyId={}", request.getFederatedUserId(), symphonyUser.getUserSystemInfo().getId());
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
       datafeedSessionPool.listenDatafeed(federatedAccount);
@@ -140,7 +141,9 @@ public class FederatedAccountService implements DatafeedListener {
     // Maybe in case of offboarding and re-onboarding?
     //
     // Otherwise, the createIMChannel will be called when the ConnectionRequestStatus.ACCEPTED event is received from the forwarder queue
+    LOG.info("sending connection request | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
     if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
+      LOG.info("Connection request already accepted | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
       return channelService.createIMChannel(session, existingAccount.get(), getCustomerInfo(advisorSymphonyId, botSession));
     }
 
@@ -150,6 +153,7 @@ public class FederatedAccountService implements DatafeedListener {
   @Override
   @NewSpan
   public void onConnectionAccepted(IUser requesting, IUser requested) {
+    LOG.info("Connection request accepted | requesting={} requested={}", requesting.getId(), requested.getId());
     federatedAccountRepository.findBySymphonyId(requesting.getId().toString())
       .ifPresent(account -> {
         channelService.createIMChannel(account, requested);

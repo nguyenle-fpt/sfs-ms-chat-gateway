@@ -65,7 +65,7 @@ public class SymphonyMessageService implements DatafeedListener {
   public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
 
     if (members.size() < 2) {
-      LOG.warn("(M)IM with streamId {} and messageId {} has less than 2 members", streamId, messageId);
+      LOG.warn("(M)IM with has less than 2 members  | streamId={} messageId={}", streamId, messageId);
       return;
     }
 
@@ -82,7 +82,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
       // Get recipient FederatedServiceAccount(s)
       if (toUserIds.size() > 1) {
-        LOG.info("More than one recipient {} --> We are in MIM", toUserIds);
+        LOG.info("More than one recipient --> We are in MIM | recipients={}", toUserIds);
       }
       handleFromSymphonyIMorMIM(streamId, messageId, fromSymphonyUser, toUserIds, timestamp, message, disclaimer, attachments);
     }

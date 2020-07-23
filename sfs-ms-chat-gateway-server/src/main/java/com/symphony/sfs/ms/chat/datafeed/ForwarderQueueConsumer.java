@@ -32,6 +32,7 @@ import io.micrometer.core.instrument.Timer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base64;
+import org.slf4j.MDC;
 import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
 import org.springframework.cloud.aws.messaging.listener.annotation.SqsListener;
 import org.springframework.stereotype.Service;
@@ -100,7 +101,7 @@ public class ForwarderQueueConsumer {
     String payloadType = envelope.getPayload().getCanonType();
 
     forwarderQueueMetrics.incomingMessages.increment();
-    LOG.debug("Message received: {} {}", payloadType, notification);
+    LOG.debug("Message received | payloadType={} notification={}", payloadType, notification);
 
     System.out.println(payloadType);
     switch (payloadType) {
@@ -111,7 +112,7 @@ public class ForwarderQueueConsumer {
         notifyMaestroMessage(envelope);
         break;
       default:
-        LOG.debug("Unsupported payload type {}", payloadType);
+        LOG.debug("Unsupported payload type | type={}", payloadType);
     }
 
     rawListener.accept(notification);
@@ -126,10 +127,11 @@ public class ForwarderQueueConsumer {
     String streamId = socialMessage.getThreadId().toBase64UrlSafeString();
     Long timestamp = socialMessage.getIngestionDate().asLong(); // or getActualIngestionDate()?
     IUser fromUser = socialMessage.getFrom(); // or getActualFromUser()?
-
+    MDC.put("streamId", streamId);
+    MDC.put("messageId", messageId);
     IJsonObject<?> attributes = envelope.getPayload().getJsonObject().getObject("attributes");
     if (attributes == null) {
-      LOG.debug("No attributes in social message: envelope={}, payload={}", envelope, envelope.getPayload());
+      LOG.debug("No attributes in social message | envelope={}, payload={}", envelope, envelope.getPayload());
       return;
     }
     ImmutableJsonList memberJsonList = ((ImmutableJsonList) attributes.get("dist"));
@@ -151,23 +153,24 @@ public class ForwarderQueueConsumer {
         .orElse(null);
     }
     if (managedSession == null) {
-      LOG.warn("IM message with no gateway-managed accounts: stream={} members={} initiator={}", streamId, members, fromUser.getId());
+      LOG.warn("IM message with no gateway-managed accounts | stream={} members={} initiator={}", streamId, members, fromUser.getId());
       return;
     }
 
     try {
-      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getText()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getText());
-      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
-      LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
+      LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getText()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getText());
+      LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
+      LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
 
       String text = unescapeSepcialsCharacters(messageDecryptor.decrypt(socialMessage, managedSession.getUserId()));
       String disclaimer = socialMessage.getDisclaimer();
+
 
       // LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
 
       datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text, disclaimer, socialMessage.getAttachments());
     } catch (UnknownDatafeedUserException e) {
-      LOG.debug("Unmanaged user {}", e.getMessage());
+      LOG.debug("Unmanaged user | message={}", e.getMessage());
     } catch (ContentKeyRetrievalException | DecryptionException e) {
       LOG.debug("Unable to decrypt social message: stream={} members={} initiator={}", streamId, members, fromUser.getId(), e);
       throw new RuntimeException(e); // TODO better exception
@@ -195,11 +198,8 @@ public class ForwarderQueueConsumer {
       case CREATE_ROOM:
       case LEAVE_ROOM:
         // TODO implement these events
-        System.out.println("==== RAW ====");
-        System.out.println(envelope);
-        System.out.println("==== PAY ====");
-        System.out.println(maestroMessage);
-        System.out.println("=============");
+        LOG.info("Create and Leave room events not supported");
+        LOG.debug("Room event | envelope={} maestroMessage={}",envelope, maestroMessage);
         break;
     }
   }
@@ -212,21 +212,21 @@ public class ForwarderQueueConsumer {
 
     // if there is no session for both members of the connection request, it means that this user is not managed by our gateway
     if (!datafeedSessionPool.sessionExists(requesting.getId().toString()) && !datafeedSessionPool.sessionExists(affectedUser.getId().toString())) {
-      LOG.warn("Connection request with no gateway-managed accounts: {}, {}", requesting.getUsername(), affectedUser.getUsername());
+      LOG.warn("Connection request with no gateway-managed accounts | requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
       return;
     }
 
     if ("pending_incoming".equalsIgnoreCase(status)) {
-      LOG.debug("onConnectionRequested requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
+      LOG.debug("onConnectionRequested | requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
       datafeedListener.onConnectionRequested(requesting, affectedUser);
     } else if ("accepted".equalsIgnoreCase(status)) {
-      LOG.debug("onConnectionAccepted requesting={} requested={}", affectedUser.getUsername(), requesting.getUsername());
+      LOG.debug("onConnectionAccepted | requesting={} requested={}", affectedUser.getUsername(), requesting.getUsername());
       datafeedListener.onConnectionAccepted(affectedUser, requesting);
     } else if ("refused".equalsIgnoreCase(status)) {
-      LOG.debug("onConnectionRefused requesting={} requested={}", affectedUser.getUsername(), requesting.getUsername());
+      LOG.debug("onConnectionRefused | requesting={} requested={}", affectedUser.getUsername(), requesting.getUsername());
       datafeedListener.onConnectionRefused(affectedUser, requesting);
     } else if ("deleted".equalsIgnoreCase(status)) {
-      LOG.debug("onConnectionDeleted requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
+      LOG.debug("onConnectionDeleted | requesting={} requested={}", requesting.getUsername(), affectedUser.getUsername());
       datafeedListener.onConnectionDeleted(requesting, affectedUser);
     } else {
       throw new IllegalArgumentException("Unknown connection request status type: " + status);
@@ -243,6 +243,7 @@ public class ForwarderQueueConsumer {
     // apparently, there is no entity class for the maestroObject property -_-"
     IJsonObject<?> maestroObject = message.getJsonObject().getRequiredObject("maestroObject");
     String streamId = Base64.encodeBase64URLSafeString(Base64.decodeBase64(maestroObject.getRequiredString("streamId").getBytes(StandardCharsets.UTF_8)));
+    MDC.put("streamId", streamId);
     boolean crosspod = maestroObject.getRequiredBoolean("crossPod");
     IUser initiator = message.getRequestingUser();
 
@@ -252,17 +253,18 @@ public class ForwarderQueueConsumer {
       atLeastOneHasSession = members.stream().anyMatch(datafeedSessionPool::sessionExists);
     }
     if (!atLeastOneHasSession) {
-      LOG.warn("IM with no gateway-managed accounts: stream={} members={} initiator={}", streamId, members, initiator.getUsername());
+      LOG.warn("IM with no gateway-managed accounts | members={} initiator={}", members, initiator.getUsername());
       return;
     }
 
-    LOG.debug("onIMCreated stream={} members={} initiator={} crosspod={}", streamId, members, initiator.getUsername(), crosspod);
+    LOG.debug("onIMCreated | members={} initiator={} crosspod={}", members, initiator.getUsername(), crosspod);
     datafeedListener.onIMCreated(streamId, members, initiator, crosspod);
   }
 
   private void notifyJoinRoom(IMaestroMessage message) {
     IJsonObject<?> maestroObject = message.getJsonObject().getRequiredObject("maestroObject");
     String streamId = Base64.encodeBase64URLSafeString(Base64.decodeBase64(maestroObject.getRequiredString("threadId").getBytes(StandardCharsets.UTF_8)));
+    MDC.put("streamId", streamId);
 
     List<String> members = message.getAffectedUsers().stream()
       .map(IUser::getId)
@@ -274,7 +276,7 @@ public class ForwarderQueueConsumer {
     // at least one of the members must be a federated user
     boolean atLeastOneHasSession = members.stream().anyMatch(datafeedSessionPool::sessionExists);
     if (!atLeastOneHasSession) {
-      LOG.warn("Room with no gateway-managed accounts: stream={} members={} initiator={}", streamId, members, initiator.getUsername());
+      LOG.warn("Room with no gateway-managed accounts | members={} initiator={}", members, initiator.getUsername());
       return;
     }
 

@@ -29,6 +29,7 @@ import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
+import org.apache.log4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.zalando.problem.violations.Violation;
@@ -75,10 +76,12 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @Override
   @ContinueSpan
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
+    MDC.put("streamId", request.getStreamId());
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(request.getFromSymphonyUserId()).orElseThrow(FederatedAccountNotFoundProblem::new);
-
+    MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
     Optional<String> advisorSymphonyUserId = findAdvisor(request.getStreamId(), federatedAccount.getSymphonyUserId());
     Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getEmp());
+    advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
 
     String symphonyMessageId = null;
     if (notEntitled.isPresent()) {
@@ -172,6 +175,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
    * @param request
    */
   private Optional<String> forwardIncomingMessageToSymphony(SendMessageRequest request) {
+    LOG.info("incoming message");
     String messageContent = "<messageML>" + request.getText() + "</messageML>";
     if (request.getFormatting() == null) {
       return symphonyMessageSender.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
@@ -198,6 +202,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
    * @param reasonText
    */
   private void blockIncomingMessage(String emp, String streamId, String reasonText) {
+    LOG.info("block incoming message");
     empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, SendSystemMessageRequest.TypeEnum.ALERT);
   }
 }

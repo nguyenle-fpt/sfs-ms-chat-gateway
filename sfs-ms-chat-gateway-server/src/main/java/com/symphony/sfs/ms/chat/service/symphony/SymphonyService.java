@@ -16,6 +16,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.Optional;
 
+import static com.symphony.sfs.ms.starter.logging.WebRequestLoggingFilter.BASE_PATH;
+import static com.symphony.sfs.ms.starter.logging.WebRequestLoggingFilter.BASE_URI;
 import static com.symphony.sfs.ms.starter.util.WebClientUtils.logWebClientError;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
@@ -35,6 +37,8 @@ public class SymphonyService {
       .header(HttpHeaders.CONTENT_TYPE, APPLICATION_JSON_VALUE)
       .header("sessionToken", session.getSessionToken())
       .header("keyManagerToken", session.getKmToken())
+      .attribute(BASE_URI, podConfiguration.getUrl())
+      .attribute(BASE_PATH,  PodConstants.REMOVEMEMBER)
       .retrieve();
   }
 
@@ -53,6 +57,8 @@ public class SymphonyService {
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
         .header("sessionToken", botSession.getSessionToken())
         .header("keyManagerToken", botSession.getKmToken())
+        .attribute(BASE_URI, podUrl)
+        .attribute(BASE_PATH,  "/agent/v1/message/")
         .retrieve()
         .bodyToMono(SymphonyInboundMessage.class)
         .block();

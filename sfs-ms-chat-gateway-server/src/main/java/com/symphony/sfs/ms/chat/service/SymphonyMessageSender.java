@@ -45,7 +45,7 @@ public class SymphonyMessageSender {
   private final SymphonySystemMessageTemplateProcessor templateProcessor;
 
   public Optional<String> sendRawMessage(SymphonySession session, String streamId, String messageContent) {
-    // LOG.debug("Send message to symphony: {} - {}", streamId, messageContent);
+    LOG.debug("Send message to symphony");
     return streamService.sendMessage(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), streamId, messageContent);
   }
 
