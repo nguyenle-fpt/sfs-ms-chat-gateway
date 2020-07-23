@@ -18,6 +18,7 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,7 @@ public class ChannelService implements DatafeedListener {
   }
 
   @Override
+  @NewSpan
   public void onIMCreated(String streamId, List<String> members, IUser initiator, boolean crosspod) {
     if (members.size() < 2) {
       LOG.warn("IM initiated by {} with streamId {} has less than 2 members (count={})", initiator.getId().toString(), streamId, members.size());
@@ -67,6 +69,7 @@ public class ChannelService implements DatafeedListener {
     }
   }
 
+  @NewSpan
   public String createIMChannel(FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
     try {
       SymphonySession session = datafeedSessionPool.refreshSession(fromFederatedAccount.getSymphonyUserId());
@@ -77,6 +80,7 @@ public class ChannelService implements DatafeedListener {
     }
   }
 
+  @NewSpan
   public String createIMChannel(SymphonySession session, FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
     String streamId = streamService.getIM(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), toSymphonyUser.getId().toString())
       .orElseThrow(CannotRetrieveStreamIdProblem::new);
@@ -89,6 +93,7 @@ public class ChannelService implements DatafeedListener {
     return streamId;
   }
 
+  @NewSpan
   public String createIMChannel(String streamId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount) {
     return createChannel(
       streamId,
@@ -131,6 +136,7 @@ public class ChannelService implements DatafeedListener {
   }
 
   @Override
+  @NewSpan
   public void onUserJoinedRoom(String streamId, List<String> members, IUser fromSymphonyUser) {
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
     List<IUser> symphonyUsers = new ArrayList<>();
@@ -142,6 +148,7 @@ public class ChannelService implements DatafeedListener {
     refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, true);
   }
 
+  @NewSpan
   public void refuseToJoinRoomOrMIM(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts, boolean isRoom) {
     try {
       for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {

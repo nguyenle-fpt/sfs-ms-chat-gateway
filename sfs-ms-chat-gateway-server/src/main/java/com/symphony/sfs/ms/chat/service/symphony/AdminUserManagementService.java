@@ -4,6 +4,7 @@ import clients.symphony.api.constants.PodConstants;
 import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.AdminUserInfo;
@@ -33,6 +34,7 @@ public class AdminUserManagementService {
 
   private final SessionManager sessionManager;
 
+  @NewSpan
   public Optional<SymphonyUser> createUser(String podUrl, SessionSupplier<SymphonySession> session, SymphonyUser user) {
 
     if (StringUtils.isBlank(podUrl)) {
@@ -54,6 +56,7 @@ public class AdminUserManagementService {
     return Optional.empty();
   }
 
+  @NewSpan
   public Optional<AdminUserInfo> getUserInfo(String podUrl, SessionSupplier<SymphonySession> session, String userId) {
 
     if (StringUtils.isBlank(podUrl)) {
@@ -74,6 +77,7 @@ public class AdminUserManagementService {
     return Optional.empty();
   }
 
+  @NewSpan
   public Optional<SymphonyUser> updateUser(String podUrl, SessionSupplier<SymphonySession> session, String userId, SymphonyUserAttributes user) {
 
     if (StringUtils.isBlank(podUrl)) {
@@ -95,6 +99,7 @@ public class AdminUserManagementService {
     return Optional.empty();
   }
 
+  @NewSpan
   public Optional<SymphonyUser> updateUserStatus(String podUrl, SessionSupplier<SymphonySession> session, String userId, UserStatus status) {
 
     if (StringUtils.isBlank(podUrl)) {

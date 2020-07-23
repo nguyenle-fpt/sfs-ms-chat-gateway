@@ -6,6 +6,7 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.starter.dynamo.AbstractRawDynamoRepository;
 import com.symphony.sfs.ms.starter.dynamo.schema.DynamoSchema;
 import com.symphony.sfs.ms.starter.dynamo.util.AttributeMap;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
@@ -26,10 +27,12 @@ public class FederatedAccountRepository extends AbstractRawDynamoRepository {
     super(amazonDynamoDB, schema);
   }
 
+  @NewSpan
   public FederatedAccount save(FederatedAccount entity) {
     return super.save(entity);
   }
 
+  @NewSpan
   public FederatedAccount saveIfNotExists(FederatedAccount entity) {
     String pkName = schema.getPrimaryKey().getPartitionKeyName();
     String skName = schema.getPrimaryKey().getSortKeyName();
@@ -49,14 +52,17 @@ public class FederatedAccountRepository extends AbstractRawDynamoRepository {
     return entity; // should it be a copy?
   }
 
+  @NewSpan
   public List<FederatedAccount> findByFederatedUserId(String federatedUserId) {
     return findByPartitionKey(federatedAccountPk(federatedUserId), FederatedAccount::new);
   }
 
+  @NewSpan
   public Optional<FederatedAccount> findByFederatedUserIdAndEmp(String federatedUserId, String emp) {
     return findByPrimaryKey(federatedAccountPk(federatedUserId), federatedAccountSk(emp), FederatedAccount::new);
   }
 
+  @NewSpan
   public Optional<FederatedAccount> findBySymphonyId(String symphonyId) {
     return findBySecondaryKey(GSI1_IDX, federatedAccountGsi1Pk(symphonyId), federatedAccountGsi1Sk(), FederatedAccount::new);
   }

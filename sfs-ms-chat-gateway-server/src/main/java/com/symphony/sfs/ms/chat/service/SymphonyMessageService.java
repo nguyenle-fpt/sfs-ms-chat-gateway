@@ -24,6 +24,7 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @Override
+  @NewSpan
   public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
 
     if (members.size() < 2) {
@@ -146,6 +148,7 @@ public class SymphonyMessageService implements DatafeedListener {
     return new User(builder);
   }
 
+  @NewSpan
   public RetrieveMessagesResponse retrieveMessages(List<MessageId> messageIds, String symphonyUserId) {
     try {
       List<MessageInfo> messageInfos = new ArrayList<>();

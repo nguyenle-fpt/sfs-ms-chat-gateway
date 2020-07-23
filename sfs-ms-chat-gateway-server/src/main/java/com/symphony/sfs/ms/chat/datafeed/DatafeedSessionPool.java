@@ -10,6 +10,7 @@ import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import io.micrometer.core.instrument.Gauge;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -38,11 +39,13 @@ public class DatafeedSessionPool {
     meterManager.register(Gauge.builder("opened.datafeeds", sessions, Map::size));
   }
 
+  @NewSpan
   public DatafeedSession listenDatafeed(String symphonyId) throws UnknownDatafeedUserException {
     FederatedAccount account = federatedAccountSessionService.findBySymphonyIdOrFail(symphonyId);
     return listenDatafeed(account);
   }
 
+  @NewSpan
   public DatafeedSession listenDatafeed(FederatedAccount account) {
     SymphonySession session = authenticationService.authenticate(
       podConfiguration.getSessionAuth(),
@@ -56,6 +59,7 @@ public class DatafeedSessionPool {
     return datafeedSession;
   }
 
+  @NewSpan
   public DatafeedSession getSession(String symphonyId) {
     DatafeedSession session = sessions.get(symphonyId);
     if (session == null) {
@@ -68,14 +72,17 @@ public class DatafeedSessionPool {
     return session;
   }
 
+  @NewSpan
   public boolean sessionExists(String symphonyId) {
     return getSession(symphonyId) != null;
   }
 
+  @NewSpan
   public boolean sessionNotExists(String symphonyId) {
     return !sessionExists(symphonyId);
   }
 
+  @NewSpan
   public DatafeedSession refreshSession(String symphonyId) throws UnknownDatafeedUserException {
     DatafeedSession session = getSession(symphonyId);
     if (session == null) {

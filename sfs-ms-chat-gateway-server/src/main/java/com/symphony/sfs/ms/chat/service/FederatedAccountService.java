@@ -38,6 +38,7 @@ import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
@@ -83,6 +84,7 @@ public class FederatedAccountService implements DatafeedListener {
     forwarderQueueConsumer.registerDatafeedListener(this);
   }
 
+  @NewSpan
   public FederatedAccount createAccount(CreateAccountRequest request) {
     Optional<FederatedAccount> existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp());
     if (existingAccount.isPresent()) {
@@ -104,6 +106,7 @@ public class FederatedAccountService implements DatafeedListener {
     }
   }
 
+  @NewSpan
   public void deleteAccount(String emp, String federatedUserId) {
     FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
       .orElseThrow(FederatedAccountNotFoundProblem::new);
@@ -122,6 +125,7 @@ public class FederatedAccountService implements DatafeedListener {
     datafeedSessionPool.removeSessionInMemory(existingAccount.getSymphonyUserId());
   }
 
+  @NewSpan
   public String createChannel(CreateChannelRequest request) {
     Optional<FederatedAccount> existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp());
     if (existingAccount.isEmpty()) {
@@ -144,6 +148,7 @@ public class FederatedAccountService implements DatafeedListener {
   }
 
   @Override
+  @NewSpan
   public void onConnectionAccepted(IUser requesting, IUser requested) {
     federatedAccountRepository.findBySymphonyId(requesting.getId().toString())
       .ifPresent(account -> {
@@ -151,6 +156,7 @@ public class FederatedAccountService implements DatafeedListener {
       });
   }
 
+  @NewSpan
   public SymphonyUser createSymphonyUser(SessionSupplier<SymphonySession> session, String firstName, String lastName, String emailAddress, String emp) {
     String publicKey = null;
     try {

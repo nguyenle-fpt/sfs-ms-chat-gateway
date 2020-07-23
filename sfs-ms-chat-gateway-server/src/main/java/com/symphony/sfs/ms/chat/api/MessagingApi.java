@@ -24,6 +24,8 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import io.micrometer.core.instrument.Counter;
+import org.springframework.cloud.sleuth.annotation.ContinueSpan;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
@@ -71,6 +73,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   }
 
   @Override
+  @ContinueSpan
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(request.getFromSymphonyUserId()).orElseThrow(FederatedAccountNotFoundProblem::new);
 
@@ -90,6 +93,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   }
 
   @Override
+  @ContinueSpan
   public ResponseEntity<RetrieveMessagesResponse> retrieveMessages(@Valid RetrieveMessagesRequest body) {
     RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getMessagesIds(), body.getSymphonyUserId());
     return ResponseEntity.ok(response);

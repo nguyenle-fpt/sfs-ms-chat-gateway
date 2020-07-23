@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -23,14 +24,17 @@ public class EmpSchemaService {
     this.empDefinitions = loadEmpDefinitions();
   }
 
+  @NewSpan
   public List<EmpEntity> getEmpList() {
     return new ArrayList<>(empDefinitions.values());
   }
 
+  @NewSpan
   public Optional<EmpEntity> getEmpDefinition(String emp) {
     return Optional.ofNullable(empDefinitions.get(emp));
   }
 
+  @NewSpan
   public EmpList loadEmpDefinitions() {
     EmpList emps = adminClient.getEmpList();
 

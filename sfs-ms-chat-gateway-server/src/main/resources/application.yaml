@@ -1,6 +1,18 @@
 spring:
   application:
     name: sfs-ms-chat-gateway
+  sleuth:
+    enabled: false
+    # 128-Bits trace IDs is required for AWS X-Ray tracing
+    trace-id128: true
+    sampler:
+      probability: 1.0
+    opentracing:
+      enabled: true
+  #    supports-join: true
+  #    baggage-keys:
+  #    propagation-keys:
+  #    local-keys:
 
 extensionapp:
   id: com.symphony.sfs.admin-app
@@ -20,3 +32,20 @@ aws:
 
 server:
   port: 9700
+
+zipkin:
+  reporter:
+    enabled: false
+    sender: http://127.0.0.1:9411/api/v2/spans
+  sampler:
+    strategy: always
+    # used for brave.sampler.BoundarySampler, brave.sampler.CountingSampler (strategy = boundary, counting)
+    probability: 1.0
+    # used for brave.sampler.RateLimitingSampler (strategy = ratelimiting)
+    tracesPerSecond: 10
+  aws:
+    reporter:
+      enabled: true
+  datadog:
+    reporter:
+      enabled: false

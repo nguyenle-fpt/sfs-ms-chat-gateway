@@ -4,6 +4,8 @@ import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelResponse;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
+import org.springframework.cloud.sleuth.annotation.ContinueSpan;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,6 +26,7 @@ public class ChannelsApi implements com.symphony.sfs.ms.chat.generated.api.Chann
   }
 
   @Override
+  @ContinueSpan
   public ResponseEntity<CreateChannelResponse> createChannel(@Valid CreateChannelRequest request) {
     String channelId = federatedAccountService.createChannel(request);
     CreateChannelResponse response = new CreateChannelResponse()

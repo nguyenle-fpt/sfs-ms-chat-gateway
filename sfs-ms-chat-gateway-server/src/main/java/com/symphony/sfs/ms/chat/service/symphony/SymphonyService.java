@@ -6,6 +6,7 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.SymMessageParser;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +28,7 @@ public class SymphonyService {
   private final PodConfiguration podConfiguration;
   private final SymMessageParser symMessageParser;
 
+  @NewSpan
   public void removeMemberFromRoom(String streamId, SymphonySession session) {
     webClient.post()
       .uri(podConfiguration.getUrl() + PodConstants.REMOVEMEMBER, streamId)
@@ -42,6 +44,7 @@ public class SymphonyService {
    * @param messageId The message id
    * @return The message text
    */
+  @NewSpan
   public Optional<MessageInfo> getMessage(String messageId, SymphonySession botSession, String podUrl) {
     try {
       //TODO put /agent/v1/message/{id} in a constant
