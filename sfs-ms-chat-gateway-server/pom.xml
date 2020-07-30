@@ -116,11 +116,6 @@
       <artifactId>handlebars</artifactId>
       <version>${handlebars.version}</version>
     </dependency>
-
-    <dependency>
-      <groupId>net.sourceforge.argparse4j</groupId>
-      <artifactId>argparse4j</artifactId>
-    </dependency>
   </dependencies>
 
   <build>
