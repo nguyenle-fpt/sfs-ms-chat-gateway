@@ -15,8 +15,10 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,7 +58,7 @@ class MessageServiceTest {
 
   @BeforeEach
   public void setUp() {
-
+    MeterManager meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
     empClient = mock(EmpClient.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
     datafeedSessionPool = mock(DatafeedSessionPool.class);
@@ -83,7 +85,7 @@ class MessageServiceTest {
 
     empSchemaService = new EmpSchemaService(adminClient);
 
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, meterManager);
   }
 
   @Test

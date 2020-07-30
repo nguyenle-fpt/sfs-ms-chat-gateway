@@ -97,7 +97,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     empSchemaService = new EmpSchemaService(adminClient);
 
-    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration);
+    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, meterManager);
     messageService.registerAsDatafeedListener();
 
     ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
@@ -132,7 +132,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       inviter
     )));
 
-    forwarderQueueConsumer.consume(notification);
+    forwarderQueueConsumer.consume(notification, "1");
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
 //    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.");
   }
@@ -161,7 +161,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       inviter
     )));
 
-    forwarderQueueConsumer.consume(notification);
+    forwarderQueueConsumer.consume(notification, "1");
 
 //    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
 //    verify(symphonyMessageSender, times(0)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite WHATSAPP contacts in a MIM.");
@@ -193,7 +193,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       inviter
     )));
 
-    forwarderQueueConsumer.consume(notification);
+    forwarderQueueConsumer.consume(notification, "1");
 
 //    verify(symphonyService, times(1)).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", session);
 //    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a chat room.");
@@ -223,7 +223,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       sender
     )));
 
-    forwarderQueueConsumer.consume(notification);
+    forwarderQueueConsumer.consume(notification, "1");
 
 //    verify(symphonyMessageSender, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
   }
@@ -252,7 +252,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       sender
     )));
 
-    forwarderQueueConsumer.consume(notification);
+    forwarderQueueConsumer.consume(notification, "1");
 
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
 

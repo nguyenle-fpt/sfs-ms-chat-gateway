@@ -13,10 +13,12 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -68,6 +70,8 @@ class SymphonyMessageServiceTest {
 
   @BeforeEach
   public void setUp() {
+    MeterManager meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
+
     podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
     podConfiguration.setSessionAuth("sessionAuth");
@@ -89,7 +93,7 @@ class SymphonyMessageServiceTest {
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, meterManager));
   }
 
   @Test
@@ -99,7 +103,7 @@ class SymphonyMessageServiceTest {
       .build();
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.of(federatedAccount));
 
-    symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text");
+    symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId");
 
     verify(streamService, once()).sendMessage(eq(podConfiguration.getUrl()), any(StaticSessionSupplier.class), eq("streamId"), eq("text"));
   }
@@ -136,7 +140,7 @@ class SymphonyMessageServiceTest {
   @Test
   void sendRawMessage_FromSymphonyUserNotFound() {
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.empty());
-    assertThrows(SendMessageFailedProblem.class, () -> symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text"));
+    assertThrows(SendMessageFailedProblem.class, () -> symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId"));
   }
 
   @Test

@@ -35,10 +35,13 @@ import org.apache.commons.codec.binary.Base64;
 import org.slf4j.MDC;
 import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
 import org.springframework.cloud.aws.messaging.listener.annotation.SqsListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -93,7 +96,8 @@ public class ForwarderQueueConsumer {
   }
 
   @SqsListener(value = {"${aws.sqs.ingestion}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
-  public void consume(String notification) throws IOException {
+  public void consume(String notification, @Header("ApproximateReceiveCount") String receiveCount) throws IOException {
+
     ISNSSQSWireObject sqsObject = SNSSQSWireObjectEntity.FACTORY.newInstance(JacksonAdaptor.adaptObject((ObjectNode) objectMapper.readTree(notification)).immutify(), modelRegistry);
     // String payloadType = sqsObject.getJsonObject().getObject("MessageAttributes").getObject("payloadType").get("Value").toString();
 
@@ -106,7 +110,7 @@ public class ForwarderQueueConsumer {
     System.out.println(payloadType);
     switch (payloadType) {
       case SocialMessage.TYPE_ID:
-        forwarderQueueMetrics.socialMessageProcessingTime.record(() -> notifySocialMessage(envelope));
+        notifySocialMessage(envelope, receiveCount);
         break;
       case MaestroMessage.TYPE_ID:
         notifyMaestroMessage(envelope);
@@ -118,7 +122,7 @@ public class ForwarderQueueConsumer {
     rawListener.accept(notification);
   }
 
-  private void notifySocialMessage(IEnvelope envelope) {
+  private void notifySocialMessage(IEnvelope envelope, String receiveCount) {
     // getting the SocialMessage from the envelope
     ISocialMessage socialMessage = SocialMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
     forwarderQueueMetrics.incomingSocialMessages.increment();
@@ -131,9 +135,16 @@ public class ForwarderQueueConsumer {
     MDC.put("messageId", messageId);
     IJsonObject<?> attributes = envelope.getPayload().getJsonObject().getObject("attributes");
     if (attributes == null) {
+      forwarderQueueMetrics.onBlockMessage(BlockingCause.SOCIAL_MESSAGE_MALFORMED, fromUser.getCompany());
       LOG.debug("No attributes in social message | envelope={}, payload={}", envelope, envelope.getPayload());
       return;
     }
+
+    // Count number of retries
+    if (Integer.parseInt(receiveCount) > 1) {
+      forwarderQueueMetrics.onRetry(fromUser.getCompany());
+    }
+
     ImmutableJsonList memberJsonList = ((ImmutableJsonList) attributes.get("dist"));
     List<String> members = Collections.emptyList();
     if (memberJsonList != null) {
@@ -153,6 +164,7 @@ public class ForwarderQueueConsumer {
         .orElse(null);
     }
     if (managedSession == null) {
+      forwarderQueueMetrics.onBlockMessage(BlockingCause.NO_GATEWAY_MANAGED_ACCOUNT, fromUser.getCompany());
       LOG.warn("IM message with no gateway-managed accounts | stream={} members={} initiator={}", streamId, members, fromUser.getId());
       return;
     }
@@ -169,10 +181,16 @@ public class ForwarderQueueConsumer {
       // LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
 
       datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text, disclaimer, socialMessage.getAttachments());
+
+      // time in milliseconds between now (the message is sent to WhatsApp) and the ingestion date
+      forwarderQueueMetrics.socialMessageProcessingTime.record(Duration.ofMillis(OffsetDateTime.now().toEpochSecond() * 1000 - timestamp));
+
     } catch (UnknownDatafeedUserException e) {
+      forwarderQueueMetrics.onBlockMessage(BlockingCause.UNMANAGED_ACCOUNT, fromUser.getCompany());
       LOG.debug("Unmanaged user | message={}", e.getMessage());
     } catch (ContentKeyRetrievalException | DecryptionException e) {
       LOG.debug("Unable to decrypt social message: stream={} members={} initiator={}", streamId, members, fromUser.getId(), e);
+      forwarderQueueMetrics.onBlockMessage(BlockingCause.DECRYPTION_FAILED, fromUser.getCompany());
       throw new RuntimeException(e); // TODO better exception
     }
   }
@@ -199,7 +217,7 @@ public class ForwarderQueueConsumer {
       case LEAVE_ROOM:
         // TODO implement these events
         LOG.info("Create and Leave room events not supported");
-        LOG.debug("Room event | envelope={} maestroMessage={}",envelope, maestroMessage);
+        LOG.debug("Room event | envelope={} maestroMessage={}", envelope, maestroMessage);
         break;
     }
   }
@@ -299,6 +317,19 @@ public class ForwarderQueueConsumer {
     return text;
   }
 
+  private enum BlockingCause {
+    SOCIAL_MESSAGE_MALFORMED("social message malformed"),
+    NO_GATEWAY_MANAGED_ACCOUNT("no gateway managed account"),
+    UNMANAGED_ACCOUNT("unmanaged account"),
+    DECRYPTION_FAILED("decryption failed");
+
+    private String blockingCause;
+
+    BlockingCause(String blockingCause) {
+      this.blockingCause = blockingCause;
+    }
+  }
+
   private static class ForwarderQueueMetrics {
     private final Counter incomingMessages;
 
@@ -307,11 +338,24 @@ public class ForwarderQueueConsumer {
 
     private final Timer socialMessageProcessingTime;
 
+    private final MeterManager meterManager;
+
+
     public ForwarderQueueMetrics(MeterManager meterManager) {
       incomingMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "all"));
       incomingSocialMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "social"));
       incomingMaestroMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "maestro"));
       socialMessageProcessingTime = meterManager.register(Timer.builder("social.message.processing.time").publishPercentileHistogram());
+
+      this.meterManager = meterManager;
+    }
+
+    public void onBlockMessage(BlockingCause blockingCause, String companyName) {
+      meterManager.register(Counter.builder("blocked.message.from.symphony").tag("cause", blockingCause.blockingCause).tag("company", companyName)).increment();
+    }
+
+    public void onRetry(String companyName) {
+      meterManager.register(Counter.builder("social.message.retries").tag("company", companyName)).increment();
     }
   }
 }

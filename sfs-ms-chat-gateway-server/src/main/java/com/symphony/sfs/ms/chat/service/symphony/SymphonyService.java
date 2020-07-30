@@ -6,9 +6,9 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.SymMessageParser;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
-import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -38,7 +38,7 @@ public class SymphonyService {
       .header("sessionToken", session.getSessionToken())
       .header("keyManagerToken", session.getKmToken())
       .attribute(BASE_URI, podConfiguration.getUrl())
-      .attribute(BASE_PATH,  PodConstants.REMOVEMEMBER)
+      .attribute(BASE_PATH, PodConstants.REMOVEMEMBER)
       .retrieve();
   }
 
@@ -58,7 +58,7 @@ public class SymphonyService {
         .header("sessionToken", botSession.getSessionToken())
         .header("keyManagerToken", botSession.getKmToken())
         .attribute(BASE_URI, podUrl)
-        .attribute(BASE_PATH,  "/agent/v1/message/")
+        .attribute(BASE_PATH, "/agent/v1/message/")
         .retrieve()
         .bodyToMono(SymphonyInboundMessage.class)
         .block();

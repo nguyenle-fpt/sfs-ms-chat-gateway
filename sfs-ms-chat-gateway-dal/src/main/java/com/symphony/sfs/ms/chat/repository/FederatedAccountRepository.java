@@ -6,8 +6,8 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.starter.dynamo.AbstractRawDynamoRepository;
 import com.symphony.sfs.ms.starter.dynamo.schema.DynamoSchema;
 import com.symphony.sfs.ms.starter.dynamo.util.AttributeMap;
-import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;

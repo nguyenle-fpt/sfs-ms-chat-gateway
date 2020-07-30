@@ -3,8 +3,8 @@ package com.symphony.sfs.ms.chat.service;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
-import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

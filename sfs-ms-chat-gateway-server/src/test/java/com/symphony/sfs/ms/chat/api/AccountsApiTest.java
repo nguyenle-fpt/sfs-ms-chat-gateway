@@ -321,7 +321,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
         .symphonyUserId("2")
         .build()
     )));
-    forwarderQueueConsumer.consume(notification);
+    forwarderQueueConsumer.consume(notification, "1");
 
     assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
   }

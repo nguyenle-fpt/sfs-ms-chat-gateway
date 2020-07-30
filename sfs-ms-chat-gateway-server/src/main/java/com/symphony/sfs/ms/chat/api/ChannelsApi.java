@@ -4,15 +4,13 @@ import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelResponse;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
-import org.springframework.cloud.sleuth.annotation.ContinueSpan;
-import org.springframework.cloud.sleuth.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.log4j.MDC;
+import org.springframework.cloud.sleuth.annotation.ContinueSpan;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
 
 @Slf4j
 @RestController

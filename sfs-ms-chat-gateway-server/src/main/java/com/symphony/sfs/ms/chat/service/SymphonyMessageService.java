@@ -9,7 +9,6 @@ import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
-import com.symphony.sfs.ms.chat.exception.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
@@ -22,26 +21,28 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.security.SessionManager;
+import com.symphony.sfs.ms.starter.health.MeterManager;
+import com.symphony.sfs.ms.starter.monitoring.CounterUtils;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
-import org.springframework.cloud.sleuth.annotation.NewSpan;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 import javax.annotation.PostConstruct;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.jsoup.nodes.Entities.escape;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SymphonyMessageService implements DatafeedListener {
 
@@ -54,6 +55,21 @@ public class SymphonyMessageService implements DatafeedListener {
   private final EmpSchemaService empSchemaService;
   private final SymphonyService symphonyService;
   private final PodConfiguration podConfiguration;
+  private final MessageMetrics messageMetrics;
+
+  public SymphonyMessageService(EmpClient empClient, FederatedAccountRepository federatedAccountRepository, ForwarderQueueConsumer forwarderQueueConsumer, DatafeedSessionPool datafeedSessionPool, SymphonyMessageSender symphonyMessageSender, AdminClient adminClient, EmpSchemaService empSchemaService, SymphonyService symphonyService, PodConfiguration podConfiguration, MeterManager meterManager) {
+    this.empClient = empClient;
+    this.federatedAccountRepository = federatedAccountRepository;
+    this.forwarderQueueConsumer = forwarderQueueConsumer;
+    this.datafeedSessionPool = datafeedSessionPool;
+    this.symphonyMessageSender = symphonyMessageSender;
+    this.adminClient = adminClient;
+    this.empSchemaService = empSchemaService;
+    this.symphonyService = symphonyService;
+    this.podConfiguration = podConfiguration;
+    this.messageMetrics = new MessageMetrics(meterManager);
+  }
+
   @PostConstruct
   @VisibleForTesting
   public void registerAsDatafeedListener() {
@@ -65,6 +81,7 @@ public class SymphonyMessageService implements DatafeedListener {
   public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
 
     if (members.size() < 2) {
+      messageMetrics.onMessageBlock(BlockingCause.NOT_ENOUGH_MEMBER, fromSymphonyUser.getCompany());
       LOG.warn("(M)IM with has less than 2 members  | streamId={} messageId={}", streamId, messageId);
       return;
     }
@@ -99,6 +116,7 @@ public class SymphonyMessageService implements DatafeedListener {
     if (federatedAccountsByEmp.isEmpty()) {
       // No federated account found
       LOG.warn("Unexpected handleFromSymphonyIMorMIM towards non-federated accounts, in-memory session to be removed | toUsers={}", toUserIds);
+      messageMetrics.onMessageBlock(BlockingCause.NO_FEDERATED_ACCOUNT, fromSymphonyUser.getCompany());
       toUserIds.forEach(datafeedSessionPool::removeSessionInMemory);
       return;
     }
@@ -116,11 +134,14 @@ public class SymphonyMessageService implements DatafeedListener {
         }
         if (adminClient.getEntitlementAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + getEmp(entry.getKey()).getDisplayName() + " users."));
+          messageMetrics.onMessageBlock(BlockingCause.NO_ENTITLEMENT_ACCESS, fromSymphonyUser.getCompany());
         } else if (toUserIds.size() > 1) {// Check there are only 2 users
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + getEmp(entry.getKey()).getDisplayName() + " contact in a MIM."));
+          messageMetrics.onMessageBlock(BlockingCause.TOO_MUCH_MEMBERS, fromSymphonyUser.getCompany());
         } else if (attachments != null && !attachments.isEmpty()) {
           // If there are some attachments, warn the advisor and block the message
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered. Attachments are not supported (messageId : " + messageId + ")."));
+          messageMetrics.onMessageBlock(BlockingCause.ATTACHMENTS, fromSymphonyUser.getCompany());
         } else {
 
           // TODO Define the behavior in case of message not correctly sent to all EMPs
@@ -130,6 +151,7 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Example: a WhatsApp user must join a WhatsGroup to discuss in the associated
           //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
           //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
+          messageMetrics.onSendMessage(fromSymphonyUser.getCompany(), streamId);
           empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer));
         }
       }
@@ -169,5 +191,45 @@ public class SymphonyMessageService implements DatafeedListener {
   private EmpEntity getEmp(String emp) {
     // Should not happen: Return emp key if emp definition not found
     return empSchemaService.getEmpDefinition(emp).orElse(new EmpEntity().displayName(emp));
+  }
+
+  private enum BlockingCause {
+    NOT_ENOUGH_MEMBER("not enough member"),
+    NO_FEDERATED_ACCOUNT("no federated account"),
+    NO_ENTITLEMENT_ACCESS("no entitlement access"),
+    TOO_MUCH_MEMBERS("too much members"),
+    ATTACHMENTS("attachments");
+
+    private String blockingCause;
+
+    BlockingCause(String blockingCause) {
+      this.blockingCause = blockingCause;
+    }
+  }
+
+  private class MessageMetrics {
+    private final MeterManager meterManager;
+
+    // to count number of conversations for which messages were sent in the last minute
+    private Map<String, OffsetDateTime> lastSentMessagesDatesByStreamId;
+    private Counter conversationsSendingMessages;
+
+    public MessageMetrics(MeterManager meterManager) {
+      this.meterManager = meterManager;
+
+      this.conversationsSendingMessages = meterManager.register(Counter.builder("conversations.sending.messages"));
+      this.lastSentMessagesDatesByStreamId = new ConcurrentHashMap<>();
+    }
+
+    public void onSendMessage(String companyName, String streamId) {
+      meterManager.register(Counter.builder("messages.send.from.symphony").tag("company", companyName)).increment();
+
+      // increment the counter and update the last received message date for the conversation
+      CounterUtils.incrementOncePerMinute(lastSentMessagesDatesByStreamId, streamId, conversationsSendingMessages);
+    }
+
+    public void onMessageBlock(BlockingCause blockingCause, String companyName) {
+      meterManager.register(Counter.builder("blocked.message.from.symphony").tag("cause", blockingCause.blockingCause).tag("company", companyName)).increment();
+    }
   }
 }

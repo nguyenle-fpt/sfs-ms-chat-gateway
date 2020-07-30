@@ -24,17 +24,16 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import io.micrometer.core.instrument.Counter;
-import org.springframework.cloud.sleuth.annotation.ContinueSpan;
-import org.springframework.cloud.sleuth.annotation.NewSpan;
+import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
 import org.apache.log4j.MDC;
+import org.springframework.cloud.sleuth.annotation.ContinueSpan;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.zalando.problem.violations.Violation;
 
-import javax.annotation.PostConstruct;
 import javax.validation.Valid;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,7 +47,6 @@ import static com.symphony.sfs.ms.starter.util.ProblemUtils.newConstraintViolati
 
 @Slf4j
 @RestController
-@RequiredArgsConstructor
 public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.MessagingApi {
 
   private final SymphonyMessageSender symphonyMessageSender;
@@ -62,34 +60,46 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   private final EmpClient empClient;
   private final UsersInfoService usersInfoService;
 
-  private final MeterManager meterManager;
+  private final MessagesMetrics messagesMetrics;
 
-  private Counter messagesSent;
-  private Counter messagesBlocked;
-
-  @PostConstruct
-  public void initializeMetrics() {
-    messagesSent = meterManager.register(Counter.builder("sent.messages.to.symphony"));
-    messagesBlocked = meterManager.register(Counter.builder("blocked.messages.to.symphony"));
+  public MessagingApi(SymphonyMessageSender symphonyMessageSender, SymphonyMessageService symphonyMessageService, StreamService streamService, PodConfiguration podConfiguration, BotConfiguration botConfiguration, FederatedAccountRepository federatedAccountRepository, AuthenticationService authenticationService, AdminClient adminClient, EmpClient empClient, UsersInfoService usersInfoService, MeterManager meterManager) {
+    this.symphonyMessageSender = symphonyMessageSender;
+    this.symphonyMessageService = symphonyMessageService;
+    this.streamService = streamService;
+    this.podConfiguration = podConfiguration;
+    this.botConfiguration = botConfiguration;
+    this.federatedAccountRepository = federatedAccountRepository;
+    this.authenticationService = authenticationService;
+    this.adminClient = adminClient;
+    this.empClient = empClient;
+    this.usersInfoService = usersInfoService;
+    this.messagesMetrics = new MessagesMetrics(meterManager);
   }
 
   @Override
   @ContinueSpan
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
     MDC.put("streamId", request.getStreamId());
-    FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(request.getFromSymphonyUserId()).orElseThrow(FederatedAccountNotFoundProblem::new);
+    FederatedAccount federatedAccount;
+    Optional<FederatedAccount> optionalFederatedAccount = federatedAccountRepository.findBySymphonyId(request.getFromSymphonyUserId());
+    if (optionalFederatedAccount.isPresent()) {
+      federatedAccount = optionalFederatedAccount.get();
+    } else {
+      messagesMetrics.onBlockMessage(BlockingCause.FEDERATED_ACCOUNT_NOT_FOUND, "UNKNOWN");
+      throw new FederatedAccountNotFoundProblem();
+    }
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
+
     Optional<String> advisorSymphonyUserId = findAdvisor(request.getStreamId(), federatedAccount.getSymphonyUserId());
     Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getEmp());
     advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
 
     String symphonyMessageId = null;
     if (notEntitled.isPresent()) {
-      messagesBlocked.increment();
+      messagesMetrics.onBlockMessage(BlockingCause.ADVISOR_NO_LONGER_AVAILABLE, "UNKNOWN");
       blockIncomingMessage(federatedAccount.getEmp(), request.getStreamId(), notEntitled.get());
     } else {
-      messagesSent.increment();
-      symphonyMessageId = forwardIncomingMessageToSymphony(request).orElseThrow(SendMessageFailedProblem::new);
+      symphonyMessageId = forwardIncomingMessageToSymphony(request, advisorSymphonyUserId.get()).orElseThrow(SendMessageFailedProblem::new);
     }
 
     return ResponseEntity.ok(new SendMessageResponse().id(symphonyMessageId));
@@ -174,23 +184,23 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   /**
    * @param request
    */
-  private Optional<String> forwardIncomingMessageToSymphony(SendMessageRequest request) {
+  private Optional<String> forwardIncomingMessageToSymphony(SendMessageRequest request, String toSymphonyUserId) {
     LOG.info("incoming message");
     String messageContent = "<messageML>" + request.getText() + "</messageML>";
     if (request.getFormatting() == null) {
-      return symphonyMessageSender.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+      return symphonyMessageSender.sendRawMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent, toSymphonyUserId);
     }
 
     messageContent = request.getText();
     switch (request.getFormatting()) {
       case SIMPLE:
-        return symphonyMessageSender.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+        return symphonyMessageSender.sendSimpleMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent, toSymphonyUserId);
       case NOTIFICATION:
-        return symphonyMessageSender.sendNotificationMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+        return symphonyMessageSender.sendNotificationMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent, toSymphonyUserId);
       case INFO:
-        return symphonyMessageSender.sendInfoMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+        return symphonyMessageSender.sendInfoMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent, toSymphonyUserId);
       case ALERT:
-        return symphonyMessageSender.sendAlertMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent);
+        return symphonyMessageSender.sendAlertMessage(request.getStreamId(), request.getFromSymphonyUserId(), messageContent, toSymphonyUserId);
       default:
         throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(SendMessageRequest.FormattingEnum.values())));
     }
@@ -204,5 +214,22 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   private void blockIncomingMessage(String emp, String streamId, String reasonText) {
     LOG.info("block incoming message");
     empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, SendSystemMessageRequest.TypeEnum.ALERT);
+  }
+
+  @AllArgsConstructor
+  private enum BlockingCause {
+    FEDERATED_ACCOUNT_NOT_FOUND("federated account not found"),
+    ADVISOR_NO_LONGER_AVAILABLE("advisor no longer available");
+
+    private String blockingCause;
+  }
+
+  @RequiredArgsConstructor
+  private static class MessagesMetrics {
+    private final MeterManager meterManager;
+
+    public void onBlockMessage(BlockingCause blockingCause, String companyName) {
+      meterManager.register(Counter.builder("blocked.messages.to.symphony").tag("cause", blockingCause.blockingCause).tag("company", companyName)).increment();
+    }
   }
 }
