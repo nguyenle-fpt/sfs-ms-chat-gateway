@@ -9,6 +9,9 @@ spring:
       probability: 1.0
     opentracing:
       enabled: true
+  cloud:
+    discovery:
+      enabled: false
   #    supports-join: true
   #    baggage-keys:
   #    propagation-keys:
@@ -29,7 +32,8 @@ aws:
   paramstore:
     prefix: /sfs
     name: ms-chat-gateway
-
+  sharedtable:
+    name: sfs-ms-symphony
 server:
   port: 9700
 

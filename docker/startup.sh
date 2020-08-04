@@ -21,7 +21,6 @@ function checkYaml() {
 
 function start() {
     echo "Starting backend..."
-
     if [ "$PARAMSTORE" = "1" ] || [ "$(echo $PARAMSTORE | tr '[:upper:]' '[:lower:]')" = "true" ]
     then
         java -jar /opt/symphony/sfs-ms-chat-gateway/sfs-ms-chat-gateway.jar

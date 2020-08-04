@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ENV=${1:-dev}
-SERVICE_NAME=sfs-${ENV}-ms-chat-gateway
+SERVICE_NAME=sfs-ms-chat-gateway
 
 POM_VERSION=$(sed -n -e 's/.*<version>\(.*\)<\/version>.*/\1/p' pom.xml | head -1)
 VERSION=$(echo ${POM_VERSION} | cut -d '-' -f 1)
@@ -10,6 +10,9 @@ TAG=${2:-"${VERSION}-${BUILD_NUMBER}"}
 
 IMAGE_NAME="${SERVICE_NAME}/${SERVICE_NAME}"
 FINAL_IMAGE_VERSION="${IMAGE_NAME}:${TAG}"
+
+AWS_ID=$(aws sts get-caller-identity --output text --query 'Account')
+AWS_REGION=$(aws configure get region)
 
 function mvnBuild() {
   mvn clean package -DskipTests -f pom.xml
@@ -33,16 +36,19 @@ function createEcrRepo() {
 }
 
 function buildContainer() {
+
     echo "Building Container..."
-    $(aws ecr get-login --no-include-email)
+    aws ecr get-login-password \
+    --region us-east-1 \
+    | docker login \
+    --username AWS \
+    --password-stdin "${AWS_ID}".dkr.ecr."${AWS_REGION}".amazonaws.com
     docker build --rm --build-arg profile="${ENV}" --file ./docker/Dockerfile --tag "${FINAL_IMAGE_VERSION}" .
     echo "Container built successfully!"
 }
 
 function uploadToEcr() {
     echo "Uploading Image ${FINAL_IMAGE_VERSION} to ECR..."
-    AWS_ID=$(aws sts get-caller-identity --output text --query 'Account')
-    AWS_REGION=$(aws configure get region)
     echo "Tagging Build..."
     docker tag "${FINAL_IMAGE_VERSION}" "${AWS_ID}".dkr.ecr."${AWS_REGION}".amazonaws.com/"${SERVICE_NAME}"
     echo "Pushing to ECR..."
