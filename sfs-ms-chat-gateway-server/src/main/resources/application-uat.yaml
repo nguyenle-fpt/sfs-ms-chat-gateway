@@ -18,7 +18,6 @@ aws:
   sharedtable:
     name: ${DYNAMODB_SHARED_TABLENAME}
 
-
 pod:
   id: ${POD_ID}
   url: ${POD_URL}
@@ -36,11 +35,12 @@ microservice:
   chat:
     msAdminUrl: ${ADMIN_URL}
 
-
 server:
   servlet:
     context-path: '/gateway'
   ssl:
+    enabled-protocols: TLSv1.2
+    ciphers: ECDHE-RSA-AES256-GCM-SHA384,ECDHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-AES128-GCM-SHA256
     key-store-type: PKCS12
     key-store: file:certs/https-keystore.p12
     key-store-password: nndjrdn
