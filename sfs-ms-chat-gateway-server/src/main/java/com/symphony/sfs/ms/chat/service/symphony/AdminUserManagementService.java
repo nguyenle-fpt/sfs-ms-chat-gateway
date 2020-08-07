@@ -18,6 +18,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.Optional;
 
+import static com.symphony.sfs.ms.starter.logging.WebRequestLoggingFilter.BASE_PATH;
+import static com.symphony.sfs.ms.starter.logging.WebRequestLoggingFilter.BASE_URI;
 import static com.symphony.sfs.ms.starter.util.WebClientUtils.blockWithRetries;
 import static com.symphony.sfs.ms.starter.util.WebClientUtils.logWebClientError;
 
@@ -46,6 +48,8 @@ public class AdminUserManagementService {
       SymphonyUser response = blockWithRetries(client.post()
         .uri(podUrl + PodConstants.ADMINCREATEUSER)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .attribute(BASE_URI, podUrl)
+        .attribute(BASE_PATH, PodConstants.ADMINCREATEUSER)
         .body(BodyInserters.fromValue(user))
         .retrieve()
         .bodyToMono(SymphonyUser.class));
@@ -68,6 +72,8 @@ public class AdminUserManagementService {
       AdminUserInfo response = blockWithRetries(client.get()
         .uri(podUrl + PodConstants.GETUSERADMIN, userId)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .attribute(BASE_URI, podUrl)
+        .attribute(BASE_PATH, PodConstants.GETUSERADMIN)
         .retrieve()
         .bodyToMono(AdminUserInfo.class));
       return Optional.ofNullable(response);
@@ -89,6 +95,8 @@ public class AdminUserManagementService {
       SymphonyUser response = blockWithRetries(client.post()
         .uri(podUrl + PodConstants.ADMINUPDATEUSER, userId)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .attribute(BASE_URI, podUrl)
+        .attribute(BASE_PATH, PodConstants.ADMINUPDATEUSER)
         .body(BodyInserters.fromValue(user))
         .retrieve()
         .bodyToMono(SymphonyUser.class));
@@ -111,6 +119,8 @@ public class AdminUserManagementService {
       blockWithRetries(client.post()
         .uri(podUrl + PodConstants.UPDATEUSERSTATUSADMIN, userId)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .attribute(BASE_URI, podUrl)
+        .attribute(BASE_PATH, PodConstants.UPDATEUSERSTATUSADMIN)
         .body(BodyInserters.fromValue(status))
         .retrieve()
         .toBodilessEntity());
