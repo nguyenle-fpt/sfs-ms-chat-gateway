@@ -85,7 +85,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
     if (optionalFederatedAccount.isPresent()) {
       federatedAccount = optionalFederatedAccount.get();
     } else {
-      messagesMetrics.onBlockMessage(BlockingCause.FEDERATED_ACCOUNT_NOT_FOUND, "UNKNOWN");
+      messagesMetrics.onBlockMessage(BlockingCause.FEDERATED_ACCOUNT_NOT_FOUND);
       throw new FederatedAccountNotFoundProblem();
     }
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
@@ -96,7 +96,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
 
     String symphonyMessageId = null;
     if (notEntitled.isPresent()) {
-      messagesMetrics.onBlockMessage(BlockingCause.ADVISOR_NO_LONGER_AVAILABLE, "UNKNOWN");
+      messagesMetrics.onBlockMessage(BlockingCause.ADVISOR_NO_LONGER_AVAILABLE);
       blockIncomingMessage(federatedAccount.getEmp(), request.getStreamId(), notEntitled.get());
     } else {
       symphonyMessageId = forwardIncomingMessageToSymphony(request, advisorSymphonyUserId.get()).orElseThrow(SendMessageFailedProblem::new);
@@ -228,8 +228,8 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   private static class MessagesMetrics {
     private final MeterManager meterManager;
 
-    public void onBlockMessage(BlockingCause blockingCause, String companyName) {
-      meterManager.register(Counter.builder("blocked.messages.to.symphony").tag("cause", blockingCause.blockingCause).tag("company", companyName)).increment();
+    public void onBlockMessage(BlockingCause blockingCause) {
+      meterManager.register(Counter.builder("blocked.messages.to.symphony").tag("cause", blockingCause.blockingCause)).increment();
     }
   }
 }
