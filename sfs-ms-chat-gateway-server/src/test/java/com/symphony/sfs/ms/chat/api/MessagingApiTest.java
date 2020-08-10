@@ -101,7 +101,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   }
 
   private <RESPONSE> RESPONSE verifyRequest(SendMessageRequest sendMessageRequest, HttpStatus expectedStatus, Class<RESPONSE> response) {
-//    return configuredGiven(objectMapper, new ExceptionHandling(), symphonyMessagingApi)
+//    return configuredGiven(objectMapper, new ExceptionHandling(tracer), symphonyMessagingApi)
 //      .contentType(MediaType.APPLICATION_JSON_VALUE)
 //      .body(sendMessageRequest)
 //      .when()

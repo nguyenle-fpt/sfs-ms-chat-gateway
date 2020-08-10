@@ -21,6 +21,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.StringId;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import io.fabric8.mockwebserver.DefaultMockServer;
+import io.opentracing.Tracer;
 import model.InboundConnectionRequest;
 import model.UserInfo;
 import model.UserInfoList;
@@ -57,6 +58,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   protected FederatedAccountService federatedAccountService;
   protected AccountsApi accountsApi;
   protected EmpSchemaService empSchemaService;
+  private Tracer tracer = mock(Tracer.class);
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -119,7 +121,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .federatedUserId("federatedUserId")
       .emp("WHATSAPP");
 
-    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(), accountsApi)
+    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(createAccountRequest)
       .when()
@@ -220,7 +222,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .federatedUserId("federatedUserId")
       .emp("WHATSAPP");
 
-    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(), accountsApi)
+    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(createAccountRequest)
       .when()
@@ -292,7 +294,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .federatedUserId("federatedUserId")
       .emp("WHATSAPP");
 
-    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(), accountsApi)
+    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(createAccountRequest)
       .when()
@@ -353,7 +355,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .federatedUserId(existingAccount.getFederatedUserId())
       .emp(existingAccount.getEmp());
 
-    configuredGiven(objectMapper, new ExceptionHandling(), accountsApi)
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(createAccountRequest)
       .when()
