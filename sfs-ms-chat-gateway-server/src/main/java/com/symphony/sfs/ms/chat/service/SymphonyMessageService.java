@@ -10,40 +10,62 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
+import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
 import com.symphony.sfs.ms.chat.generated.model.MessageSenderNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
+import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.health.MeterManager;
-import com.symphony.sfs.ms.starter.monitoring.CounterUtils;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
+import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
-import io.micrometer.core.instrument.Counter;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import model.UserInfo;
+import org.apache.log4j.MDC;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.zalando.problem.violations.Violation;
 
 import javax.annotation.PostConstruct;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.ATTACHMENTS;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_FEDERATED_ACCOUNT;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.TOO_MUCH_MEMBERS;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ADVISOR_NO_LONGER_AVAILABLE;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.FEDERATED_ACCOUNT_NOT_FOUND;
+import static com.symphony.sfs.ms.starter.util.ProblemUtils.newConstraintViolation;
 import static org.jsoup.nodes.Entities.escape;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class SymphonyMessageService implements DatafeedListener {
 
   private final EmpClient empClient;
@@ -55,20 +77,11 @@ public class SymphonyMessageService implements DatafeedListener {
   private final EmpSchemaService empSchemaService;
   private final SymphonyService symphonyService;
   private final PodConfiguration podConfiguration;
-  private final MessageMetrics messageMetrics;
-
-  public SymphonyMessageService(EmpClient empClient, FederatedAccountRepository federatedAccountRepository, ForwarderQueueConsumer forwarderQueueConsumer, DatafeedSessionPool datafeedSessionPool, SymphonyMessageSender symphonyMessageSender, AdminClient adminClient, EmpSchemaService empSchemaService, SymphonyService symphonyService, PodConfiguration podConfiguration, MeterManager meterManager) {
-    this.empClient = empClient;
-    this.federatedAccountRepository = federatedAccountRepository;
-    this.forwarderQueueConsumer = forwarderQueueConsumer;
-    this.datafeedSessionPool = datafeedSessionPool;
-    this.symphonyMessageSender = symphonyMessageSender;
-    this.adminClient = adminClient;
-    this.empSchemaService = empSchemaService;
-    this.symphonyService = symphonyService;
-    this.podConfiguration = podConfiguration;
-    this.messageMetrics = new MessageMetrics(meterManager);
-  }
+  private final BotConfiguration botConfiguration;
+  private final AuthenticationService authenticationService;
+  private final UsersInfoService usersInfoService;
+  private final StreamService streamService;
+  private final MessageIOMonitor messageMetrics;
 
   @PostConstruct
   @VisibleForTesting
@@ -81,7 +94,7 @@ public class SymphonyMessageService implements DatafeedListener {
   public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
 
     if (members.size() < 2) {
-      messageMetrics.onMessageBlock(BlockingCause.NOT_ENOUGH_MEMBER, fromSymphonyUser.getCompany());
+      messageMetrics.onMessageBlockFromSymphony(NOT_ENOUGH_MEMBER, streamId);
       LOG.warn("(M)IM with has less than 2 members  | streamId={} messageId={}", streamId, messageId);
       return;
     }
@@ -116,7 +129,7 @@ public class SymphonyMessageService implements DatafeedListener {
     if (federatedAccountsByEmp.isEmpty()) {
       // No federated account found
       LOG.warn("Unexpected handleFromSymphonyIMorMIM towards non-federated accounts, in-memory session to be removed | toUsers={}", toUserIds);
-      messageMetrics.onMessageBlock(BlockingCause.NO_FEDERATED_ACCOUNT, fromSymphonyUser.getCompany());
+      messageMetrics.onMessageBlockFromSymphony(NO_FEDERATED_ACCOUNT, streamId);
       toUserIds.forEach(datafeedSessionPool::removeSessionInMemory);
       return;
     }
@@ -134,14 +147,14 @@ public class SymphonyMessageService implements DatafeedListener {
         }
         if (adminClient.getEntitlementAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + getEmp(entry.getKey()).getDisplayName() + " users."));
-          messageMetrics.onMessageBlock(BlockingCause.NO_ENTITLEMENT_ACCESS, fromSymphonyUser.getCompany());
+          messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
         } else if (toUserIds.size() > 1) {// Check there are only 2 users
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + getEmp(entry.getKey()).getDisplayName() + " contact in a MIM."));
-          messageMetrics.onMessageBlock(BlockingCause.TOO_MUCH_MEMBERS, fromSymphonyUser.getCompany());
+          messageMetrics.onMessageBlockFromSymphony(TOO_MUCH_MEMBERS, streamId);
         } else if (attachments != null && !attachments.isEmpty()) {
           // If there are some attachments, warn the advisor and block the message
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered. Attachments are not supported (messageId : " + messageId + ")."));
-          messageMetrics.onMessageBlock(BlockingCause.ATTACHMENTS, fromSymphonyUser.getCompany());
+          messageMetrics.onMessageBlockFromSymphony(ATTACHMENTS, streamId);
         } else {
 
           // TODO Define the behavior in case of message not correctly sent to all EMPs
@@ -151,7 +164,7 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Example: a WhatsApp user must join a WhatsGroup to discuss in the associated
           //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
           //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
-          messageMetrics.onSendMessage(fromSymphonyUser.getCompany(), streamId);
+          messageMetrics.onSendMessageFromSymphony(fromSymphonyUser, entry.getValue(), streamId);
           empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer));
         }
       }
@@ -188,48 +201,134 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
+  @NewSpan
+  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text) {
+    MDC.put("streamId", streamId);
+    FederatedAccount federatedAccount;
+    Optional<FederatedAccount> optionalFederatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId);
+    if (optionalFederatedAccount.isPresent()) {
+      federatedAccount = optionalFederatedAccount.get();
+    } else {
+      messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
+      throw new FederatedAccountNotFoundProblem();
+    }
+    MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
+
+    Optional<String> advisorSymphonyUserId = findAdvisor(streamId, federatedAccount.getSymphonyUserId());
+    Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getEmp());
+    advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
+
+    String symphonyMessageId = null;
+    if (notEntitled.isPresent()) {
+      messageMetrics.onMessageBlockToSymphony(ADVISOR_NO_LONGER_AVAILABLE, streamId);
+      blockIncomingMessage(federatedAccount.getEmp(), streamId, notEntitled.get());
+    } else {
+      // TODO fix this bad management of optional
+      messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, advisorSymphonyUserId.get(), streamId);
+      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, advisorSymphonyUserId.get(), formatting, text).orElseThrow(SendMessageFailedProblem::new);
+    }
+
+    return symphonyMessageId;
+  }
+
+  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text) {
+    LOG.info("incoming message");
+    String messageContent = "<messageML>" + text + "</messageML>";
+    if (formatting == null) {
+      return symphonyMessageSender.sendRawMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+    }
+
+    messageContent = text;
+    switch (formatting) {
+      case SIMPLE:
+        return symphonyMessageSender.sendSimpleMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+      case NOTIFICATION:
+        return symphonyMessageSender.sendNotificationMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+      case INFO:
+        return symphonyMessageSender.sendInfoMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+      case ALERT:
+        return symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+      default:
+        throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));
+    }
+  }
+
+  private void blockIncomingMessage(String emp, String streamId, String reasonText) {
+    LOG.info("block incoming message");
+    empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, SendSystemMessageRequest.TypeEnum.ALERT);
+  }
+
   private EmpEntity getEmp(String emp) {
     // Should not happen: Return emp key if emp definition not found
     return empSchemaService.getEmpDefinition(emp).orElse(new EmpEntity().displayName(emp));
   }
 
-  private enum BlockingCause {
-    NOT_ENOUGH_MEMBER("not enough member"),
-    NO_FEDERATED_ACCOUNT("no federated account"),
-    NO_ENTITLEMENT_ACCESS("no entitlement access"),
-    TOO_MUCH_MEMBERS("too much members"),
-    ATTACHMENTS("attachments");
+  /**
+   * Pre-requisite: the stream is an IM between an advisor and an emp user
+   *
+   * @param streamId
+   * @param fromFederatedAccountSymphonyUserId
+   * @return Optional with found advisor symphonyUserId. Empty if no advisor found
+   */
+  private Optional<String> findAdvisor(String streamId, String fromFederatedAccountSymphonyUserId) {
 
-    private String blockingCause;
+    SymphonySession botSession = authenticationService.authenticate(
+      podConfiguration.getSessionAuth(),
+      podConfiguration.getKeyAuth(),
+      botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
-    BlockingCause(String blockingCause) {
-      this.blockingCause = blockingCause;
+    StreamInfo streamInfo = streamService.getStreamInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId).orElseThrow(CannotRetrieveStreamIdProblem::new);
+
+    List<Long> streamMemberIds = streamInfo.getStreamAttributes().getMembers();
+    if (streamMemberIds.size() != 2) {
+      LOG.warn("Unsupported stream {} with {} members (symphonyUserIds = {})", streamId, streamMemberIds.size(), streamMemberIds);
+      return Optional.empty();
+    } else {
+
+      // Nominal case of IM: We have a stream with exactly 2 members
+      // - 1 user must an advisor
+      // - 1 user must be a emp user
+      return streamInfo.getStreamAttributes().getMembers()
+        .parallelStream()
+        .map(String::valueOf)
+        .filter(symphonyId -> !symphonyId.equals(fromFederatedAccountSymphonyUserId)) // Remove federatedAccountUser
+        .findFirst();
     }
   }
 
-  private class MessageMetrics {
-    private final MeterManager meterManager;
+  /**
+   * @param advisorSymphonyUserId
+   * @param emp
+   * @return If present, message indicating that advisor is NOT entitled.
+   */
+  private Optional<String> notEntitledMessage(Optional<String> advisorSymphonyUserId, String emp) {
+    final String CONTACT_NOT_AVAILABLE = "Sorry, your contact is no longer available";
+    final String CONTACT_WITH_DETAILS_NOT_AVAILABLE = "Sorry, your contact %s is no longer available";
 
-    // to count number of conversations for which messages were sent in the last minute
-    private Map<String, OffsetDateTime> lastSentMessagesDatesByStreamId;
-    private Counter conversationsSendingMessages;
-
-    public MessageMetrics(MeterManager meterManager) {
-      this.meterManager = meterManager;
-
-      this.conversationsSendingMessages = meterManager.register(Counter.builder("conversations.sending.messages"));
-      this.lastSentMessagesDatesByStreamId = new ConcurrentHashMap<>();
+    // No advisor at all
+    if (advisorSymphonyUserId.isEmpty()) {
+      return Optional.of(CONTACT_NOT_AVAILABLE);
     }
 
-    public void onSendMessage(String companyName, String streamId) {
-      meterManager.register(Counter.builder("messages.send.from.symphony").tag("company", companyName)).increment();
-
-      // increment the counter and update the last received message date for the conversation
-      CounterUtils.incrementOncePerMinute(lastSentMessagesDatesByStreamId, streamId, conversationsSendingMessages);
+    // Advisor entitled
+    if (adminClient.getEntitlementAccess(advisorSymphonyUserId.get(), emp).isPresent()) {
+      return Optional.empty();
     }
 
-    public void onMessageBlock(BlockingCause blockingCause, String companyName) {
-      meterManager.register(Counter.builder("blocked.message.from.symphony").tag("cause", blockingCause.blockingCause).tag("company", companyName)).increment();
+    // From here advisor is not entitled
+    // Get advisor details
+    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+    final List<UserInfo> usersFromIds = usersInfoService.getUsersFromIds(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), Collections.singletonList(advisorSymphonyUserId.get()));
+
+    String message;
+    if (usersFromIds.isEmpty()) {
+      LOG.warn("Advisor with symphonyUserId {} not found on Symphony side", advisorSymphonyUserId.get());
+      message = CONTACT_NOT_AVAILABLE;
+    } else {
+      // Message with advisor details
+      message = String.format(CONTACT_WITH_DETAILS_NOT_AVAILABLE, usersFromIds.get(0).getDisplayName());
     }
+
+    return Optional.ofNullable(message);
   }
 }

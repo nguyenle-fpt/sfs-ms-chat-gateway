@@ -26,6 +26,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.starter.health.MeterManager;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
@@ -50,6 +51,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.*;
+
 @Service
 @Slf4j
 public class ForwarderQueueConsumer {
@@ -64,11 +67,13 @@ public class ForwarderQueueConsumer {
   private final MultiDatafeedListener datafeedListener = new MultiDatafeedListener();
 
   private final ForwarderQueueMetrics forwarderQueueMetrics;
+  private final MessageIOMonitor messageIOMonitor;
 
-  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool, MeterManager meterManager) {
+  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool, MessageIOMonitor messageIOMonitor, MeterManager meterManager) {
     this.objectMapper = objectMapper;
     this.messageDecryptor = messageDecryptor;
     this.datafeedSessionPool = datafeedSessionPool;
+    this.messageIOMonitor = messageIOMonitor;
     this.forwarderQueueMetrics = new ForwarderQueueMetrics(meterManager);
 
     // Hell...
@@ -135,7 +140,7 @@ public class ForwarderQueueConsumer {
     MDC.put("messageId", messageId);
     IJsonObject<?> attributes = envelope.getPayload().getJsonObject().getObject("attributes");
     if (attributes == null) {
-      forwarderQueueMetrics.onBlockMessage(BlockingCause.SOCIAL_MESSAGE_MALFORMED, fromUser.getCompany());
+      messageIOMonitor.onMessageBlockFromSymphony(SOCIAL_MESSAGE_MALFORMED, streamId);
       LOG.debug("No attributes in social message | envelope={}, payload={}", envelope, envelope.getPayload());
       return;
     }
@@ -164,7 +169,7 @@ public class ForwarderQueueConsumer {
         .orElse(null);
     }
     if (managedSession == null) {
-      forwarderQueueMetrics.onBlockMessage(BlockingCause.NO_GATEWAY_MANAGED_ACCOUNT, fromUser.getCompany());
+      messageIOMonitor.onMessageBlockFromSymphony(NO_GATEWAY_MANAGED_ACCOUNT, streamId);
       LOG.warn("IM message with no gateway-managed accounts | stream={} members={} initiator={}", streamId, members, fromUser.getId());
       return;
     }
@@ -174,9 +179,8 @@ public class ForwarderQueueConsumer {
       LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
       LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
 
-      String text = unescapeSepcialsCharacters(messageDecryptor.decrypt(socialMessage, managedSession.getUserId()));
+      String text = unescapeSpecialCharacters(messageDecryptor.decrypt(socialMessage, managedSession.getUserId()));
       String disclaimer = socialMessage.getDisclaimer();
-
 
       // LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
 
@@ -186,11 +190,11 @@ public class ForwarderQueueConsumer {
       forwarderQueueMetrics.socialMessageProcessingTime.record(Duration.ofMillis(OffsetDateTime.now().toEpochSecond() * 1000 - timestamp));
 
     } catch (UnknownDatafeedUserException e) {
-      forwarderQueueMetrics.onBlockMessage(BlockingCause.UNMANAGED_ACCOUNT, fromUser.getCompany());
+      messageIOMonitor.onMessageBlockFromSymphony(UNMANAGED_ACCOUNT, streamId);
       LOG.debug("Unmanaged user | message={}", e.getMessage());
     } catch (ContentKeyRetrievalException | DecryptionException e) {
       LOG.debug("Unable to decrypt social message: stream={} members={} initiator={}", streamId, members, fromUser.getId(), e);
-      forwarderQueueMetrics.onBlockMessage(BlockingCause.DECRYPTION_FAILED, fromUser.getCompany());
+      messageIOMonitor.onMessageBlockFromSymphony(DECRYPTION_FAILED, streamId);
       throw new RuntimeException(e); // TODO better exception
     }
   }
@@ -308,26 +312,13 @@ public class ForwarderQueueConsumer {
     return Envelope.FACTORY.newInstance(payload, modelRegistry);
   }
 
-  private String unescapeSepcialsCharacters(String text) {
+  private String unescapeSpecialCharacters(String text) {
     List<String> specialsCharacters = Arrays.asList("+", "-", "_", "*", "`");
     for (String specialCharacter : specialsCharacters) {
       text = text.replace("\\" + specialCharacter, specialCharacter);
     }
 
     return text;
-  }
-
-  private enum BlockingCause {
-    SOCIAL_MESSAGE_MALFORMED("social message malformed"),
-    NO_GATEWAY_MANAGED_ACCOUNT("no gateway managed account"),
-    UNMANAGED_ACCOUNT("unmanaged account"),
-    DECRYPTION_FAILED("decryption failed");
-
-    private String blockingCause;
-
-    BlockingCause(String blockingCause) {
-      this.blockingCause = blockingCause;
-    }
   }
 
   private static class ForwarderQueueMetrics {
@@ -342,20 +333,16 @@ public class ForwarderQueueConsumer {
 
 
     public ForwarderQueueMetrics(MeterManager meterManager) {
-      incomingMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "all"));
-      incomingSocialMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "social"));
-      incomingMaestroMessages = meterManager.register(Counter.builder("forwarder.incoming").tag("type", "maestro"));
-      socialMessageProcessingTime = meterManager.register(Timer.builder("social.message.processing.time").publishPercentileHistogram());
+      incomingMessages = meterManager.register(Counter.builder("sfs.forwarder.incoming").tag("type", "all"));
+      incomingSocialMessages = meterManager.register(Counter.builder("sfs.forwarder.incoming").tag("type", "social"));
+      incomingMaestroMessages = meterManager.register(Counter.builder("sfs.forwarder.incoming").tag("type", "maestro"));
+      socialMessageProcessingTime = meterManager.register(Timer.builder("sfs.social.message.processing.time").publishPercentileHistogram());
 
       this.meterManager = meterManager;
     }
 
-    public void onBlockMessage(BlockingCause blockingCause, String companyName) {
-      meterManager.register(Counter.builder("blocked.message.from.symphony").tag("cause", blockingCause.blockingCause).tag("company", companyName)).increment();
-    }
-
     public void onRetry(String companyName) {
-      meterManager.register(Counter.builder("social.message.retries").tag("company", companyName)).increment();
+      meterManager.register(Counter.builder("sfs.social.message.retries").tag("company", companyName)).increment();
     }
   }
 }

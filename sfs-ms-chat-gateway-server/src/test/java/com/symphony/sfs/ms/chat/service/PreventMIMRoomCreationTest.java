@@ -92,12 +92,12 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
     ObjectMapper objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
     MessageDecryptor messageDecryptor = mock(MessageDecryptor.class);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, meterManager);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager);
 
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     empSchemaService = new EmpSchemaService(adminClient);
 
-    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, meterManager);
+    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager));
     messageService.registerAsDatafeedListener();
 
     ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);

@@ -7,6 +7,7 @@ import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -53,7 +54,6 @@ class MessagingApiTest extends AbstractIntegrationTest {
     super.setUp(db, mockServer);
 
     symphonyMessageSender = mock(SymphonyMessageSender.class);
-    symphonyMessageService = mock(SymphonyMessageService.class);
     streamService = mock(StreamService.class);
 
     botConfiguration = new BotConfiguration();
@@ -72,7 +72,8 @@ class MessagingApiTest extends AbstractIntegrationTest {
     empClient = mock(EmpClient.class);
     usersInfoService = mock(UsersInfoService.class);
 
-    symphonyMessagingApi = new MessagingApi(symphonyMessageSender, symphonyMessageService, streamService, podConfiguration, botConfiguration, federatedAccountRepository, authenticationService, adminClient, empClient, usersInfoService, meterManager);
+    symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, null, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager));
+    symphonyMessagingApi = new MessagingApi(symphonyMessageService);
 
     FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUserId("fromSymphonyUserId").build();
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.of(federatedAccount));

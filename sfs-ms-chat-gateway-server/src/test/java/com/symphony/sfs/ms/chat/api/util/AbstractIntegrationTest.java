@@ -13,6 +13,7 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
+import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
@@ -122,7 +123,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     ContentKeyManager contentKeyManager = new ContentKeyManager(podConfiguration, datafeedSessionPool);
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, meterManager);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager);
 
     SymphonyAuthFactory symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
@@ -130,7 +131,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // services
     streamService = spy(new StreamService(sessionManager));
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, meterManager));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager)));
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
     channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);

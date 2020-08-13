@@ -36,7 +36,7 @@ public class DatafeedSessionPool {
 
   @PostConstruct
   public void initializeMetrics() {
-    meterManager.register(Gauge.builder("opened.datafeeds", sessions, Map::size));
+    meterManager.register(Gauge.builder("sfs.opened.datafeeds", sessions, Map::size));
   }
 
   @NewSpan
