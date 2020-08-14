@@ -4,10 +4,12 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import lombok.Getter;
+import org.eclipse.jetty.util.ConcurrentHashSet;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -16,6 +18,7 @@ public class MockEmpClient implements EmpClient {
 
   private Map<String, String> channels = new ConcurrentHashMap<>();
   private Map<String, String> messages = new ConcurrentHashMap<>();
+  private Set<String> deletedFederatedAccounts = new ConcurrentHashSet<>();
 
   @Override
   public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
@@ -50,7 +53,13 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteAccountOrFail(String emp, String federatedUserId, String email) {
-    // No implementation for now
+  public void deleteAccountOrFail(String emp, String symphonyId, String email) {
+    deletedFederatedAccounts.add(symphonyId);
+  }
+
+  @Override
+  public void deleteChannel(String streamId, String emp) {
+    channels.remove(emp + ":" + streamId);
+
   }
 }

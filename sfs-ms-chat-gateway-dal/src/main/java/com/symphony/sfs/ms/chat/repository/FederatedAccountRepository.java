@@ -67,6 +67,7 @@ public class FederatedAccountRepository extends AbstractRawDynamoRepository {
     return findBySecondaryKey(GSI1_IDX, federatedAccountGsi1Pk(symphonyId), federatedAccountGsi1Sk(), FederatedAccount::new);
   }
 
+  @NewSpan
   public void delete(FederatedAccount federatedAccount) {
     super.delete(federatedAccount);
   }

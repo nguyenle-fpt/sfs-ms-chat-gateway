@@ -33,5 +33,4 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
     RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getMessagesIds(), body.getSymphonyUserId());
     return ResponseEntity.ok(response);
   }
-
 }

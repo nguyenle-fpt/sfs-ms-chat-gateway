@@ -1,14 +1,17 @@
 package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
+import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
+import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
@@ -38,17 +41,26 @@ import java.util.Collections;
 import java.util.Optional;
 
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
+import static clients.symphony.api.constants.PodConstants.ADMINUPDATEUSER;
 import static clients.symphony.api.constants.PodConstants.GETCONNECTIONSTATUS;
 import static clients.symphony.api.constants.PodConstants.GETIM;
 import static clients.symphony.api.constants.PodConstants.GETUSERSV3;
 import static clients.symphony.api.constants.PodConstants.SENDCONNECTIONREQUEST;
+import static clients.symphony.api.constants.PodConstants.UPDATEUSERSTATUSADMIN;
+import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getAcceptedConnectionRequestMaestroMessage;
+import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getEnvelopeMessage;
+import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getSnsMaestroMessage;
 import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.DELETEFEDERATEDACCOUNT_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.CREATECHANNEL_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +70,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   protected FederatedAccountService federatedAccountService;
   protected AccountsApi accountsApi;
   protected EmpSchemaService empSchemaService;
+  protected MockAdminClient mockAdminClient;
+  protected ChannelsApi channelApi;
   private Tracer tracer = mock(Tracer.class);
 
   @BeforeEach
@@ -67,6 +81,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     empSchemaService = mock(EmpSchemaService.class);
 
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
+    mockAdminClient = new MockAdminClient();
 
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
     federatedAccountService = new FederatedAccountService(
@@ -83,8 +98,11 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       new UsersInfoService(sessionManager),
       empSchemaService,
       empClient,
-      symphonyAuthFactory);
+      symphonyAuthFactory,
+      mockAdminClient,
+      channelRepository);
     federatedAccountService.registerAsDatafeedListener();
+    channelApi = new ChannelsApi(federatedAccountService, channelService);
 
     accountsApi = new AccountsApi(federatedAccountService);
   }
@@ -156,8 +174,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     assertEquals(expectedAccount, actualAccount);
   }
 
-  // TODO Fix test when management decides that quality matters
-  @Disabled
+  @Test
   public void createAccountWithAdvisor_AlreadyConnected() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
@@ -235,6 +252,18 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     assertEquals(new CreateAccountResponse()
       .symphonyUserId(accountSession.getUserId())
       .symphonyUsername(accountSession.getUsername()), response);
+    CreateChannelRequest createChannelRequest = new CreateChannelRequest()
+      .federatedUserId("federatedUserId")
+      .advisorUserId("2")
+      .emp("WHATSAPP");
+
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createChannelRequest)
+      .when()
+      .post(CREATECHANNEL_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value());
 
     assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
   }
@@ -310,6 +339,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
 
+    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isEmpty());
+
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
       FederatedAccount.builder()
         .emailAddress(createAccountRequest.getEmailAddress())
@@ -323,9 +354,127 @@ public class AccountsApiTest extends AbstractIntegrationTest {
         .symphonyUserId("2")
         .build()
     )));
+    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
     forwarderQueueConsumer.consume(notification, "1");
-
     assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
+    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isPresent());
+
+  }
+  @Test
+  public void createAccountWithAdvisor_ThenDelete() throws IOException {
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
+    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
+
+    EmpEntity empEntity = new EmpEntity()
+      .name("WHATSAPP")
+      .serviceAccountSuffix("WHATSAPP");
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
+
+    SymphonyUser symphonyUser = new SymphonyUser();
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
+    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
+
+    mockServer.expect()
+      .post()
+      .withPath(ADMINCREATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    mockServer.expect()
+      .get()
+      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
+      .andReturn(HttpStatus.NOT_FOUND.value(), null)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
+    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
+    mockServer.expect()
+      .post()
+      .withPath(SENDCONNECTIONREQUEST)
+      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    mockServer.expect()
+      .post()
+      .withPath(GETIM)
+      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    CreateAccountRequest createAccountRequest = new CreateAccountRequest()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .companyName("companyName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP");
+
+    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createAccountRequest)
+      .when()
+      .post(CREATEACCOUNT_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value())
+      .extract().response().body()
+      .as(CreateAccountResponse.class);
+
+    assertEquals(new CreateAccountResponse()
+      .symphonyUserId(accountSession.getUserId())
+      .symphonyUsername(accountSession.getUsername()), response);
+
+    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
+
+    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isEmpty());
+
+    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
+      FederatedAccount.builder()
+        .emailAddress(createAccountRequest.getEmailAddress())
+        .phoneNumber(createAccountRequest.getPhoneNumber())
+        .firstName(createAccountRequest.getFirstName())
+        .lastName(createAccountRequest.getLastName())
+        .symphonyUserId(accountSession.getUserId())
+        .symphonyUsername(accountSession.getUsername())
+        .build(),
+      FederatedAccount.builder()
+        .symphonyUserId("2")
+        .build()
+    )));
+    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
+    forwarderQueueConsumer.consume(notification, "1");
+    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
+
+    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isPresent());
+
+    mockServer.expect()
+      .post()
+      .withPath(ADMINUPDATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+    mockServer.expect()
+      .post()
+      .withPath(UPDATEUSERSTATUSADMIN)
+      .andReturn(HttpStatus.OK.value(), null)
+      .always();
+
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .when()
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp())
+      .then()
+      .statusCode(HttpStatus.OK.value());
+
+
+    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isEmpty());
+    assertTrue(federatedAccountRepository.findByFederatedUserId(createAccountRequest.getFederatedUserId()).isEmpty());
+    assertTrue(((MockEmpClient) empClient).getDeletedFederatedAccounts().contains(accountSession.getUserId()));
   }
 
   @Test
@@ -354,222 +503,15 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .companyName(existingAccount.getCompanyName())
       .federatedUserId(existingAccount.getFederatedUserId())
       .emp(existingAccount.getEmp());
-
-    configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+    // For some reason having a tracer here actually throws the exception which fails the test
+    // even though we are correctly checking for the status code
+    // TODO investigate why this happens
+    configuredGiven(objectMapper, new ExceptionHandling(null), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(createAccountRequest)
       .when()
       .post(CREATEACCOUNT_ENDPOINT)
       .then()
       .statusCode(HttpStatus.CONFLICT.value());
-  }
-
-  private String getAcceptedConnectionRequestMaestroMessage(FederatedAccount requester, FederatedAccount requested) {
-    return "{" +
-      "  \"_type\":\"com.symphony.s2.model.chat.MaestroMessage\"," +
-      "  \"affectedUsers\":[" +
-      "    {" +
-      "      \"companyName\":\"Symphony\"," +
-      "      \"emailAddress\":\"" + requester.getEmailAddress() + "\"," +
-      "      \"firstName\":\"" + requester.getFirstName() + "\"," +
-      "      \"givenName\":\"" + requester.getFirstName() + "\"," +
-      "      \"id\":" + requester.getSymphonyUserId() + "," +
-      "      \"imageUrl\":\"../avatars/static/150/default.png\"," +
-      "      \"imageUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "      \"images\":{" +
-      "      }," +
-      "      \"location\":\"\"," +
-      "      \"prettyName\":\"" + requester.getFirstName() + " " + requester.getLastName() + "\"," +
-      "      \"screenName\":\"" + requester.getFirstName() + "\"," +
-      "      \"surname\":\"" + requester.getLastName() + "\"," +
-      "      \"userType\":\"lc\"," +
-      "      \"verifiedForBadge\":true" +
-      "    }" +
-      "  ]," +
-      "  \"copyDisabled\":false," +
-      "  \"event\":\"CONNECTION_REQUEST_ALERT\"," +
-      "  \"fromPod\":196," +
-      "  \"ingestionDate\":1584448898220," +
-      "  \"isCopyDisabled\":false," +
-      "  \"messageId\":\"jEt58ZHU580+FiQS40XhjH///o8XfHtTbw==\"," +
-      "  \"payload\":{" +
-      "    \"cargo\":{" +
-      "      \"images\":{" +
-      "        \"150\":\"../avatars/static/150/default.png\"," +
-      "        \"50\":\"../avatars/static/50/default.png\"," +
-      "        \"500\":\"../avatars/static/500/default.png\"," +
-      "        \"600\":\"../avatars/static/600/default.png\"," +
-      "        \"orig\":\"../avatars/static/orig/default.png\"" +
-      "      }," +
-      "      \"imgUrl\":\"../avatars/static/150/default.png\"," +
-      "      \"imgUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "      \"initiatorUserId\":13469017440257," +
-      "      \"requestCounter\":0," +
-      "      \"status\":\"accepted\"," +
-      "      \"targetUserId\":13606456395797" +
-      "    }," +
-      "    \"images\":{" +
-      "      \"150\":\"../avatars/static/150/default.png\"," +
-      "      \"50\":\"../avatars/static/50/default.png\"," +
-      "      \"500\":\"../avatars/static/500/default.png\"," +
-      "      \"600\":\"../avatars/static/600/default.png\"," +
-      "      \"orig\":\"../avatars/static/orig/default.png\"" +
-      "    }," +
-      "    \"imgUrl\":\"../avatars/static/150/default.png\"," +
-      "    \"imgUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "    \"requestCounter\":0," +
-      "    \"status\":\"accepted\"," +
-      "    \"targetUserId\":13606456395797," +
-      "    \"version\":\"connectionRequestAlertPayload\"" +
-      "  }," +
-      "  \"podDistribution\":[" +
-      "    196," +
-      "    198" +
-      "  ]," +
-      "  \"requestingUser\":{" +
-      "    \"company\":\"Symphony\"," +
-      "    \"emailAddress\":\"" + requested.getEmailAddress() + "\"," +
-      "    \"firstName\":\"" + requested.getFirstName() + "\"," +
-      "    \"id\":" + requested.getSymphonyUserId() + "," +
-      "    \"imageUrl\":\"../avatars/static/150/default.png\"," +
-      "    \"imageUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "    \"images\":{" +
-      "      \"150\":\"../avatars/static/150/default.png\"," +
-      "      \"50\":\"../avatars/static/50/default.png\"," +
-      "      \"500\":\"../avatars/static/500/default.png\"," +
-      "      \"600\":\"../avatars/static/600/default.png\"," +
-      "      \"orig\":\"../avatars/static/orig/default.png\"" +
-      "    }," +
-      "    \"prettyName\":\"" + requested.getFirstName() + " " + requested.getLastName() + "\"," +
-      "    \"firstName\":\"" + requested.getLastName() + "\"," +
-      "    \"userType\":\"lc\"," +
-      "    \"username\":\"" + requested.getSymphonyUsername() + "\"" +
-      "  }," +
-      "  \"schemaVersion\":1," +
-      "  \"semVersion\":\"1.56.0-SNAPSHOT\"," +
-      "  \"traceId\":\"EFpFOL\"," +
-      "  \"version\":\"MAESTRO\"" +
-      "}";
-  }
-
-  private String getConnectionRequestMaestroMessage(UserInfo requester, FederatedAccount requested) {
-    return "{" +
-      "  \"_type\":\"com.symphony.s2.model.chat.MaestroMessage\"," +
-      "  \"affectedUsers\":[" +
-      "    {" +
-      "      \"companyName\":\"Symphony\"," +
-      "      \"emailAddress\":\"" + requester.getEmailAddress() + "\"," +
-      "      \"firstName\":\"" + requester.getFirstName() + "\"," +
-      "      \"givenName\":\"" + requester.getFirstName() + "\"," +
-      "      \"id\":" + requester.getId() + "," +
-      "      \"imageUrl\":\"../avatars/static/150/default.png\"," +
-      "      \"imageUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "      \"images\":{" +
-      "      }," +
-      "      \"location\":\"\"," +
-      "      \"prettyName\":\"" + requester.getFirstName() + " " + requester.getLastName() + "\"," +
-      "      \"screenName\":\"" + requester.getFirstName() + "\"," +
-      "      \"surname\":\"" + requester.getLastName() + "\"," +
-      "      \"userType\":\"lc\"," +
-      "      \"verifiedForBadge\":true" +
-      "    }" +
-      "  ]," +
-      "  \"copyDisabled\":false," +
-      "  \"event\":\"CONNECTION_REQUEST_ALERT\"," +
-      "  \"fromPod\":196," +
-      "  \"ingestionDate\":1584448898220," +
-      "  \"isCopyDisabled\":false," +
-      "  \"messageId\":\"jEt58ZHU580+FiQS40XhjH///o8XfHtTbw==\"," +
-      "  \"payload\":{" +
-      "    \"cargo\":{" +
-      "      \"images\":{" +
-      "        \"150\":\"../avatars/static/150/default.png\"," +
-      "        \"50\":\"../avatars/static/50/default.png\"," +
-      "        \"500\":\"../avatars/static/500/default.png\"," +
-      "        \"600\":\"../avatars/static/600/default.png\"," +
-      "        \"orig\":\"../avatars/static/orig/default.png\"" +
-      "      }," +
-      "      \"imgUrl\":\"../avatars/static/150/default.png\"," +
-      "      \"imgUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "      \"initiatorUserId\":13469017440257," +
-      "      \"requestCounter\":0," +
-      "      \"status\":\"accepted\"," +
-      "      \"targetUserId\":13606456395797" +
-      "    }," +
-      "    \"images\":{" +
-      "      \"150\":\"../avatars/static/150/default.png\"," +
-      "      \"50\":\"../avatars/static/50/default.png\"," +
-      "      \"500\":\"../avatars/static/500/default.png\"," +
-      "      \"600\":\"../avatars/static/600/default.png\"," +
-      "      \"orig\":\"../avatars/static/orig/default.png\"" +
-      "    }," +
-      "    \"imgUrl\":\"../avatars/static/150/default.png\"," +
-      "    \"imgUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "    \"requestCounter\":0," +
-      "    \"status\":\"pending_incoming\"," +
-      "    \"targetUserId\":13606456395797," +
-      "    \"version\":\"connectionRequestAlertPayload\"" +
-      "  }," +
-      "  \"podDistribution\":[" +
-      "    196," +
-      "    198" +
-      "  ]," +
-      "  \"requestingUser\":{" +
-      "    \"company\":\"Symphony\"," +
-      "    \"emailAddress\":\"" + requested.getEmailAddress() + "\"," +
-      "    \"firstName\":\"" + requested.getFirstName() + "\"," +
-      "    \"id\":" + requested.getSymphonyUserId() + "," +
-      "    \"imageUrl\":\"../avatars/static/150/default.png\"," +
-      "    \"imageUrlSmall\":\"../avatars/static/50/default.png\"," +
-      "    \"images\":{" +
-      "      \"150\":\"../avatars/static/150/default.png\"," +
-      "      \"50\":\"../avatars/static/50/default.png\"," +
-      "      \"500\":\"../avatars/static/500/default.png\"," +
-      "      \"600\":\"../avatars/static/600/default.png\"," +
-      "      \"orig\":\"../avatars/static/orig/default.png\"" +
-      "    }," +
-      "    \"prettyName\":\"" + requested.getFirstName() + " " + requested.getLastName() + "\"," +
-      "    \"firstName\":\"" + requested.getLastName() + "\"," +
-      "    \"userType\":\"lc\"," +
-      "    \"username\":\"" + requested.getSymphonyUsername() + "\"" +
-      "  }," +
-      "  \"schemaVersion\":1," +
-      "  \"semVersion\":\"1.56.0-SNAPSHOT\"," +
-      "  \"traceId\":\"EFpFOL\"," +
-      "  \"version\":\"MAESTRO\"" +
-      "}";
-  }
-
-  private String getEnvelopeMessage(String payload) {
-    return "{" +
-      "  \"_type\":\"com.symphony.s2.model.core.Envelope\"," +
-      "  \"_version\":\"1.0\"," +
-      "  \"createdDate\":\"2020-03-17T12:39:59.117Z\"," +
-      "  \"distributionList\":[" +
-      "    13469017440257" +
-      "  ]," +
-      "  \"notificationDate\":\"2020-03-17T12:39:59.407Z\"," +
-      "  \"payload\":" + payload + "," +
-      "  \"payloadType\":\"com.symphony.s2.model.chat.MaestroMessage.CONNECTION_REQUEST_ALERT\"," +
-      "  \"podId\":196," +
-      "  \"purgeDate\":\"2027-03-16T12:39:59.117Z\"" +
-      "}";
-  }
-
-  private String getSnsMaestroMessage(String podId, String payload) {
-    return "{" +
-      "  \"Message\":\"{\\\"payload\\\":\\\"" + Base64.encodeBase64String(payload.getBytes()) + "\\\"}\"," +
-      "  \"MessageAttributes\":{" +
-      "    \"payloadType\":{" +
-      "      \"Type\":\"String\"," +
-      "      \"Value\":\"com.symphony.s2.model.chat.MaestroMessage\"" +
-      "    }," +
-      "    \"podId\":{" +
-      "      \"Type\":\"Number\"," +
-      "      \"Value\":\"" + podId + "\"" +
-      "    }" +
-      "  }," +
-      "  \"Type\":\"Notification\"" +
-      "}";
   }
 }

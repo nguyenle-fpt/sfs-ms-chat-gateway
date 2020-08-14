@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
@@ -9,6 +10,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.DefaultAdminClient;
@@ -34,11 +36,13 @@ import java.util.Optional;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +56,8 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   private SymphonyService symphonyService;
   private AdminClient adminClient;
   private EmpSchemaService empSchemaService;
+  private ChannelRepository channelRepository;
+  private MessageDecryptor messageDecryptor;
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -61,6 +67,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     empClient = new MockEmpClient();
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
+    channelRepository = mock(ChannelRepository.class);
 
     AuthenticationService authenticationService = mock(AuthenticationService.class);
 
@@ -91,7 +98,8 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
     datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
     ObjectMapper objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
-    MessageDecryptor messageDecryptor = mock(MessageDecryptor.class);
+
+    messageDecryptor = mock(MessageDecryptor.class);
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager);
 
     when(adminClient.getEmpList()).thenReturn(new EmpList());
@@ -100,7 +108,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager));
     messageService.registerAsDatafeedListener();
 
-    ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService);
+    ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService, channelRepository);
     channelService.registerAsDatafeedListener();
   }
 
@@ -222,10 +230,10 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       whatsAppUser,
       sender
     )));
-
+    when(messageDecryptor.decrypt(any(), eq(whatsAppUser.getSymphonyUserId()))).thenReturn("");
     forwarderQueueConsumer.consume(notification, "1");
 
-//    verify(symphonyMessageSender, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
+    verify(symphonyMessageSender, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
   }
 
   @Test
@@ -251,7 +259,8 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       whatsAppUser,
       sender
     )));
-
+    when(messageDecryptor.decrypt(any(), eq(whatsAppUser.getSymphonyUserId()))).thenReturn("");
+    when(adminClient.canChat("1", "federatedUserId", "WHATSAPP")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     forwarderQueueConsumer.consume(notification, "1");
 
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
@@ -666,7 +675,8 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "    \"principalBaseHash\":\"dUTW4YYIa6vxg0_zzD-J8Rbj2P2Jsevlc5PRvSwBHx4BAQ\"," +
       "    \"surname\":\"" + sender.getLastName() + "\"," +
       "    \"userType\":\"lc\"," +
-      "    \"username\":\"" + sender.getEmailAddress() + "\"" +
+      "    \"username\":\"" + sender.getEmailAddress() + "\"," +
+      "    \"company\":\"symphony\"" +
       "  }," +
       "  \"fromPod\":196," +
       "  \"ignoreDLPWarning\":false," +

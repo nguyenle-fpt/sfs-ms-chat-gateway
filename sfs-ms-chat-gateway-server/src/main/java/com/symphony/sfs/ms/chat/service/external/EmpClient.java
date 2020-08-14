@@ -70,4 +70,6 @@ public interface EmpClient {
    * @param emailAddress
    */
   void deleteAccountOrFail(String emp, String symphonyId, String emailAddress);
+
+  void deleteChannel(String streamId, String emp);
 }

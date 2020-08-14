@@ -86,7 +86,7 @@ class SymphonyMessageServiceTest {
     templateProcessor = mock(SymphonySystemMessageTemplateProcessor.class);
 
     symphonyMessageSender = mock(SymphonyMessageSender.class);
-    symphonyMessageService = mock(SymphonyMessageService.class);
+    symphonyMessageService = mock(SymphonyMessageService.class); // TODO this can't be a mock
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     symphonyService = mock(SymphonyService.class);
 

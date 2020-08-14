@@ -11,3 +11,16 @@ federated-account-not-found:
     status:
       type: integer
       format: 400
+channel-not-found:
+  type: object
+  description: 'Channel not found'
+  properties:
+    type:
+      type: string
+      format: 'channel.not.found'
+    title:
+      type: string
+      format: 'Channel not found'
+    status:
+      type: integer
+      format: 404

@@ -7,8 +7,11 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
+import com.symphony.sfs.ms.chat.generated.model.ChannelNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelFailedProblem;
+import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
@@ -46,6 +49,7 @@ public class ChannelService implements DatafeedListener {
   private final FederatedAccountRepository federatedAccountRepository;
   private final AdminClient adminClient;
   private final SymphonyService symphonyService;
+  private final ChannelRepository channelRepository;
 
   @PostConstruct
   @VisibleForTesting
@@ -84,9 +88,14 @@ public class ChannelService implements DatafeedListener {
   public String createIMChannel(SymphonySession session, FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
     String streamId = streamService.getIM(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), toSymphonyUser.getId().toString())
       .orElseThrow(CannotRetrieveStreamIdProblem::new);
-
+    Channel channel =  Channel.builder()
+                              .streamId(streamId)
+                              .advisorSymphonyId(toSymphonyUser.getId().toString())
+                              .federatedUserId(fromFederatedAccount.getFederatedUserId())
+                              .emp(fromFederatedAccount.getEmp())
+                              .build();
+    channelRepository.save(channel);
     Optional<String> channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
-
     if (channelId.isEmpty()) {
       symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
     }
@@ -212,4 +221,20 @@ public class ChannelService implements DatafeedListener {
 
     refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, false);
   }
+
+  @NewSpan
+  public void deleteChannel(String advisorSymphonyId, String federatedUserId, String emp) {
+    // do we need to fail here ?
+    Channel channel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(advisorSymphonyId, federatedUserId, emp).orElseThrow(ChannelNotFoundProblem::new);
+    // do we need to fail here ?
+    empClient.deleteChannel(channel.getStreamId(), emp);
+    // send message
+    Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(channel.getFederatedUserId(), emp);
+    if(federatedAccount.isPresent()) {
+      symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", channel.getAdvisorSymphonyId());
+    }
+    channelRepository.delete(channel);
+
+  }
+
 }

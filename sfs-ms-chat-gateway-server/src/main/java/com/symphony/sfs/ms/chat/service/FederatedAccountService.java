@@ -6,6 +6,7 @@ import com.google.common.hash.Hashing;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
+import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
@@ -19,7 +20,9 @@ import com.symphony.sfs.ms.chat.generated.model.EmpNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
@@ -75,6 +78,8 @@ public class FederatedAccountService implements DatafeedListener {
   private final EmpSchemaService empSchemaService;
   private final EmpClient empClient;
   private final SymphonyAuthFactory symphonyAuthFactory;
+  private final AdminClient adminClient;
+  private final ChannelRepository channelRepository;
 
   @PostConstruct
   @VisibleForTesting
@@ -120,6 +125,7 @@ public class FederatedAccountService implements DatafeedListener {
     adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), attributes);
     adminUserManagementService.updateUserStatus(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), UserStatus.DISABLED);
     federatedAccountRepository.delete(existingAccount);
+    channelRepository.findAllByFederatedUserId(federatedUserId).forEach(channelRepository::delete);
 
     datafeedSessionPool.removeSessionInMemory(existingAccount.getSymphonyUserId());
   }
@@ -152,10 +158,14 @@ public class FederatedAccountService implements DatafeedListener {
   @NewSpan
   public void onConnectionAccepted(IUser requesting, IUser requested) {
     LOG.info("Connection request accepted | requesting={} requested={}", requesting.getId(), requested.getId());
-    federatedAccountRepository.findBySymphonyId(requesting.getId().toString())
-      .ifPresent(account -> {
+    Optional<FederatedAccount>  federatedAccount = federatedAccountRepository.findBySymphonyId(requesting.getId().toString());
+    if(federatedAccount.isPresent()) {
+      FederatedAccount account = federatedAccount.get();
+      Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
+      if(canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
         channelService.createIMChannel(account, requested);
-      });
+      }
+    }
   }
 
   @NewSpan

@@ -54,6 +54,7 @@ public class MessageIOMonitor {
     NOT_ENOUGH_MEMBER("not enough member"),
     NO_FEDERATED_ACCOUNT("no federated account"),
     NO_ENTITLEMENT_ACCESS("no entitlement access"),
+    NO_CONTACT("no contact"),
     TOO_MUCH_MEMBERS("too much members"),
     ATTACHMENTS("attachments"),
     SOCIAL_MESSAGE_MALFORMED("social message malformed"),

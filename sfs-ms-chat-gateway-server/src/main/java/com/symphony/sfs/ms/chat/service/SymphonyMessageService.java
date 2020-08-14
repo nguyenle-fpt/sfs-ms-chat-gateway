@@ -5,6 +5,7 @@ import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
+import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -55,6 +56,7 @@ import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.ATTACHMENTS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_CONTACT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_FEDERATED_ACCOUNT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.TOO_MUCH_MEMBERS;
@@ -145,9 +147,13 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Do we check first all sessions are ok?
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
-        if (adminClient.getEntitlementAccess(fromSymphonyUser.getId().toString(), entry.getKey()).isEmpty()) {
+        Optional<CanChatResponse> canChat = adminClient.canChat(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
+        if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + getEmp(entry.getKey()).getDisplayName() + " users."));
           messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
+        }   else if (canChat.get() == CanChatResponse.NO_CONTACT) {
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
+          messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
         } else if (toUserIds.size() > 1) {// Check there are only 2 users
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + getEmp(entry.getKey()).getDisplayName() + " contact in a MIM."));
           messageMetrics.onMessageBlockFromSymphony(TOO_MUCH_MEMBERS, streamId);
@@ -215,7 +221,7 @@ public class SymphonyMessageService implements DatafeedListener {
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
 
     Optional<String> advisorSymphonyUserId = findAdvisor(streamId, federatedAccount.getSymphonyUserId());
-    Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getEmp());
+    Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp());
     advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
 
     String symphonyMessageId = null;
@@ -301,7 +307,7 @@ public class SymphonyMessageService implements DatafeedListener {
    * @param emp
    * @return If present, message indicating that advisor is NOT entitled.
    */
-  private Optional<String> notEntitledMessage(Optional<String> advisorSymphonyUserId, String emp) {
+  private Optional<String> notEntitledMessage(Optional<String> advisorSymphonyUserId, String federatedUserId, String emp) {
     final String CONTACT_NOT_AVAILABLE = "Sorry, your contact is no longer available";
     final String CONTACT_WITH_DETAILS_NOT_AVAILABLE = "Sorry, your contact %s is no longer available";
 
@@ -311,7 +317,8 @@ public class SymphonyMessageService implements DatafeedListener {
     }
 
     // Advisor entitled
-    if (adminClient.getEntitlementAccess(advisorSymphonyUserId.get(), emp).isPresent()) {
+    Optional<CanChatResponse> canChatResponse = adminClient.canChat(advisorSymphonyUserId.get(), federatedUserId, emp);
+    if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
       return Optional.empty();
     }
 

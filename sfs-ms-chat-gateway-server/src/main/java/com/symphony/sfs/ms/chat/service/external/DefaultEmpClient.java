@@ -86,6 +86,13 @@ public class DefaultEmpClient implements EmpClient {
     client.getUserApi().deleteUserOrFail(symphonyId, emailAddress);
   }
 
+  @Override
+  public void deleteChannel(String streamId, String emp) {
+    EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
+    client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    client.getChannelApi().deleteChannel(streamId);
+  }
+
   private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
     List<ChannelMember> members = new ArrayList<>();
     federatedUsers.forEach(account -> members.add(new ChannelMember()

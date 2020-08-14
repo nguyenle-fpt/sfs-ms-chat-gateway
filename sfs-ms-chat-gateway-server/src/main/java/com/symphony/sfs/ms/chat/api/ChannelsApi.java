@@ -36,5 +36,14 @@ public class ChannelsApi implements com.symphony.sfs.ms.chat.generated.api.Chann
       .channelId(channelId);
     return ResponseEntity.ok(response);
   }
+  @Override
+  public ResponseEntity<Void> deleteChannel(String advisorSymphonyId, String federatedUserId, String emp) {
+    MDC.put("federatedUserId", federatedUserId);
+    MDC.put("emp", emp);
+    MDC.put("advisor", advisorSymphonyId);
+    LOG.info("delete channel");
+    channelService.deleteChannel(advisorSymphonyId, federatedUserId, emp);
+    return ResponseEntity.ok().build();
+  }
 
 }

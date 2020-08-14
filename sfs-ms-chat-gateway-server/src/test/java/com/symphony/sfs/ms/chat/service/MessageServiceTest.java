@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
+import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -93,10 +94,11 @@ class MessageServiceTest {
     IUser fromSymphonyUser = newIUser("1");
     List<String> members = Arrays.asList("1", "101");
     FederatedAccount federatedAccount101 = newFederatedAccount("emp", "101");
+    federatedAccount101.setFederatedUserId("fed");
 
     when(federatedAccountRepository.findBySymphonyId("101")).thenReturn(Optional.of(federatedAccount101));
     // fromSymphonyUser is advisor
-    when(adminClient.getEntitlementAccess("1", "emp")).thenReturn(Optional.of(new EntitlementResponse()));
+    when(adminClient.canChat("1", "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
 
     long now = new Date().getTime();
 
@@ -120,16 +122,16 @@ class MessageServiceTest {
   @Test
   void onIMMessage() {
     EntitlementResponse response = new EntitlementResponse();
-    when(adminClient.getEntitlementAccess("123456789", "emp")).thenReturn(Optional.of(response));
+    when(adminClient.canChat("123456789", "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     FederatedAccount toFederatedAccount = FederatedAccount.builder()
       .emp("emp")
       .symphonyUserId("234567891")
+      .federatedUserId("fed")
       .build();
 
     IUser fromSymphonyUser = newIUser("123456789");
 
     long now = OffsetDateTime.now().toEpochSecond();
-
 
     when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
     when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null)).thenReturn(Optional.of("leaseId"));
@@ -141,8 +143,58 @@ class MessageServiceTest {
   }
 
   @Test
-  void onIMMessage_FederatedServiceAccountNotFound() {
+  void onIMMessage_No_entitlements() {
+    EntitlementResponse response = new EntitlementResponse();
+    when(adminClient.canChat("123456789", "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
+    FederatedAccount toFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId("234567891")
+      .federatedUserId("fed")
+      .build();
 
+    IUser fromSymphonyUser = newIUser("123456789");
+
+    long now = OffsetDateTime.now().toEpochSecond();
+
+    when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null)).thenReturn(Optional.of("leaseId"));
+    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null);
+
+    verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
+    verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "");
+    // session is mocked, null for now
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You are not entitled to send messages to emp users.");
+  }
+
+  @Test
+  void onIMMessage_No_Contact() {
+    EntitlementResponse response = new EntitlementResponse();
+    when(adminClient.canChat("123456789", "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_CONTACT));
+    FederatedAccount toFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId("234567891")
+      .federatedUserId("fed")
+      .build();
+
+    IUser fromSymphonyUser = newIUser("123456789");
+
+    long now = OffsetDateTime.now().toEpochSecond();
+
+    when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null)).thenReturn(Optional.of("leaseId"));
+    messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null);
+
+    verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
+    verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "");
+    // session is mocked, null for now
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "This message will not be delivered. You no longer have the entitlement for this.");
+  }
+
+  @Test
+  void onIMMessage_FederatedServiceAccountNotFound() {
+    // is this still useful??
     IUser fromSymphonyUser = newIUser("123456789");
     long now = OffsetDateTime.now().toEpochSecond();
 
@@ -224,7 +276,7 @@ class MessageServiceTest {
 
   @Test
   void onMIMMessage_FederatedServiceAccountNotFound() {
-
+    // This seems obsolete ??
     IUser fromSymphonyUser = newIUser("123456789");
     long now = OffsetDateTime.now().toEpochSecond();
 
@@ -391,6 +443,7 @@ class MessageServiceTest {
     PodAndUserId id = PodAndUserId.newBuilder().build(Long.valueOf(symphonyUserId));
     IUser mockIUser = mock(IUser.class);
     when(mockIUser.getId()).thenReturn(id);
+    when(mockIUser.getCompany()).thenReturn("symphony");
 
     return mockIUser;
 

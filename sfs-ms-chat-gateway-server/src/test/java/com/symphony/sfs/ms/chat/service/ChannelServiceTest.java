@@ -7,6 +7,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -48,6 +50,7 @@ class ChannelServiceTest {
   private BotConfiguration botConfiguration;
   private AuthenticationService authenticationService;
   private SymphonySession userSession;
+  private ChannelRepository channelRepository;
   private MockAdminClient mockAdminClient;
 
   private SymphonyService symphonyService;
@@ -60,7 +63,7 @@ class ChannelServiceTest {
     empClient = mock(EmpClient.class);
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
-
+    channelRepository = mock(ChannelRepository.class);
     authenticationService = mock(AuthenticationService.class);
 
     botConfiguration = new BotConfiguration();
@@ -77,7 +80,7 @@ class ChannelServiceTest {
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, symphonyService);
+    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, symphonyService, channelRepository);
   }
 
   @Test
@@ -90,7 +93,7 @@ class ChannelServiceTest {
 
     DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
     when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
-    doNothing().when(symphonyMessageSender).sendInfoMessage(any(SymphonySession.class), eq("streamId"), anyString());
+    doReturn(Optional.empty()).when(symphonyMessageSender).sendInfoMessage(any(SymphonySession.class), eq("streamId"), anyString());
 
     String streamId = channelService.createIMChannel(
       "streamId",
