@@ -52,7 +52,7 @@ public class AdminUserManagementService {
         .attribute(BASE_PATH, PodConstants.ADMINCREATEUSER)
         .body(BodyInserters.fromValue(user))
         .retrieve()
-        .bodyToMono(SymphonyUser.class));
+        .bodyToMono(SymphonyUser.class), LOG, PodConstants.ADMINCREATEUSER);
       return Optional.ofNullable(response);
     } catch (Exception e) {
       logWebClientError(LOG, PodConstants.ADMINCREATEUSER, e);
@@ -75,7 +75,7 @@ public class AdminUserManagementService {
         .attribute(BASE_URI, podUrl)
         .attribute(BASE_PATH, PodConstants.GETUSERADMIN)
         .retrieve()
-        .bodyToMono(AdminUserInfo.class));
+        .bodyToMono(AdminUserInfo.class), LOG, PodConstants.GETUSERADMIN);
       return Optional.ofNullable(response);
     } catch (Exception e) {
       logWebClientError(LOG, PodConstants.GETUSERADMIN, e);
@@ -99,7 +99,7 @@ public class AdminUserManagementService {
         .attribute(BASE_PATH, PodConstants.ADMINUPDATEUSER)
         .body(BodyInserters.fromValue(user))
         .retrieve()
-        .bodyToMono(SymphonyUser.class));
+        .bodyToMono(SymphonyUser.class), LOG, PodConstants.ADMINUPDATEUSER);
       return Optional.ofNullable(response);
     } catch (Exception e) {
       logWebClientError(LOG, PodConstants.ADMINUPDATEUSER, e);
@@ -123,9 +123,9 @@ public class AdminUserManagementService {
         .attribute(BASE_PATH, PodConstants.UPDATEUSERSTATUSADMIN)
         .body(BodyInserters.fromValue(status))
         .retrieve()
-        .toBodilessEntity());
+        .toBodilessEntity(), LOG, PodConstants.ADMINUPDATEUSER);
     } catch (Exception e) {
-      logWebClientError(LOG, PodConstants.UPDATEUSERSTATUSADMIN, e);
+      logWebClientError(LOG, PodConstants.ADMINUPDATEUSER, e);
     }
     return Optional.empty();
   }
