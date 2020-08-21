@@ -28,7 +28,49 @@ channels:
               oneOf:
                 - $ref: '../errors/channels.yaml#/federated-account-not-found'
                 - $ref: '../errors/accounts.yaml#/create-channel-failed'
-delete-channel:
+
+manage-channel:
+  get:
+    tags:
+      - Channels
+    summary: Retrieves a channel between a federated account and and symphony advisor
+    operationId: retrieveChannel
+    description: >
+      => Retrieves a channel
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: advisorSymphonyId
+        schema:
+          type: string
+        required: true
+        description: The advisor's symphony id
+      - in: path
+        name: federatedUserId #TODO maybe move to symphonyID? Beware of the state of the DB
+        schema:
+          type: string
+        required: true
+        description: The federated user id
+      - in: path
+        name: emp
+        schema:
+          type: string
+        required: true
+        description: The EMP concerned
+    responses:
+      '200':
+        description: The channel has been successfully retrieved
+        content:
+          application/json:
+            schema:
+              $ref: '../components/channels.yaml#/retrieve-channel-response'
+      '404':
+        description: Channel not found
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/channels.yaml#/channel-not-found'
   delete:
     tags:
       - Channels

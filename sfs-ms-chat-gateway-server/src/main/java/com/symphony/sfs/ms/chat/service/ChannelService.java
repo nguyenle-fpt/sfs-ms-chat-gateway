@@ -224,8 +224,8 @@ public class ChannelService implements DatafeedListener {
 
   @NewSpan
   public void deleteChannel(String advisorSymphonyId, String federatedUserId, String emp) {
-    // do we need to fail here ?
-    Channel channel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(advisorSymphonyId, federatedUserId, emp).orElseThrow(ChannelNotFoundProblem::new);
+    Channel channel = retrieveChannel(advisorSymphonyId, federatedUserId, emp);
+
     // do we need to fail here ?
     empClient.deleteChannel(channel.getStreamId(), emp);
     // send message
@@ -237,4 +237,8 @@ public class ChannelService implements DatafeedListener {
 
   }
 
+  @NewSpan
+  public Channel retrieveChannel(String advisorSymphonyId, String federatedUserId, String emp) {
+    return channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(advisorSymphonyId, federatedUserId, emp).orElseThrow(ChannelNotFoundProblem::new);
+  }
 }

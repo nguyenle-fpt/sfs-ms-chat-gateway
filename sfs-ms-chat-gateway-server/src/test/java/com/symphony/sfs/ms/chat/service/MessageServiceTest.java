@@ -199,7 +199,7 @@ class MessageServiceTest {
     long now = OffsetDateTime.now().toEpochSecond();
 
     when(federatedAccountRepository.findBySymphonyId("123456789")).thenReturn(Optional.empty());
-    Assertions.assertThrows(FederatedAccountNotFoundProblem.class, () -> messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null));
+    Assertions.assertDoesNotThrow(() -> messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null));
   }
 
   /*
@@ -282,7 +282,7 @@ class MessageServiceTest {
 
     // Do not find any FederatedAccount
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.empty());
-    Assertions.assertThrows(FederatedAccountNotFoundProblem.class, () -> messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891", "345678912", "456789123"), now, "text", null, null));
+    Assertions.assertDoesNotThrow(() -> messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891", "345678912", "456789123"), now, "text", null, null));
   }
 
   /*

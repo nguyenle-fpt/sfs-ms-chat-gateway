@@ -20,4 +20,15 @@ create-channel-response:
     channelId:
       type: string
 
+retrieve-channel-response:
+  type: object
+  properties:
+    streamId:
+      type: string
+    advisorSymphonyId:
+      type: string
+    federatedUserId:
+      type: string
+    emp:
+      type: string
 
