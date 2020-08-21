@@ -1,0 +1,55 @@
+version: 0.2
+
+env:
+  variables:
+    SONAR_PROJECT: sfs-ms-chassis
+  parameter-store:
+    ARTIFACTORY_PASSWORD: "/sfs/artifactory/password"
+    SONAR_HOST: "/sfs/sonarqube/host"
+    SONAR_LOGIN: "/sfs/sonarqube/login"
+    SONAR_PASSWORD: "/sfs/sonarqube/password"
+    GITHUB_TOKEN: "/sfs/github/sfs-bot-token"
+  git-credential-helper: yes
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - pip install diff_cover
+      - pip install yq
+  pre_build:
+    commands:
+      - sed -i -e 's|ARTIFACTORY_PASSWORD|${ARTIFACTORY_PASSWORD}|g' settings.xml
+      - ci/install-deps.sh
+      - cat pom.xml | xq -r ".project.modules.module[]" | tee submodules.dat
+      - cat submodules.dat | awk '{print $0"/src/main/java "}' | tr -d '\n' | tee submodules-src-path.dat
+      - SUBMODULES_SRC_PATH=$(cat submodules-src-path.dat)
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo $CODEBUILD_WEBHOOK_TRIGGER
+      - mvn -s settings.xml -f pom.xml clean package | tee build.log
+      - echo "$(find . -name jacoco.xml) --src-roots $SUBMODULES_SRC_PATH" | xargs diff-cover | tee diffcover.log
+      - COVERAGE=$(cat diffcover.log | grep "Coverage:" | sed 's/[^0-9]*//g')
+      - $(if [ $COVERAGE -lt $COVERAGE_THRESHOLD ]; then exit 1; fi)
+      #- mvn -s settings.xml -f pom.xml clean package sonar:sonar -Dsonar.projectKey=$SONAR_PROJECT -Dsonar.host.url=$SONAR_HOST -Dsonar.login=$SONAR_LOGIN -Dsonar.password=$SONAR_PASSWORD | tee build.log
+  post_build:
+    commands:
+      #- SONAR_LINK=$(egrep -o "you can browse http://[^, ]+" build.log)
+      #- SONAR_TASK_ID=$(egrep -o "task\?id=[^ ]+" build.log | cut -d'=' -f2)
+      - PR_NUMBER=$(echo $CODEBUILD_WEBHOOK_TRIGGER | cut -d'/' -f2)
+      #- ./ops/wait_sonar.sh "$SONAR_HOST" "$SONAR_LOGIN" "$SONAR_PASSWORD" "$SONAR_LINK" "$SONAR_TASK_ID" "$GITHUB_TOKEN" "$PR_NUMBER" "$SONAR_PROJECT"
+
+cache:
+  paths:
+    - '/root/.m2/**/*'
+
+reports:
+  SurefireReports:
+    files:
+      - '**/target/surefire-reports/*'
+  jacoco-report:
+    files:
+      - '**/target/site/jacoco/jacoco.xml'
+    file-format: 'JaCoCoXml'
