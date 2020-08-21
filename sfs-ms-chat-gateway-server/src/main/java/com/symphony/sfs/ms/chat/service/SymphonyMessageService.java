@@ -151,7 +151,7 @@ public class SymphonyMessageService implements DatafeedListener {
         if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + getEmp(entry.getKey()).getDisplayName() + " users."));
           messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
-        }   else if (canChat.get() == CanChatResponse.NO_CONTACT) {
+        } else if (canChat.get() == CanChatResponse.NO_CONTACT) {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
           messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
         } else if (toUserIds.size() > 1) {// Check there are only 2 users
@@ -221,7 +221,7 @@ public class SymphonyMessageService implements DatafeedListener {
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
 
     Optional<String> advisorSymphonyUserId = findAdvisor(streamId, federatedAccount.getSymphonyUserId());
-    Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp());
+    Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp(), formatting);
     advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
 
     String symphonyMessageId = null;
@@ -307,7 +307,7 @@ public class SymphonyMessageService implements DatafeedListener {
    * @param emp
    * @return If present, message indicating that advisor is NOT entitled.
    */
-  private Optional<String> notEntitledMessage(Optional<String> advisorSymphonyUserId, String federatedUserId, String emp) {
+  private Optional<String> notEntitledMessage(Optional<String> advisorSymphonyUserId, String federatedUserId, String emp, FormattingEnum formatting) {
     final String CONTACT_NOT_AVAILABLE = "Sorry, your contact is no longer available";
     final String CONTACT_WITH_DETAILS_NOT_AVAILABLE = "Sorry, your contact %s is no longer available";
 
@@ -318,7 +318,10 @@ public class SymphonyMessageService implements DatafeedListener {
 
     // Advisor entitled
     Optional<CanChatResponse> canChatResponse = adminClient.canChat(advisorSymphonyUserId.get(), federatedUserId, emp);
-    if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
+    // We can still send notifications to advisors without contacts. Useful for onboarding when we need to send a notification before the contact is created
+    // TODO REFACTOR, adding a message type and checking on that might make more sense than checking the formatting to change behaviour
+    if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT ||
+      canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.NO_CONTACT && formatting != null) {
       return Optional.empty();
     }
 
