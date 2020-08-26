@@ -3,17 +3,17 @@
   <servers>
     <server>
       <id>symphony</id>
-      <username>services</username>
+      <username>ARTIFACTORY_USER</username>
       <password>ARTIFACTORY_PASSWORD</password>
     </server>
     <server>
       <id>snapshots</id>
-      <username>services</username>
+      <username>ARTIFACTORY_USER</username>
       <password>ARTIFACTORY_PASSWORD</password>
     </server>
     <server>
       <id>symdocker</id>
-      <username>services</username>
+      <username>ARTIFACTORY_USER</username>
       <password>ARTIFACTORY_PASSWORD</password>
     </server>
   </servers>

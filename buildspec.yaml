@@ -4,6 +4,7 @@ env:
   variables:
     SONAR_PROJECT: sfs-ms-chassis
   parameter-store:
+    ARTIFACTORY_USER: "/sfs/artifactory/username"
     ARTIFACTORY_PASSWORD: "/sfs/artifactory/password"
     SONAR_HOST: "/sfs/sonarqube/host"
     SONAR_LOGIN: "/sfs/sonarqube/login"
@@ -20,6 +21,7 @@ phases:
       - pip install yq
   pre_build:
     commands:
+      - sed -i -e 's|ARTIFACTORY_USER|${ARTIFACTORY_USER}|g' settings.xml
       - sed -i -e 's|ARTIFACTORY_PASSWORD|${ARTIFACTORY_PASSWORD}|g' settings.xml
       - ci/install-deps.sh
       - cat pom.xml | xq -r ".project.modules.module[]" | tee submodules.dat
