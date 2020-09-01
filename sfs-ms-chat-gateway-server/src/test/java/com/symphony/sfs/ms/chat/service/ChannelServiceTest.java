@@ -3,12 +3,15 @@ package com.symphony.sfs.ms.chat.service;
 import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
+import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.external.AdminClient;
+import com.symphony.sfs.ms.chat.service.external.DefaultAdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
@@ -54,6 +57,7 @@ class ChannelServiceTest {
   private MockAdminClient mockAdminClient;
 
   private SymphonyService symphonyService;
+  private EmpSchemaService empSchemaService;
 
   @BeforeEach
   public void setUp() {
@@ -80,7 +84,10 @@ class ChannelServiceTest {
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, symphonyService, channelRepository);
+    mockAdminClient = new MockAdminClient();
+    empSchemaService = new EmpSchemaService(mockAdminClient);
+
+    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, empSchemaService, symphonyService, channelRepository);
   }
 
   @Test

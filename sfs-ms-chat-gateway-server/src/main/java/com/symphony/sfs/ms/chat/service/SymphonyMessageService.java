@@ -2,11 +2,8 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
-import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
-import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -25,6 +22,7 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
+import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -125,7 +123,7 @@ public class SymphonyMessageService implements DatafeedListener {
     List<IUser> symphonyUsers = new ArrayList<>();
 
     for (String symphonyId : toUserIds) {
-      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(newIUser(symphonyId)));
+      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(SymphonyUserUtils.newIUser(symphonyId)));
     }
 
     if (federatedAccountsByEmp.isEmpty()) {
@@ -149,13 +147,13 @@ public class SymphonyMessageService implements DatafeedListener {
         }
         Optional<CanChatResponse> canChat = adminClient.canChat(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
         if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + getEmp(entry.getKey()).getDisplayName() + " users."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(entry.getKey()) + " users."));
           messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
         } else if (canChat.get() == CanChatResponse.NO_CONTACT) {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
           messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
         } else if (toUserIds.size() > 1) {// Check there are only 2 users
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + getEmp(entry.getKey()).getDisplayName() + " contact in a MIM."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
           messageMetrics.onMessageBlockFromSymphony(TOO_MUCH_MEMBERS, streamId);
         } else if (attachments != null && !attachments.isEmpty()) {
           // If there are some attachments, warn the advisor and block the message
@@ -180,15 +178,6 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
-  private IUser newIUser(String symphonyId) {
-    // TODO resolve firstName and lastName
-    UserEntity.Builder builder = new UserEntity.Builder()
-      .withId(Long.valueOf(symphonyId))
-      .withFirstName(symphonyId + "_firstName")
-      .withSurname(symphonyId + "_lastName");
-    return new User(builder);
-  }
-
   @NewSpan
   public RetrieveMessagesResponse retrieveMessages(List<MessageId> messageIds, String symphonyUserId) {
     try {
@@ -210,17 +199,13 @@ public class SymphonyMessageService implements DatafeedListener {
   @NewSpan
   public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text) {
     MDC.put("streamId", streamId);
-    FederatedAccount federatedAccount;
-    Optional<FederatedAccount> optionalFederatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId);
-    if (optionalFederatedAccount.isPresent()) {
-      federatedAccount = optionalFederatedAccount.get();
-    } else {
+    FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
-      throw new FederatedAccountNotFoundProblem();
-    }
+      return new FederatedAccountNotFoundProblem();
+    });
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
 
-    Optional<String> advisorSymphonyUserId = findAdvisor(streamId, federatedAccount.getSymphonyUserId());
+    Optional<String> advisorSymphonyUserId = findAdvisor(streamId, fromSymphonyUserId);
     Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp(), formatting);
     advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
 
@@ -262,11 +247,6 @@ public class SymphonyMessageService implements DatafeedListener {
   private void blockIncomingMessage(String emp, String streamId, String reasonText) {
     LOG.info("block incoming message");
     empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, SendSystemMessageRequest.TypeEnum.ALERT);
-  }
-
-  private EmpEntity getEmp(String emp) {
-    // Should not happen: Return emp key if emp definition not found
-    return empSchemaService.getEmpDefinition(emp).orElse(new EmpEntity().displayName(emp));
   }
 
   /**

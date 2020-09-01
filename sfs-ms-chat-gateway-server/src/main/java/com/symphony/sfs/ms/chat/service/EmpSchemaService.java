@@ -34,6 +34,11 @@ public class EmpSchemaService {
     return Optional.ofNullable(empDefinitions.get(emp));
   }
 
+  public String getEmpDisplayName(String emp) {
+    // Should not happen: Return emp key if emp definition not found
+    return getEmpDefinition(emp).map(EmpEntity::getDisplayName).orElse(emp);
+  }
+
   @NewSpan
   public EmpList loadEmpDefinitions() {
     EmpList emps = adminClient.getEmpList();

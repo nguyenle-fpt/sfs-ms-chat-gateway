@@ -48,6 +48,7 @@ public class ChannelService implements DatafeedListener {
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
   private final AdminClient adminClient;
+  private final EmpSchemaService empSchemaService;
   private final SymphonyService symphonyService;
   private final ChannelRepository channelRepository;
 
@@ -134,7 +135,7 @@ public class ChannelService implements DatafeedListener {
 
           userSessions.forEach(session -> symphonyMessageSender.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
         } else {
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
         }
       }
     } catch (UnknownDatafeedUserException e) {
@@ -173,11 +174,11 @@ public class ChannelService implements DatafeedListener {
         // Remove all federated users
         if (isRoom) {
           // Send message to alert it is impossible to add WhatsApp user into a room
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a chat room."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a chat room."));
           userSessions.forEach(session -> symphonyService.removeMemberFromRoom(streamId, session));
         } else {
           // Send message to alert it is impossible to add WhatsApp user into a MIM
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + entry.getKey() + " contact in a MIM."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
         }
       }
     } catch (UnknownDatafeedUserException e) {
@@ -199,7 +200,7 @@ public class ChannelService implements DatafeedListener {
         } else {
           // send error message
           try {
-            symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, "You are not entitled to send messages to " + toFederatedAccount.get().getEmp() + " users");
+            symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp()) + " users");
           } catch (UnknownDatafeedUserException e) {
             throw new IllegalStateException();
           }

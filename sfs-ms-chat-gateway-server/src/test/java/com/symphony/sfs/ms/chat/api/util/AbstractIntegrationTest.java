@@ -14,6 +14,7 @@ import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
+import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
@@ -70,6 +71,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected ConnectionsService connectionsServices;
   protected ConnectionRequestManager connectionRequestManager;
   protected ChannelService channelService;
+  protected EmpSchemaService empSchemaService;
   protected ForwarderQueueConsumer forwarderQueueConsumer;
   protected FederatedAccountSessionService federatedAccountSessionService;
   protected FederatedAccountRepository federatedAccountRepository;
@@ -139,7 +141,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager)));
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
-    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, symphonyService, channelRepository);
+    empSchemaService = new EmpSchemaService(adminClient);
+    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);
     channelService.registerAsDatafeedListener();
   }
 
