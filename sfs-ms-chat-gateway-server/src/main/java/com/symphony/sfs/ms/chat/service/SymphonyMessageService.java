@@ -169,7 +169,10 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
           //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
           messageMetrics.onSendMessageFromSymphony(fromSymphonyUser, entry.getValue(), streamId);
-          empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer));
+          Optional<String> empMessageId = empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer));
+          if (empMessageId.isEmpty()) {
+            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + messageId + ")."));
+          }
         }
       }
     } catch (UnknownDatafeedUserException e) {
