@@ -2,6 +2,7 @@ logging:
   level:
     com.symphony: INFO
     org.springframework.web.filter.CommonsRequestLoggingFilter: INFO
+    org.springframework.cloud.aws: WARN
 
 aws:
   dynamodb:

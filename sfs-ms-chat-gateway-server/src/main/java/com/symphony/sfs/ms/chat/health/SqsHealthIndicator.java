@@ -5,9 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 
-/**
- * Custom health indicator for DynamoDB.
- */
 @Slf4j
 public class SqsHealthIndicator implements HealthIndicator {
 

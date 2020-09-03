@@ -9,7 +9,10 @@ import com.symphony.sfs.ms.starter.health.DynamoDbHealthIndicator;
 import com.symphony.sfs.ms.starter.health.HealthMeterService;
 import com.symphony.sfs.ms.starter.health.MicroserviceHealthIndicator;
 import com.symphony.sfs.ms.starter.health.TimeoutHealthIndicator;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import com.symphony.sfs.ms.chat.health.QueueListenerHealthIndicator;
+import org.springframework.cloud.aws.messaging.listener.SimpleMessageListenerContainer;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -20,21 +23,14 @@ import java.util.List;
 import static com.symphony.sfs.ms.starter.util.HealthUtils.buildHealthIndicatorForMicroservices;
 
 @Configuration
+@RequiredArgsConstructor
 public class HealthMetricsConfiguration {
-  private HealthMeterService healthMeterService;
-  private EmpMicroserviceResolver empMicroserviceResolver;
-  private WebClient webClient;
-  private AmazonDynamoDB amazonDynamoDB;
-  private AmazonSQSAsync amazonSqs;
-
-
-  public HealthMetricsConfiguration(HealthMeterService healthMeterService, EmpMicroserviceResolver empMicroserviceResolver, WebClient webClient, AmazonDynamoDB amazonDynamoDB, AmazonSQSAsync amazonSqs) {
-    this.healthMeterService = healthMeterService;
-    this.empMicroserviceResolver = empMicroserviceResolver;
-    this.webClient = webClient;
-    this.amazonDynamoDB = amazonDynamoDB;
-    this.amazonSqs = amazonSqs;
-  }
+  private final HealthMeterService healthMeterService;
+  private final EmpMicroserviceResolver empMicroserviceResolver;
+  private final WebClient webClient;
+  private final AmazonDynamoDB amazonDynamoDB;
+  private final AmazonSQSAsync amazonSqs;
+  private final SimpleMessageListenerContainer queueListener;
 
   @PostConstruct
   public void initHealthMeters() {
@@ -45,6 +41,9 @@ public class HealthMetricsConfiguration {
 
     HealthIndicator sqsHealth = new CachedHealthIndicator(cacheTtl, new SqsHealthIndicator(amazonSqs));
     healthMeterService.registerHealthMeter("sqs", sqsHealth);
+
+    HealthIndicator queueListenersHealth = new CachedHealthIndicator(cacheTtl, new QueueListenerHealthIndicator(amazonSqs, queueListener));
+    healthMeterService.registerHealthMeter("sqs-listeners", queueListenersHealth);
 
     List<MicroserviceHealthIndicator> indicators = buildHealthIndicatorForMicroservices(webClient, empMicroserviceResolver.getAllEmpMicroserviceBaseUris());
     indicators.forEach(indicator -> healthMeterService.registerHealthMeter(indicator.getMicroserviceName(), getCachedTimeoutIndicator(indicator)));
