@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -128,12 +129,21 @@ public class ChannelService implements DatafeedListener {
 
         // Check there are only 2 users
         if (toFederatedAccounts.size() == 1 && toSymphonyUsers.size() == 1 && toSymphonyUsers.get(0) == fromSymphonyUser) {
-          // TODO need a recovery mechanism to re-trigger the failed channel creation
-          //  Short term proposition: recovery is manual - display a System message in the MIM indicating that channel creation has failed for some EMPs and to contact an administrator
-          empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers)
-            .orElseThrow(CreateChannelFailedProblem::new);
-
-          userSessions.forEach(session -> symphonyMessageSender.sendInfoMessage(session, streamId, "Hello, I will be ready as soon as I join the whatsapp group"));
+          Optional<Channel>  existingChannel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
+          if (existingChannel.isEmpty()) { // avoid recreating an already present channel
+            Channel channel = Channel.builder()
+                              .advisorSymphonyId(fromSymphonyUser.getId().toString())
+                              .federatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId())
+                              .emp(entry.getKey())
+                              .build();
+            channelRepository.save(channel);
+            // TODO need a recovery mechanism to re-trigger the failed channel creation
+            //  Short term proposition: recovery is manual - display a System message in the MIM indicating that channel creation has failed for some EMPs and to contact an administrator
+            Optional<String> channelId = empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers);
+            if (channelId.isEmpty()) {
+              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
+            }
+          }
         } else {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
         }
@@ -195,12 +205,19 @@ public class ChannelService implements DatafeedListener {
 
       Optional<FederatedAccount> toFederatedAccount = federatedAccountRepository.findBySymphonyId(toFederatedAccountId);
       if (toFederatedAccount.isPresent()) {
-        if (adminClient.getEntitlementAccess(initiator.getId().toString(), toFederatedAccount.get().getEmp()).isPresent()) {
+        Optional<CanChatResponse> canChatResponse = adminClient.canChat(initiator.getId().toString(), toFederatedAccount.get().getFederatedUserId(), toFederatedAccount.get().getEmp());
+        if (canChatResponse.isEmpty() || canChatResponse.get() == CanChatResponse.CAN_CHAT) {
           createIMChannel(streamId, initiator, toFederatedAccount.get());
         } else {
           // send error message
           try {
-            symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp()) + " users");
+            String createChannelErrorMessage = null;
+            if(canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT) {
+              createChannelErrorMessage = "You are not entitled to send messages to " + toFederatedAccount.get().getEmp() + " users";
+            } else {
+              createChannelErrorMessage = "This message will not be delivered. You no longer have the entitlement for this.";
+            }
+            symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, createChannelErrorMessage);
           } catch (UnknownDatafeedUserException e) {
             throw new IllegalStateException();
           }

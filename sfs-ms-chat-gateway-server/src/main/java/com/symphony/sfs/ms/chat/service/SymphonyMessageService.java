@@ -208,7 +208,7 @@ public class SymphonyMessageService implements DatafeedListener {
     });
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
 
-    Optional<String> advisorSymphonyUserId = findAdvisor(streamId, fromSymphonyUserId);
+    Optional<String> advisorSymphonyUserId = findAdvisor(streamId, federatedAccount.getSymphonyUserId());
     Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp(), formatting);
     advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
 
