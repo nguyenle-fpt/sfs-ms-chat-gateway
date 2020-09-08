@@ -13,6 +13,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+import static com.symphony.sfs.ms.chat.model.ChannelMapper.channelGsi1Pk;
+import static com.symphony.sfs.ms.chat.model.ChannelMapper.channelGsi1Sk;
 import static com.symphony.sfs.ms.chat.model.ChannelMapper.channelPk;
 import static com.symphony.sfs.ms.chat.model.ChannelMapper.channelSk;
 import static com.symphony.sfs.ms.starter.util.PaginationUtils.followPages;
@@ -39,6 +41,11 @@ public class ChannelRepository extends AbstractRawDynamoRepository {
   @NewSpan
   public List<Channel> findAllByFederatedUserId(String federatedUserId) {
     return followPages(pageable -> findAllByFederatedUserId(federatedUserId, pageable));
+  }
+
+  @NewSpan
+  public Optional<Channel> findByStreamId(String streamId) {
+    return findByPrimaryKey(channelGsi1Pk(streamId), channelGsi1Sk(), Channel::new);
   }
 
   @NewSpan
