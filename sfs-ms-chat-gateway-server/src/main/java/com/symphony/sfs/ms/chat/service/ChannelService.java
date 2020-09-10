@@ -206,13 +206,13 @@ public class ChannelService implements DatafeedListener {
       Optional<FederatedAccount> toFederatedAccount = federatedAccountRepository.findBySymphonyId(toFederatedAccountId);
       if (toFederatedAccount.isPresent()) {
         Optional<CanChatResponse> canChatResponse = adminClient.canChat(initiator.getId().toString(), toFederatedAccount.get().getFederatedUserId(), toFederatedAccount.get().getEmp());
-        if (canChatResponse.isEmpty() || canChatResponse.get() == CanChatResponse.CAN_CHAT) {
+        if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
           createIMChannel(streamId, initiator, toFederatedAccount.get());
         } else {
           // send error message
           try {
             String createChannelErrorMessage = null;
-            if(canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT) {
+            if(canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT) {
               createChannelErrorMessage = "You are not entitled to send messages to " + toFederatedAccount.get().getEmp() + " users";
             } else {
               createChannelErrorMessage = "This message will not be delivered. You no longer have the entitlement for this.";
