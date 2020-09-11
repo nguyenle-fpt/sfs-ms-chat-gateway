@@ -24,6 +24,7 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
+import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -53,7 +54,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.ATTACHMENTS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_CONTACT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
@@ -157,11 +157,16 @@ public class SymphonyMessageService implements DatafeedListener {
         } else if (toUserIds.size() > 1) {// Check there are only 2 users
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
           messageMetrics.onMessageBlockFromSymphony(TOO_MUCH_MEMBERS, streamId);
-        } else if (attachments != null && !attachments.isEmpty()) {
-          // If there are some attachments, warn the advisor and block the message
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered. Attachments are not supported (messageId : " + messageId + ")."));
-          messageMetrics.onMessageBlockFromSymphony(ATTACHMENTS, streamId);
         } else {
+          List<Attachment> attachmentsContent = null;
+          if (attachments != null && !attachments.isEmpty()) {
+            // retrieve the attachment
+            attachmentsContent = attachments.stream().map(a -> new Attachment()
+              .contentType(a.getContentType())
+              .fileName(a.getName())
+              .data(symphonyService.getAttachment(streamId, messageId, a.getFileId(), userSessions.get(0)))
+            ).collect(Collectors.toList());
+          }
 
           // TODO Define the behavior in case of message not correctly sent to all EMPs
           //  need a recovery mechanism to re-send message in case of error only on some EMPs
@@ -175,7 +180,7 @@ public class SymphonyMessageService implements DatafeedListener {
             channelService.createIMChannel(streamId, fromSymphonyUser, toFederatedAccountsForEmp.get(0));
           }
           messageMetrics.onSendMessageFromSymphony(fromSymphonyUser, entry.getValue(), streamId);
-          Optional<String> empMessageId = empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer));
+          Optional<String> empMessageId = empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer), attachmentsContent);
           if (empMessageId.isEmpty()) {
             userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + messageId + ")."));
           }
@@ -194,7 +199,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
       SymphonySession userSession = datafeedSessionPool.refreshSession(symphonyUserId);
       for (MessageId id : messageIds) {
-        MessageInfo message = symphonyService.getMessage(id.getMessageId(), userSession, podConfiguration.getUrl()).orElseThrow(RetrieveMessageFailedProblem::new);
+        MessageInfo message = symphonyService.getMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
         messageInfos.add(message);
       }
 

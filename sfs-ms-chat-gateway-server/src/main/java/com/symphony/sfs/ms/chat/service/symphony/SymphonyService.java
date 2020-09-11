@@ -30,6 +30,9 @@ public class SymphonyService {
   private final PodConfiguration podConfiguration;
   private final SymMessageParser symMessageParser;
 
+  public static final String GETMESSAGE = "/agent/v1/message/{messageId}";
+  public static final String GETATTACHMENT = "/agent/v1/stream/{streamId}/attachment?messageId={messageId}&fileId={fileId}";
+
   @NewSpan
   public void removeMemberFromRoom(String streamId, SymphonySession session) {
     webClient.post()
@@ -49,16 +52,16 @@ public class SymphonyService {
    * @return The message text
    */
   @NewSpan
-  public Optional<MessageInfo> getMessage(String messageId, SymphonySession botSession, String podUrl) {
+  public Optional<MessageInfo> getMessage(String messageId, SymphonySession session) {
     try {
       //TODO put /agent/v1/message/{id} in a constant
       SymphonyInboundMessage response = webClient.get()
-        .uri(podUrl + "/agent/v1/message/" + messageId)
+        .uri(podConfiguration.getUrl() + GETMESSAGE, messageId)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-        .header("sessionToken", botSession.getSessionToken())
-        .header("keyManagerToken", botSession.getKmToken())
-        .attribute(BASE_URI, podUrl)
-        .attribute(BASE_PATH, "/agent/v1/message/")
+        .header("sessionToken", session.getSessionToken())
+        .header("keyManagerToken", session.getKmToken())
+        .attribute(BASE_URI, podConfiguration.getUrl())
+        .attribute(BASE_PATH, GETMESSAGE)
         .retrieve()
         .bodyToMono(SymphonyInboundMessage.class)
         .block();
@@ -69,8 +72,32 @@ public class SymphonyService {
           .messageId(r.getMessageId())
           .disclaimer(r.getDisclaimer()));
     } catch (Exception e) {
-      logWebClientError(LOG, "/agent/v1/message/" + messageId, e);
+      logWebClientError(LOG, GETMESSAGE.replace("{messageId}", messageId), e);
       return Optional.empty();
     }
   }
+
+  /**
+   * Retrieve an attachment of a message
+   *
+   * @param streamId  Conversation ID of the IM, MIM, or chatroom where the message containing the attachment is located
+   * @param messageId Message ID of the message containing the attachment
+   * @param fileId    ID of the attachment to download
+   * @return The attachment body encoded in Base64
+   */
+  public String getAttachment(String streamId, String messageId, String fileId, SymphonySession session) {
+    String response = webClient.get()
+      .uri(podConfiguration.getUrl() + GETATTACHMENT, streamId, messageId, fileId)
+      .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .header("sessionToken", session.getSessionToken())
+      .header("keyManagerToken", session.getKmToken())
+      .attribute(BASE_URI, podConfiguration.getUrl())
+      .attribute(BASE_PATH, GETATTACHMENT)
+      .retrieve()
+      .bodyToMono(String.class)
+      .block();
+
+    return response;
+  }
+
 }

@@ -7,6 +7,7 @@ import com.symphony.sfs.ms.chat.service.EmpMicroserviceResolver;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
 import com.symphony.sfs.ms.emp.EmpMicroserviceClient;
 import com.symphony.sfs.ms.emp.generated.model.AsyncResult;
+import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
@@ -47,7 +48,7 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer) {
+  public Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     SendMessageRequest request = new SendMessageRequest()
@@ -57,7 +58,8 @@ public class DefaultEmpClient implements EmpClient {
       .fromSymphonyUserId(fromSymphonyUser.getId().toString())
       .timestamp(timestamp)
       .text(message)
-      .disclaimer(disclaimer);
+      .disclaimer(disclaimer)
+      .attachments(attachments);
 
     // TODO async result too?
     client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());

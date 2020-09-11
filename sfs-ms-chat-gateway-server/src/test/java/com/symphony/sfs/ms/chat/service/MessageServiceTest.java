@@ -7,7 +7,6 @@ import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
-import com.symphony.sfs.ms.chat.exception.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -110,15 +109,15 @@ class MessageServiceTest {
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", null, null);
 
     InOrder orderVerifier = inOrder(empClient);
-    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer");
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "");
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null);
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null);
     orderVerifier.verifyNoMoreInteractions();
 
     // With disclaimer
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, members, now, "message", "disclaimer", null);
 
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer");
-    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", null);
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null);
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", null, null);
     orderVerifier.verifyNoMoreInteractions();
   }
 
@@ -137,12 +136,12 @@ class MessageServiceTest {
     long now = OffsetDateTime.now().toEpochSecond();
 
     when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null)).thenReturn(Optional.of("leaseId"));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null, null)).thenReturn(Optional.of("leaseId"));
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null);
 
     verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
     verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "");
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "", null);
   }
 
   @Test
@@ -160,12 +159,12 @@ class MessageServiceTest {
     long now = OffsetDateTime.now().toEpochSecond();
 
     when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null)).thenReturn(Optional.of("leaseId"));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null, null)).thenReturn(Optional.of("leaseId"));
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null);
 
     verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
     verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "");
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "", null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You are not entitled to send messages to emp users.");
   }
@@ -185,12 +184,12 @@ class MessageServiceTest {
     long now = OffsetDateTime.now().toEpochSecond();
 
     when(federatedAccountRepository.findBySymphonyId("234567891")).thenReturn(Optional.of(toFederatedAccount));
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null)).thenReturn(Optional.of("leaseId"));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, now, "text", null, null)).thenReturn(Optional.of("leaseId"));
     messageService.onIMMessage("streamId", "messageId", fromSymphonyUser, Arrays.asList("123456789", "234567891"), now, "text", null, null);
 
     verify(federatedAccountRepository, once()).findBySymphonyId("123456789");
     verify(federatedAccountRepository, once()).findBySymphonyId("234567891");
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "");
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), now, "text", "", null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "This message will not be delivered. You no longer have the entitlement for this.");
   }
