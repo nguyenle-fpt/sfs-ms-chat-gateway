@@ -9,7 +9,6 @@ import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.ChannelNotFoundProblem;
-import com.symphony.sfs.ms.chat.generated.model.CreateChannelFailedProblem;
 import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
@@ -96,10 +95,12 @@ public class ChannelService implements DatafeedListener {
                               .federatedUserId(fromFederatedAccount.getFederatedUserId())
                               .emp(fromFederatedAccount.getEmp())
                               .build();
-    channelRepository.save(channel);
+
     Optional<String> channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
     if (channelId.isEmpty()) {
       symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+    } else {
+      channelRepository.save(channel);
     }
     return streamId;
   }
@@ -132,16 +133,18 @@ public class ChannelService implements DatafeedListener {
           Optional<Channel>  existingChannel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
           if (existingChannel.isEmpty()) { // avoid recreating an already present channel
             Channel channel = Channel.builder()
-                              .advisorSymphonyId(fromSymphonyUser.getId().toString())
-                              .federatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId())
-                              .emp(entry.getKey())
-                              .build();
-            channelRepository.save(channel);
+              .advisorSymphonyId(fromSymphonyUser.getId().toString())
+              .federatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId())
+              .emp(entry.getKey())
+              .streamId(streamId)
+              .build();
             // TODO need a recovery mechanism to re-trigger the failed channel creation
             //  Short term proposition: recovery is manual - display a System message in the MIM indicating that channel creation has failed for some EMPs and to contact an administrator
             Optional<String> channelId = empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers);
             if (channelId.isEmpty()) {
               userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
+            } else {
+              channelRepository.save(channel);
             }
           }
         } else {
@@ -242,7 +245,7 @@ public class ChannelService implements DatafeedListener {
 
   @NewSpan
   public void deleteChannel(String advisorSymphonyId, String federatedUserId, String emp) {
-    Channel channel = retrieveChannel(advisorSymphonyId, federatedUserId, emp);
+    Channel channel = retrieveChannelOrFail(advisorSymphonyId, federatedUserId, emp);
 
     // do we need to fail here ?
     empClient.deleteChannel(channel.getStreamId(), emp);
@@ -256,7 +259,12 @@ public class ChannelService implements DatafeedListener {
   }
 
   @NewSpan
-  public Channel retrieveChannel(String advisorSymphonyId, String federatedUserId, String emp) {
+  public Channel retrieveChannelOrFail(String advisorSymphonyId, String federatedUserId, String emp) {
     return channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(advisorSymphonyId, federatedUserId, emp).orElseThrow(ChannelNotFoundProblem::new);
+  }
+
+  @NewSpan
+  public Optional<Channel> retrieveChannel(String advisorSymphonyId, String federatedUserId, String emp) {
+    return channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(advisorSymphonyId, federatedUserId, emp);
   }
 }

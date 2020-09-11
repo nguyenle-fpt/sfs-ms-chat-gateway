@@ -57,7 +57,7 @@ public class ChannelsApi implements com.symphony.sfs.ms.chat.generated.api.Chann
     MDC.put("emp", emp);
     MDC.put("advisor", advisorSymphonyId);
     LOG.info("retrieve channel");
-    Channel channel = channelService.retrieveChannel(advisorSymphonyId, federatedUserId, emp);
+    Channel channel = channelService.retrieveChannelOrFail(advisorSymphonyId, federatedUserId, emp);
     RetrieveChannelResponse retrieveChannelResponse = new RetrieveChannelResponse()
       .streamId(channel.getStreamId())
       .advisorSymphonyId(channel.getAdvisorSymphonyId())

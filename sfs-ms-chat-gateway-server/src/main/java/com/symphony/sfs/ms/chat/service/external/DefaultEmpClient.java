@@ -61,7 +61,7 @@ public class DefaultEmpClient implements EmpClient {
 
     // TODO async result too?
     client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getId);
+    return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getOperationId);
   }
 
   @Override
@@ -76,7 +76,7 @@ public class DefaultEmpClient implements EmpClient {
 
     // TODO async result too?
     client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return client.getMessagingApi().sendSystemMessage(request).map(SendSystemMessageResponse::getId);
+    return client.getMessagingApi().sendSystemMessage(request).map(SendSystemMessageResponse::getOperationId);
   }
 
   @Override

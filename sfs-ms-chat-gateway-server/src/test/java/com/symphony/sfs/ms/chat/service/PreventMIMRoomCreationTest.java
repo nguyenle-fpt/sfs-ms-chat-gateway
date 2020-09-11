@@ -105,7 +105,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     empSchemaService = new EmpSchemaService(adminClient);
 
-    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager));
+    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService);
     messageService.registerAsDatafeedListener();
 
     ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);

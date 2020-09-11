@@ -54,6 +54,7 @@ class MessageServiceTest {
   private AdminClient adminClient;
   private EmpSchemaService empSchemaService;
   private SymphonyService symphonyService;
+  private ChannelService channelService;
 
   private SymphonySession userSession;
 
@@ -86,7 +87,9 @@ class MessageServiceTest {
 
     empSchemaService = new EmpSchemaService(adminClient);
 
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, null, new MessageIOMonitor(meterManager));
+    channelService = mock(ChannelService.class);
+
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, null, new MessageIOMonitor(meterManager), channelService);
   }
 
   @Test

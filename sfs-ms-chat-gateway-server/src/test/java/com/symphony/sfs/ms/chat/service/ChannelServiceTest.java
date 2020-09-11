@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -112,12 +113,37 @@ class ChannelServiceTest {
 
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
-    verify(symphonyMessageSender, once()).sendInfoMessage(userSession101, "streamId", "Hello, I will be ready as soon as I join the whatsapp group");
 
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
-
+    verify(channelRepository, once()).save(any());
   }
 
+  @Test
+  void createIMChannel_Failed() throws UnknownDatafeedUserException {
+
+    FederatedAccount toFederatedAccount = newFederatedAccount("emp1", "101");
+    IUser fromSymphonyUser = newIUser("1");
+
+    when(empClient.createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser))).thenReturn(Optional.empty());
+
+    DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
+    when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
+    doReturn(Optional.empty()).when(symphonyMessageSender).sendInfoMessage(any(SymphonySession.class), eq("streamId"), anyString());
+
+    String streamId = channelService.createIMChannel(
+      "streamId",
+      newIUser("1"),
+      toFederatedAccount
+    );
+
+    assertEquals("streamId", streamId);
+
+    verify(datafeedSessionPool, once()).refreshSession("101");
+    verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+    verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
+    verify(channelRepository, never()).save(any());
+  }
 //  @Test
 //  void createMIMChannel() throws UnknownDatafeedUserException {
 //

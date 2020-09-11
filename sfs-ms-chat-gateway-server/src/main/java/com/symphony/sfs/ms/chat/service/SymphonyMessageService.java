@@ -17,6 +17,7 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
+import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -82,6 +83,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private final UsersInfoService usersInfoService;
   private final StreamService streamService;
   private final MessageIOMonitor messageMetrics;
+  private final ChannelService channelService;
 
   @PostConstruct
   @VisibleForTesting
@@ -168,6 +170,10 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Example: a WhatsApp user must join a WhatsGroup to discuss in the associated
           //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
           //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
+          Optional<Channel> channel = channelService.retrieveChannel(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
+          if (channel.isEmpty()) {
+            channelService.createIMChannel(streamId, fromSymphonyUser, toFederatedAccountsForEmp.get(0));
+          }
           messageMetrics.onSendMessageFromSymphony(fromSymphonyUser, entry.getValue(), streamId);
           Optional<String> empMessageId = empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer));
           if (empMessageId.isEmpty()) {
