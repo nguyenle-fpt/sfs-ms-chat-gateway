@@ -216,7 +216,7 @@ public class ChannelService implements DatafeedListener {
           try {
             String createChannelErrorMessage = null;
             if(canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT) {
-              createChannelErrorMessage = "You are not entitled to send messages to " + toFederatedAccount.get().getEmp() + " users";
+              createChannelErrorMessage = "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp()) + " users";
             } else {
               createChannelErrorMessage = "This message will not be delivered. You no longer have the entitlement for this.";
             }

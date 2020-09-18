@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
+import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -24,7 +25,9 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
@@ -86,7 +89,8 @@ class ChannelServiceTest {
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
     mockAdminClient = new MockAdminClient();
-    empSchemaService = new EmpSchemaService(mockAdminClient);
+    //empSchemaService = new EmpSchemaService(mockAdminClient);
+    empSchemaService =  mock(EmpSchemaService.class);
 
     channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, empSchemaService, symphonyService, channelRepository);
   }
@@ -144,6 +148,26 @@ class ChannelServiceTest {
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
     verify(channelRepository, never()).save(any());
   }
+
+  @Test
+  void onCreateIM_failed() throws UnknownDatafeedUserException {
+    FederatedAccount toFederatedAccount = newFederatedAccount("emp1", "101");
+    IUser fromSymphonyUser = newIUser("1");
+
+    when(federatedAccountRepository.findBySymphonyId("101")).thenReturn(Optional.of(toFederatedAccount));
+    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.NO_ENTITLEMENT));
+    DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
+    when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
+    when(empSchemaService.getEmpDisplayName("emp1")).thenReturn("External Messaging Platform");
+
+    List<String> members = new ArrayList<>();
+    members.add("1");
+    members.add("101");
+    channelService.onIMCreated("streamId", members, fromSymphonyUser, false);
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "You are not entitled to send messages to External Messaging Platform users");
+
+  }
+
 //  @Test
 //  void createMIMChannel() throws UnknownDatafeedUserException {
 //
