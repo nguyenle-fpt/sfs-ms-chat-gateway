@@ -9,6 +9,7 @@ import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.ChannelNotFoundProblem;
+import com.symphony.sfs.ms.chat.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
@@ -17,10 +18,12 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
@@ -31,9 +34,15 @@ import org.springframework.util.MultiValueMap;
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
 
 @Service
 @RequiredArgsConstructor
@@ -243,19 +252,67 @@ public class ChannelService implements DatafeedListener {
     refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, false);
   }
 
+
   @NewSpan
-  public void deleteChannel(String advisorSymphonyId, String federatedUserId, String emp) {
-    Channel channel = retrieveChannelOrFail(advisorSymphonyId, federatedUserId, emp);
+  public com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse deleteChannels(List<DeleteChannelRequest> deleteChannelRequests) {
+    Map<DeleteChannelRequest, BulkRemovalStatus> response = new HashMap<>();
+    Map<String, Channel> channelsToDelete = new HashMap<>();
 
-    // do we need to fail here ?
-    empClient.deleteChannel(channel.getStreamId(), emp);
-    // send message
-    Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(channel.getFederatedUserId(), emp);
-    if(federatedAccount.isPresent()) {
-      symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", channel.getAdvisorSymphonyId());
+    // a map where the key is the emp and the value is the list of all requests related to it
+    Map<String, List<DeleteChannelRequest>> channelsMap = deleteChannelRequests.stream()
+      .collect(groupingBy(DeleteChannelRequest::getEntitlementType, mapping(Function.identity(), toList())));
+    // a map to link each stream to the request related to it
+    Map<String, DeleteChannelRequest> streamID2request = new HashMap<>();
+
+    for (Map.Entry<String, List<DeleteChannelRequest>> currentEmp : channelsMap.entrySet()) {
+      List<String> streamIDs = new ArrayList<>();
+      // call to EMP to delete streams
+      for (DeleteChannelRequest req : currentEmp.getValue()) {
+        Optional<Channel> channel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(req.getAdvisorSymphonyId(), req.getFederatedUserId(), req.getEntitlementType());
+        if (channel.isEmpty()) {
+          response.put(req, BulkRemovalStatus.FAILURE);
+        } else {
+          streamID2request.put(channel.get().getStreamId(), req);
+          streamIDs.add(channel.get().getStreamId());
+          channelsToDelete.put(channel.get().getStreamId(), channel.get());
+        }
+      }
+      Optional<DeleteChannelsResponse> result = empClient.deleteChannels(streamIDs, currentEmp.getKey());
+      // delete for all streams failed
+      if (result.isEmpty()) {
+        currentEmp.getValue().forEach(channel -> response.put(channel, BulkRemovalStatus.FAILURE));
+      } else {
+        for (com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse deleteChannelResponse : result.get().getReport()) {
+          DeleteChannelRequest request = streamID2request.get(deleteChannelResponse.getStreamId());
+          response.put(request, deleteChannelResponse.getStatus());
+          if (BulkRemovalStatus.FAILURE.equals(deleteChannelResponse.getStatus())) {
+            channelsToDelete.remove(deleteChannelResponse.getStreamId());
+          }
+        }
+      }
     }
-    channelRepository.delete(channel);
 
+    // send messages for only streams for which the removal worked in the EMP
+    for (Channel channel : channelsToDelete.values()) {
+      Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(channel.getFederatedUserId(), channel.getEmp());
+      if (federatedAccount.isPresent()) {
+        symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", channel.getAdvisorSymphonyId());
+      }
+    }
+      channelRepository.delete(channelsToDelete.values());
+      return this.generateDeleteChannelsResponse(response);
+    }
+
+  private com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse generateDeleteChannelsResponse(Map<DeleteChannelRequest, BulkRemovalStatus> response) {
+    com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse deleteChannelsResponse = new com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse();
+    for (Map.Entry<DeleteChannelRequest, BulkRemovalStatus> entry : response.entrySet()) {
+      DeleteChannelRequest channel = entry.getKey();
+      deleteChannelsResponse.addReportItem(
+        new com.symphony.sfs.ms.chat.generated.model.DeleteChannelResponse().channel(new DeleteChannelRequest().advisorSymphonyId(channel.getAdvisorSymphonyId())
+          .entitlementType(channel.getEntitlementType()).federatedUserId(channel.getFederatedUserId()))
+          .status(entry.getValue()));
+    }
+    return deleteChannelsResponse;
   }
 
   @NewSpan

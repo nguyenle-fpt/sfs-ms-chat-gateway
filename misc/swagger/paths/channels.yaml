@@ -2,7 +2,7 @@ channels:
   post:
     tags:
       - Channels
-    summary: Create a new channel between a federated account and and symphony advisor
+    summary: Create a new channel between a federated account and a symphony advisor
     operationId: createChannel
     description: >
       => Create a new Channel
@@ -29,11 +29,11 @@ channels:
                 - $ref: '../errors/channels.yaml#/federated-account-not-found'
                 - $ref: '../errors/accounts.yaml#/create-channel-failed'
 
-manage-channel:
+retrieve-channel:
   get:
     tags:
       - Channels
-    summary: Retrieves a channel between a federated account and and symphony advisor
+    summary: Retrieves a channel between a federated account and a symphony advisor
     operationId: retrieveChannel
     description: >
       => Retrieves a channel
@@ -71,40 +71,30 @@ manage-channel:
           application/json:
             schema:
               $ref: '../errors/channels.yaml#/channel-not-found'
-  delete:
+
+delete-channels:
+  post:
     tags:
       - Channels
-    summary: Deletes a channel between a federated account and and symphony advisor
-    operationId: deleteChannel
+    summary: Deletes a list of channels between a federated account and a symphony advisor
+    operationId: deleteChannels
     description: >
-      => Delete a channel
+      => Delete  channels
     security:
       - sfsAuthentication: []
-    parameters:
-      - in: path
-        name: advisorSymphonyId
-        schema:
-          type: string
-        required: true
-        description: The advisor's symphony id
-      - in: path
-        name: federatedUserId #TODO maybe move to symphonyID? Beware of the state of the DB
-        schema:
-          type: string
-        required: true
-        description: The federated user id
-      - in: path
-        name: emp
-        schema:
-          type: string
-        required: true
-        description: The EMP concerned
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/channels.yaml#/deleteChannels-request'
     responses:
       '200':
         description: The channel has been successfully deleted
-      '404':
-        description: Channel not found
         content:
           application/json:
             schema:
-              $ref: '../errors/channels.yaml#/channel-not-found'
+              $ref: '../components/channels.yaml#/deleteChannels-response'

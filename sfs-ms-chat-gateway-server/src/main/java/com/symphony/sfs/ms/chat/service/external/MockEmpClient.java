@@ -2,8 +2,11 @@ package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import lombok.Getter;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 
@@ -59,8 +62,15 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteChannel(String streamId, String emp) {
-    channels.remove(emp + ":" + streamId);
-
+  public Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp) {
+    DeleteChannelsResponse response = new DeleteChannelsResponse();
+    streamIds.forEach(streamId -> {
+      if(this.channels.remove(emp + ":" + streamId) == null){
+        response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.FAILURE));
+      }else{
+        response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.SUCCESS));
+      }
+    });
+    return Optional.of(response);
   }
 }

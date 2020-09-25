@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,5 +52,9 @@ public class ChannelRepository extends AbstractRawDynamoRepository {
   @NewSpan
   public void delete(Channel channel) {
     super.delete(channel);
+  }
+  @NewSpan
+  public void delete(Collection<Channel> channels) {
+    super.batchDelete(channels);
   }
 }

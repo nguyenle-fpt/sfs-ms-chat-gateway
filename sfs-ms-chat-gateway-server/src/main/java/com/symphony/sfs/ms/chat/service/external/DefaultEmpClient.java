@@ -10,6 +10,8 @@ import com.symphony.sfs.ms.emp.generated.model.AsyncResult;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.CreateChannelRequest;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsRequest;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
@@ -89,10 +91,10 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteChannel(String streamId, String emp) {
+  public Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    client.getChannelApi().deleteChannel(streamId);
+    return client.getChannelApi().deleteChannelsOrFail(new DeleteChannelsRequest().streamIds(streamIds));
   }
 
   private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {

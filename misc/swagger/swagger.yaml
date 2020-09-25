@@ -22,7 +22,9 @@ paths:
   /api/v1/internal/channels:
     $ref: './paths/channels.yaml#/channels'
   /api/v1/internal/channels/advisor/{advisorSymphonyId}/user/{federatedUserId}/emp/{emp}:
-    $ref: './paths/channels.yaml#/manage-channel'
+    $ref: './paths/channels.yaml#/retrieve-channel'
+  /api/v1/internal/channels/delete:
+    $ref: './paths/channels.yaml#/delete-channels'
   /api/v1/internal/messages:
     $ref: './paths/messaging.yaml#/messages'
   /api/v1/internal/emps/reload:

@@ -13,6 +13,27 @@ create-channel-request:
     advisorUserId:
       type: string
 
+deleteChannel-request:
+  type: object
+  required:
+    - advisorSymphonyId
+    - federatedUserId
+    - emp
+  properties:
+    advisorSymphonyId:
+      type: string
+    federatedUserId: #TODO maybe move to symphonyID? Beware of the state of the DB
+      type: string
+    entitlementType:
+      type: string
+
+deleteChannels-request:
+  type: object
+  properties:
+    channels:
+      type: array
+      items:
+        $ref: '#/deleteChannel-request'
 #Responses
 create-channel-response:
   type: object
@@ -31,4 +52,20 @@ retrieve-channel-response:
       type: string
     emp:
       type: string
+
+deleteChannel-response:
+  type: object
+  properties:
+    channel:
+      $ref: '#/deleteChannel-request'
+    status:
+      $ref: './entities.yaml#/bulk-removal-status'
+
+deleteChannels-response:
+  type: object
+  properties:
+    report:
+      type: array
+      items:
+        $ref: '#/deleteChannel-response'
 

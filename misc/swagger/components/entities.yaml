@@ -1,0 +1,6 @@
+#Responses
+bulk-removal-status:
+  type: string
+  enum:
+    - FAILURE
+    - SUCCESS

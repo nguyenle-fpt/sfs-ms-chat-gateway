@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 
@@ -72,5 +73,5 @@ public interface EmpClient {
    */
   void deleteAccountOrFail(String emp, String symphonyId, String emailAddress);
 
-  void deleteChannel(String streamId, String emp);
+  Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp);
 }

@@ -2,6 +2,8 @@ package com.symphony.sfs.ms.chat.api;
 
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelResponse;
+import com.symphony.sfs.ms.chat.generated.model.DeleteChannelsRequest;
+import com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveChannelResponse;
 import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.service.ChannelService;
@@ -41,13 +43,9 @@ public class ChannelsApi implements com.symphony.sfs.ms.chat.generated.api.Chann
 
   @Override
   @NewSpan
-  public ResponseEntity<Void> deleteChannel(String advisorSymphonyId, String federatedUserId, String emp) {
-    MDC.put("federatedUserId", federatedUserId);
-    MDC.put("emp", emp);
-    MDC.put("advisor", advisorSymphonyId);
-    LOG.info("delete channel");
-    channelService.deleteChannel(advisorSymphonyId, federatedUserId, emp);
-    return ResponseEntity.ok().build();
+  public ResponseEntity<DeleteChannelsResponse> deleteChannels(DeleteChannelsRequest body) {
+    LOG.info("delete channels");
+    return ResponseEntity.ok(channelService.deleteChannels(body.getChannels()));
   }
 
   @Override
