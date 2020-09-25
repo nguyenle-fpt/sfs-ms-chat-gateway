@@ -1,0 +1,16 @@
+model:
+  get:
+    tags:
+      - ModelGeneration
+    summary: Generate model Description
+    operationId: getModel
+    security:
+      - sfsAuthentication: []
+    produces:
+      - application/json
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              type: object

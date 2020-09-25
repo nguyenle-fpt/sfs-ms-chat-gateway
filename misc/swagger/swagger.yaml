@@ -12,6 +12,8 @@ tags:
     description: Messaging API
   - name: EMP
     description: EMP API
+  - name: ModelGeneration
+    description: Model Generation API
 paths:
   /api/v1/internal/accounts:
     $ref: './paths/accounts.yaml#/accounts'
@@ -25,6 +27,9 @@ paths:
     $ref: './paths/messaging.yaml#/messages'
   /api/v1/internal/emps/reload:
     $ref: './paths/emps.yaml#/internal-reload-emps'
+
+  /model:
+    $ref: './paths/utils.yaml#/model'
 components:
   securitySchemes:
     sfsAuthentication:

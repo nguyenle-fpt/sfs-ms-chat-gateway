@@ -3,7 +3,6 @@ package com.symphony.sfs.ms.chat.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
-import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -11,7 +10,6 @@ import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
-import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.DefaultAdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
@@ -21,6 +19,7 @@ import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
@@ -40,10 +39,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,7 +51,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   private SymphonyMessageSender symphonyMessageSender;
   private EmpClient empClient;
   private DatafeedSessionPool datafeedSessionPool;
-  private FederatedAccountRepository federatedAccountRepository;
   private SymphonyService symphonyService;
   private AdminClient adminClient;
   private EmpSchemaService empSchemaService;
@@ -67,7 +64,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     symphonyMessageSender = mock(SymphonyMessageSender.class);
     empClient = new MockEmpClient();
     datafeedSessionPool = mock(DatafeedSessionPool.class);
-    federatedAccountRepository = mock(FederatedAccountRepository.class);
     channelRepository = mock(ChannelRepository.class);
 
     AuthenticationService authenticationService = mock(AuthenticationService.class);
@@ -132,8 +128,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     UserInfo inviter = new UserInfo();
     inviter.setId(2L);
 
-    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
-    when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUserInvited));
+    federatedAccountRepository.save(whatsAppUserInvited);
 
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getCreateMIMMaestroMessage(
       whatsAppUserInvited,
@@ -162,8 +157,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     UserInfo inviter = new UserInfo();
     inviter.setId(2L);
 
-    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
-    when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUserInvited));
+    federatedAccountRepository.save(whatsAppUserInvited);
 
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getCreateIMMaestroMessage(
       whatsAppUserInvited,
@@ -194,7 +188,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     inviter.setId(2L);
 
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUserInvited);
-    when(federatedAccountRepository.findBySymphonyId("1")).thenReturn(Optional.of(whatsAppUserInvited));
+    federatedAccountRepository.save(whatsAppUserInvited);
     doNothing().when(symphonyService).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn///pINMV/OdA==", session);
 
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getCreateRoomMaestroMessage(
@@ -206,6 +200,35 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
 //    verify(symphonyService, times(1)).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", session);
 //    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a chat room.");
+  }
+
+  @Test
+  public void onIMMessageNotEntitled() throws Exception {
+    FederatedAccount whatsAppUser = FederatedAccount.builder()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP")
+      .symphonyUserId("3")
+      .symphonyUsername("username")
+      .build();
+
+    UserInfo sender = new UserInfo();
+    sender.setId(1L);
+
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
+    federatedAccountRepository.save(whatsAppUser);
+
+    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
+      whatsAppUser,
+      sender
+    )));
+    doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    forwarderQueueConsumer.consume(notification, "1");
+
+    verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
   }
 
   @Test
@@ -224,53 +247,25 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     UserInfo sender = new UserInfo();
     sender.setId(1L);
 
+    UserInfo receipter = new UserInfo();
+    sender.setId(3L);
+
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
-    when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUser));
+    federatedAccountRepository.save(whatsAppUser);
 
     String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
       whatsAppUser,
       sender
     )));
-    doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
-    forwarderQueueConsumer.consume(notification, "1");
 
-    verify(symphonyMessageSender, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
-  }
-
-  @Disabled
-  @Test
-  public void onIMMessageWithAttachment() throws Exception {
-    when(adminClient.getEntitlementAccess(anyString(), anyString())).thenReturn(Optional.of(new EntitlementResponse()));
-    FederatedAccount whatsAppUser = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP")
-      .symphonyUserId("3")
-      .symphonyUsername("username")
-      .build();
-
-    UserInfo sender = new UserInfo();
-    sender.setId(1L);
-
-    when(federatedAccountRepository.findBySymphonyId("3")).thenReturn(Optional.of(whatsAppUser));
-
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
-      whatsAppUser,
-      sender
-    )));
     doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     when(adminClient.canChat("1", "federatedUserId", "WHATSAPP")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
+
     forwarderQueueConsumer.consume(notification, "1");
 
-    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
-
-    String alertMessage = "This message was not delivered. Attachments are not supported (messageId : ";
-    verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), startsWith(alertMessage));
+    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString());
   }
-
 
   private String getCreateMIMMaestroMessage(FederatedAccount whatsAppUserInvited, UserInfo symphonyUserInvited, UserInfo inviter) {
     return " {" +
