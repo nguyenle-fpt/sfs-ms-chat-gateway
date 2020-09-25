@@ -4,7 +4,6 @@ send-message-request:
   required:
     - streamId
     - fromSymphonyUserId
-    - text
   properties:
     streamId:
       type: string
@@ -15,6 +14,10 @@ send-message-request:
     appendTags:
       type: boolean
       default: false
+    attachments:
+      type: array
+      items:
+        $ref: '#/symphony-attachment'
     formatting:
       type: string
       enum:
@@ -70,3 +73,19 @@ message-info:
     disclaimer:
       type: string
 
+symphony-attachment:
+  type: object
+  required:
+    - contentType
+    - fileName
+    - data
+  properties:
+    contentType:
+      type: string
+    fileName:
+      enum:
+        - image
+        - document
+    data:
+      type: string
+      format: base64

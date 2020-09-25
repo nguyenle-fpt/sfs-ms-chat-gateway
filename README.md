@@ -25,3 +25,9 @@ aws sqs receive-message --queue-url <QUEUE_URL> --wait-time-seconds 20
 ## Create a local forwarder topic
 
 aws --endpoint-url=http://localhost:4576 sqs create-queue --queue-name sfs-federation-events
+
+
+## start sfs-ms-chat-gateway
+```
+SPRING_PROFILES_ACTIVE=local mvn -f sfs-ms-chat-gateway-server/pom.xml clean spring-boot:run
+```

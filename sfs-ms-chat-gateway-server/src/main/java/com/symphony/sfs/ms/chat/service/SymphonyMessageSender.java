@@ -1,7 +1,9 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.amazonaws.util.Base64;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
@@ -10,11 +12,17 @@ import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
+import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.UNKNOWN_SENDER;
 
@@ -102,6 +110,33 @@ public class SymphonyMessageSender {
 
   public Optional<String> sendAlertMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
     return sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE), toSymphonyUserId);
+  }
+
+  public Optional<String> sendRawMessageWithAttachments(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId, List<SymphonyAttachment> attachments) {
+    FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
+      LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
+      messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
+      return new SendMessageFailedProblem();
+    });
+
+    messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, toSymphonyUserId, streamId);
+
+    SymphonySession userSession = authenticationService.authenticate(
+      podConfiguration.getSessionAuth(),
+      podConfiguration.getKeyAuth(),
+      federatedAccount.getSymphonyUsername(),
+      chatConfiguration.getSharedPrivateKey().getData());
+    SymphonyOutboundMessage symphonyOutboundMessage = SymphonyOutboundMessage.builder()
+      .message(messageContent)
+      .attachment(attachments.stream().map(attachment ->
+        SymphonyOutboundAttachment.builder()
+          .name(attachment.getFileName())
+          .data(Base64.decode(attachment.getData()))
+          .mediaType(MediaType.parseMediaType(attachment.getContentType()))
+          .build()
+      ).toArray(SymphonyOutboundAttachment[]::new)).build();
+    Optional<SymphonyInboundMessage> response =  streamService.sendMessageMultiPart(podConfiguration.getUrl(), new StaticSessionSupplier<>(userSession), streamId, symphonyOutboundMessage, false);
+    return response.map(SymphonyInboundMessage::getMessageId);
   }
 
   // TODO i18n?

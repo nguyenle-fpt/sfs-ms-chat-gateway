@@ -17,6 +17,7 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
+import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
@@ -42,6 +43,7 @@ import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.zalando.problem.violations.Violation;
 
 import javax.annotation.PostConstruct;
@@ -211,7 +213,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text) {
+  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
@@ -230,31 +232,38 @@ public class SymphonyMessageService implements DatafeedListener {
     } else {
       // TODO fix this bad management of optional
       messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, advisorSymphonyUserId.get(), streamId);
-      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, advisorSymphonyUserId.get(), formatting, text).orElseThrow(SendMessageFailedProblem::new);
+      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, advisorSymphonyUserId.get(), formatting, text, attachments).orElseThrow(SendMessageFailedProblem::new);
     }
 
     return symphonyMessageId;
   }
 
-  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text) {
+  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments) {
     LOG.info("incoming message");
-    String messageContent = "<messageML>" + text + "</messageML>";
-    if (formatting == null) {
-      return symphonyMessageSender.sendRawMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+    if(StringUtils.isEmpty(text)) {
+      text = " "; // this is the minimum message for symphony
     }
+    String messageContent = "<messageML>" + text + "</messageML>";
+    if(attachments != null && attachments.size() > 0 ) {
+      return symphonyMessageSender.sendRawMessageWithAttachments(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId, attachments);
+    } else {
+      if (formatting == null) {
+        return symphonyMessageSender.sendRawMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+      }
 
-    messageContent = text;
-    switch (formatting) {
-      case SIMPLE:
-        return symphonyMessageSender.sendSimpleMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
-      case NOTIFICATION:
-        return symphonyMessageSender.sendNotificationMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
-      case INFO:
-        return symphonyMessageSender.sendInfoMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
-      case ALERT:
-        return symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
-      default:
-        throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));
+      messageContent = text;
+      switch (formatting) {
+        case SIMPLE:
+          return symphonyMessageSender.sendSimpleMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+        case NOTIFICATION:
+          return symphonyMessageSender.sendNotificationMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+        case INFO:
+          return symphonyMessageSender.sendInfoMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+        case ALERT:
+          return symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+        default:
+          throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));
+      }
     }
   }
 

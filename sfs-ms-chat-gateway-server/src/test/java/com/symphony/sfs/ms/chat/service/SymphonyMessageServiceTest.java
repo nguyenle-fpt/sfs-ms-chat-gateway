@@ -7,6 +7,7 @@ import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
@@ -18,7 +19,10 @@ import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,6 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
+import org.springframework.http.MediaType;
 
 import java.util.Collections;
 import java.util.List;
@@ -106,6 +111,27 @@ class SymphonyMessageServiceTest {
     symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId");
 
     verify(streamService, once()).sendMessage(eq(podConfiguration.getUrl()), any(StaticSessionSupplier.class), eq("streamId"), eq("text"));
+  }
+
+  @Test
+  void sendRawMessageWithAttachment() {
+    FederatedAccount federatedAccount = FederatedAccount.builder()
+      .symphonyUsername("username")
+      .build();
+
+    byte[] data = new byte[] {1, 2, 3, 4, 5};
+    SymphonyAttachment attachment = new SymphonyAttachment()
+                                        .fileName("filename.png")
+                                        .contentType("image/png")
+                                        .data(Base64.encodeBase64String(data));
+
+    when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.of(federatedAccount));
+
+    symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId", Collections.singletonList(attachment));
+    SymphonyOutboundMessage symphonyOutboundMessage = SymphonyOutboundMessage.builder().message("text")
+      .attachment(new SymphonyOutboundAttachment[] { SymphonyOutboundAttachment.builder().mediaType(MediaType.IMAGE_PNG).name("filename.png").data(data).build()}).build();
+
+    verify(streamService, once()).sendMessageMultiPart(eq(podConfiguration.getUrl()), any(StaticSessionSupplier.class), eq("streamId"), eq(symphonyOutboundMessage), eq(false));
   }
 
   @TestInstance(PER_CLASS)

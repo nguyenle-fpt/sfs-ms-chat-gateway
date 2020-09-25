@@ -28,6 +28,7 @@ import com.symphony.sfs.ms.starter.util.RsaUtils;
 import model.UserInfo;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
@@ -236,6 +237,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     verify(symphonyMessageSender, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
   }
 
+  @Disabled
   @Test
   public void onIMMessageWithAttachment() throws Exception {
     when(adminClient.getEntitlementAccess(anyString(), anyString())).thenReturn(Optional.of(new EntitlementResponse()));
