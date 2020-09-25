@@ -1,5 +1,7 @@
 # Backend configuration
 aws:
+  awsAccessKey: ""
+  awsSecretKey: ""
   dynamodb:
     endpoint: http://localhost:8000
     signinRegion: ""
