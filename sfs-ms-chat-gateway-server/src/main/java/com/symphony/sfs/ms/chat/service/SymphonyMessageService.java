@@ -40,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
 import org.apache.log4j.MDC;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -71,6 +72,7 @@ import static org.jsoup.nodes.Entities.escape;
 @RequiredArgsConstructor
 public class SymphonyMessageService implements DatafeedListener {
 
+  private final long MAX_UPLOAD_SIZE = 25 * 1024 * 1024;
   private final EmpClient empClient;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -161,13 +163,28 @@ public class SymphonyMessageService implements DatafeedListener {
           messageMetrics.onMessageBlockFromSymphony(TOO_MUCH_MEMBERS, streamId);
         } else {
           List<Attachment> attachmentsContent = null;
+          long totalsize = 0;
           if (attachments != null && !attachments.isEmpty()) {
             // retrieve the attachment
-            attachmentsContent = attachments.stream().map(a -> new Attachment()
-              .contentType(a.getContentType())
-              .fileName(a.getName())
-              .data(symphonyService.getAttachment(streamId, messageId, a.getFileId(), userSessions.get(0)))
-            ).collect(Collectors.toList());
+            try {
+              attachmentsContent = new ArrayList<>();
+              for (IAttachment attachment : attachments) {
+                Attachment result = new Attachment()
+                  .contentType(attachment.getContentType())
+                  .fileName(attachment.getName())
+                  .data(symphonyService.getAttachment(streamId, messageId, attachment.getFileId(), userSessions.get(0)));
+
+                attachmentsContent.add(result);
+
+                totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
+                if (totalsize > MAX_UPLOAD_SIZE) {
+                  userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + messageId + ")."));
+                  return;
+                }
+              }
+            } catch (DataBufferLimitException dbe) {
+              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + messageId + ")."));
+            }
           }
 
           // TODO Define the behavior in case of message not correctly sent to all EMPs
