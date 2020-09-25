@@ -58,6 +58,7 @@ public class MessageIOMonitor {
     TOO_MUCH_MEMBERS("too much members"),
     ATTACHMENTS("attachments"),
     SOCIAL_MESSAGE_MALFORMED("social message malformed"),
+    UNSUPPORTED_MESSAGE_CONTENTS("unsupported message contents"),
     NO_GATEWAY_MANAGED_ACCOUNT("no gateway managed account"),
     UNMANAGED_ACCOUNT("unmanaged account"),
     DECRYPTION_FAILED("decryption failed");

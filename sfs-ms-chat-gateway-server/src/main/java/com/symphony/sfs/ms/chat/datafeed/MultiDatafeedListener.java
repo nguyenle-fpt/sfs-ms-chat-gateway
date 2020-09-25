@@ -1,6 +1,5 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
-import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 
 import java.util.HashSet;
@@ -30,8 +29,8 @@ public class MultiDatafeedListener implements DatafeedListener {
     listeners.forEach(l -> l.onConnectionAccepted(requesting, requested));
   }
 
-  public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
-    listeners.forEach(l -> l.onIMMessage(streamId, messageId, fromSymphonyUser, members, timestamp, message, disclaimer, attachments));
+  public void onIMMessage(GatewaySocialMessage gatewaySocialMessage) {
+    listeners.forEach(l -> l.onIMMessage(gatewaySocialMessage));
   }
 
   public void register(DatafeedListener listener) {

@@ -6,7 +6,9 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
+import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
@@ -42,6 +44,7 @@ import org.apache.log4j.MDC;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
@@ -50,6 +53,7 @@ import org.zalando.problem.violations.Violation;
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -62,10 +66,10 @@ import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFro
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_FEDERATED_ACCOUNT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.TOO_MUCH_MEMBERS;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.UNSUPPORTED_MESSAGE_CONTENTS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ADVISOR_NO_LONGER_AVAILABLE;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.FEDERATED_ACCOUNT_NOT_FOUND;
 import static com.symphony.sfs.ms.starter.util.ProblemUtils.newConstraintViolation;
-import static org.jsoup.nodes.Entities.escape;
 
 @Service
 @Slf4j
@@ -97,93 +101,111 @@ public class SymphonyMessageService implements DatafeedListener {
 
   @Override
   @NewSpan
-  public void onIMMessage(String streamId, String messageId, IUser fromSymphonyUser, List<String> members, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
-
-    if (members.size() < 2) {
-      messageMetrics.onMessageBlockFromSymphony(NOT_ENOUGH_MEMBER, streamId);
-      LOG.warn("(M)IM with has less than 2 members  | streamId={} messageId={}", streamId, messageId);
+  public void onIMMessage(GatewaySocialMessage gatewaySocialMessage) {
+    if (!arePartiesValid(gatewaySocialMessage)) {
       return;
     }
-
-    // Recipients correspond to all userIds which are not fromUserId
-    String fromSymphonyUserId = fromSymphonyUser.getId().toString();
-    List<String> toUserIds = members.stream().filter(id -> !id.equals(fromSymphonyUserId)).collect(Collectors.toList());
-
-    Optional<FederatedAccount> fromFederatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId);
-    boolean isMessageFromFederatedUser = fromFederatedAccount.isPresent();
-
-    if (!isMessageFromFederatedUser) {
-      // (M)IM from Symphony to EMP(s)
-      // Reminder: channel is created on the fly if needed in EMPs
-
-      // Get recipient FederatedServiceAccount(s)
-      if (toUserIds.size() > 1) {
-        LOG.info("More than one recipient --> We are in MIM | recipients={}", toUserIds);
-      }
-      handleFromSymphonyIMorMIM(streamId, messageId, fromSymphonyUser, toUserIds, timestamp, message, disclaimer, attachments);
+    // Here we know this is a (M)IM from Symphony to EMP(s)
+    // Reminder: channel is created on the fly if needed in EMPs
+    if (gatewaySocialMessage.getToUserIds().size() > 1) {
+      LOG.info("More than one recipient --> We are in MIM | recipients={}", gatewaySocialMessage.getToUserIds());
     }
+    handleFromSymphonyIMorMIM(gatewaySocialMessage);
   }
 
-  private void handleFromSymphonyIMorMIM(String streamId, String messageId, IUser fromSymphonyUser, List<String> toUserIds, Long timestamp, String message, String disclaimer, List<IAttachment> attachments) {
+  private boolean arePartiesValid(GatewaySocialMessage gatewaySocialMessage) {
+    if (gatewaySocialMessage.getMembers().size() < 2) {
+      messageMetrics.onMessageBlockFromSymphony(NOT_ENOUGH_MEMBER, gatewaySocialMessage.getStreamId());
+      LOG.warn("(M)IM with has less than 2 members  | streamId={} messageId={}", gatewaySocialMessage.getStreamId(), gatewaySocialMessage.getMessageId());
+      return false;
+    }
+    if (federatedAccountRepository.findBySymphonyId(gatewaySocialMessage.getFromUserId()).isPresent()) {
+      // Message is from a Federated User
+      return false;
+    }
+    // Build recipient FederatedServiceAccount(s)
+    gatewaySocialMessage.onPartiesValidated();
+    return true;
+  }
+
+  private void handleFromSymphonyIMorMIM(GatewaySocialMessage gatewaySocialMessage) {
+    String streamId = gatewaySocialMessage.getStreamId();
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
     List<IUser> symphonyUsers = new ArrayList<>();
 
-    for (String symphonyId : toUserIds) {
+    for (String symphonyId : gatewaySocialMessage.getToUserIds()) {
       federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(SymphonyUserUtils.newIUser(symphonyId)));
     }
 
     if (federatedAccountsByEmp.isEmpty()) {
       // No federated account found
-      LOG.warn("Unexpected handleFromSymphonyIMorMIM towards non-federated accounts, in-memory session to be removed | toUsers={}", toUserIds);
+      LOG.warn("Unexpected handleFromSymphonyIMorMIM towards non-federated accounts, in-memory session to be removed | toUsers={}", gatewaySocialMessage.getToUserIds());
       messageMetrics.onMessageBlockFromSymphony(NO_FEDERATED_ACCOUNT, streamId);
-      toUserIds.forEach(datafeedSessionPool::removeSessionInMemory);
+      gatewaySocialMessage.getToUserIds().forEach(datafeedSessionPool::removeSessionInMemory);
       return;
     }
 
     try {
+      // Check if message contents can be sent
+      List<SymphonySession> allUserSessions = new ArrayList<>(gatewaySocialMessage.getToUserIds().size());
+      for (FederatedAccount toFederatedAccount : federatedAccountsByEmp.values().stream().flatMap(Collection::stream).collect(Collectors.toList())) {
+        allUserSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
+      }
+      if (gatewaySocialMessage.isChime()) {
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Chimes are not supported currently, your contact was not notified."));
+        messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
+        return;
+      } else if (gatewaySocialMessage.isTable()) {
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Your message was not sent. Sending tables is not supported currently."));
+        messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
+        return;
+      } else if (gatewaySocialMessage.getParentRelationshipType() == ParentRelationshipType.REPLY) {
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Your message was not sent to your contact. Inline replies are not supported currently."));
+        messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
+        return;
+      }
+
       for (Map.Entry<String, List<FederatedAccount>> entry : federatedAccountsByEmp.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
+        String emp = entry.getKey();
         List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
 
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
-          // TODO The process stops at first UnknownDatafeedUserException
-          //  Some EMPs may have been called, others may have not
-          //  Do we check first all sessions are ok?
-          userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
+          userSessions.add(datafeedSessionPool.getSession(toFederatedAccount.getSymphonyUserId()));
         }
-        Optional<CanChatResponse> canChat = adminClient.canChat(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
+        Optional<CanChatResponse> canChat = adminClient.canChat(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), emp);
         if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(entry.getKey()) + " users."));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(emp) + " users."));
           messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
         } else if (canChat.get() == CanChatResponse.NO_CONTACT) {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
           messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
-        } else if (toUserIds.size() > 1) {// Check there are only 2 users
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
+        } else if (gatewaySocialMessage.getToUserIds().size() > 1) {// Check there are only 2 users
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + empSchemaService.getEmpDisplayName(emp) + " contact in a MIM."));
           messageMetrics.onMessageBlockFromSymphony(TOO_MUCH_MEMBERS, streamId);
         } else {
           List<Attachment> attachmentsContent = null;
           long totalsize = 0;
-          if (attachments != null && !attachments.isEmpty()) {
+          if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
             // retrieve the attachment
             try {
               attachmentsContent = new ArrayList<>();
-              for (IAttachment attachment : attachments) {
+              for (IAttachment attachment : gatewaySocialMessage.getAttachments()) {
                 Attachment result = new Attachment()
                   .contentType(attachment.getContentType())
                   .fileName(attachment.getName())
-                  .data(symphonyService.getAttachment(streamId, messageId, attachment.getFileId(), userSessions.get(0)));
+                  .data(symphonyService.getAttachment(streamId, gatewaySocialMessage.getMessageId(), attachment.getFileId(), userSessions.get(0)));
 
                 attachmentsContent.add(result);
 
                 totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
                 if (totalsize > MAX_UPLOAD_SIZE) {
-                  userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + messageId + ")."));
+                  userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
                   return;
                 }
               }
             } catch (DataBufferLimitException dbe) {
-              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + messageId + ")."));
+              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
             }
           }
 
@@ -194,14 +216,22 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Example: a WhatsApp user must join a WhatsGroup to discuss in the associated
           //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
           //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
-          Optional<Channel> channel = channelService.retrieveChannel(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
+          Optional<Channel> channel = channelService.retrieveChannel(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
           if (channel.isEmpty()) {
-            channelService.createIMChannel(streamId, fromSymphonyUser, toFederatedAccountsForEmp.get(0));
+            channelService.createIMChannel(streamId, gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp.get(0));
           }
-          messageMetrics.onSendMessageFromSymphony(fromSymphonyUser, entry.getValue(), streamId);
-          Optional<String> empMessageId = empClient.sendMessage(entry.getKey(), streamId, messageId, fromSymphonyUser, entry.getValue(), timestamp, escape(message), escape(disclaimer), attachmentsContent);
+          messageMetrics.onSendMessageFromSymphony(gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp, streamId);
+          Optional<String> empMessageId = empClient.sendMessage(emp,
+            streamId,
+            gatewaySocialMessage.getMessageId(),
+            gatewaySocialMessage.getFromUser(),
+            toFederatedAccountsForEmp,
+            gatewaySocialMessage.getTimestamp(),
+            gatewaySocialMessage.getMessageForEmp(),
+            gatewaySocialMessage.getDisclaimerForEmp(),
+            attachmentsContent);
           if (empMessageId.isEmpty()) {
-            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + messageId + ")."));
+            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
           }
         }
       }

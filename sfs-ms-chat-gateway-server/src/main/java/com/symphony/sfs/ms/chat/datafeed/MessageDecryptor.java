@@ -14,6 +14,7 @@ import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -28,14 +29,18 @@ public class MessageDecryptor {
     this.cryptoHandler = new ClientCryptoHandler();
   }
 
-  public String decrypt(ISocialMessage socialMessage, String userId) throws UnknownDatafeedUserException, ContentKeyRetrievalException, DecryptionException {
+  public void decrypt(ISocialMessage socialMessage, String userId, GatewaySocialMessage gatewaySocialMessage) throws UnknownDatafeedUserException, ContentKeyRetrievalException, DecryptionException {
     try {
       // Get message ciphertext transport to extract rotation Id of key that was used to cipher the text.
       ICiphertextTransport msgCipherTransport = CiphertextFactory.getTransport(socialMessage.getText());
 
       byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), userId, msgCipherTransport.getRotationId());
-
-      return cryptoHandler.decryptMsg(contentKey, socialMessage.getText());
+      if (socialMessage.getText() != null) {
+        gatewaySocialMessage.setTextContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getText()));
+      }
+      if (StringUtils.isBlank(gatewaySocialMessage.getTextContent()) && socialMessage.getPresentationML() != null) { // decrypt PresentationML only if Text is blank
+        gatewaySocialMessage.setPresentationMLContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getPresentationML()));
+      }
     } catch (SymphonyInputException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException e) {
       throw new DecryptionException(e);
     }

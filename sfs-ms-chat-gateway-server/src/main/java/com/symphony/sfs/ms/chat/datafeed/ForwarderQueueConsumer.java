@@ -43,7 +43,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -144,6 +143,7 @@ public class ForwarderQueueConsumer {
       LOG.debug("No attributes in social message | envelope={}, payload={}", envelope, envelope.getPayload());
       return;
     }
+    ParentRelationshipType parentRelationshipType = ParentRelationshipType.fromJsonObject(envelope.getPayload().getJsonObject());
 
     // Count number of retries
     if (Integer.parseInt(receiveCount) > 1) {
@@ -159,15 +159,23 @@ public class ForwarderQueueConsumer {
         .collect(Collectors.toList());
     }
 
-    // at least one of the members must be part of the IM
-    DatafeedSession managedSession = datafeedSessionPool.getSession(fromUser.getId().toString());
-    if (managedSession == null) {
-      managedSession = members.stream()
-        .map(datafeedSessionPool::getSession)
-        .filter(Objects::nonNull)
-        .findAny()
-        .orElse(null);
-    }
+    LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getText()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getText());
+    LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
+    LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
+
+    GatewaySocialMessage gatewaySocialMessage = GatewaySocialMessage.builder()
+      .streamId(streamId)
+      .messageId(messageId)
+      .fromUser(fromUser)
+      .members(members)
+      .timestamp(timestamp)
+      .chime(socialMessage.getIsChime())
+      .disclaimer(socialMessage.getDisclaimer())
+      .attachments(socialMessage.getAttachments())
+      .parentRelationshipType(parentRelationshipType)
+      .build();
+
+    DatafeedSession managedSession = getManagedSession(gatewaySocialMessage);
     if (managedSession == null) {
       messageIOMonitor.onMessageBlockFromSymphony(NO_GATEWAY_MANAGED_ACCOUNT, streamId);
       LOG.warn("IM message with no gateway-managed accounts | stream={} members={} initiator={}", streamId, members, fromUser.getId());
@@ -175,16 +183,9 @@ public class ForwarderQueueConsumer {
     }
 
     try {
-      LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getText()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getText());
-      LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
-      LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
-
-      String text = unescapeSpecialCharacters(messageDecryptor.decrypt(socialMessage, managedSession.getUserId()));
-      String disclaimer = socialMessage.getDisclaimer();
-
-      // LOG.debug("onIMMessage streamId={} messageId={} fromUserId={}, members={}, timestamp={} decrypted={}", streamId, messageId, fromUser.getId(), members, timestamp, text);
-
-      datafeedListener.onIMMessage(streamId, messageId, fromUser, members, timestamp, text, disclaimer, socialMessage.getAttachments());
+      messageDecryptor.decrypt(socialMessage, managedSession.getUserId(), gatewaySocialMessage);
+      //LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); To uncomment for local execution
+      datafeedListener.onIMMessage(gatewaySocialMessage);
 
       // time in milliseconds between now (the message is sent to WhatsApp) and the ingestion date
       forwarderQueueMetrics.socialMessageProcessingTime.record(Duration.ofMillis(OffsetDateTime.now().toEpochSecond() * 1000 - timestamp));
@@ -197,6 +198,19 @@ public class ForwarderQueueConsumer {
       messageIOMonitor.onMessageBlockFromSymphony(DECRYPTION_FAILED, streamId);
       throw new RuntimeException(e); // TODO better exception
     }
+  }
+
+  private DatafeedSession getManagedSession(GatewaySocialMessage gatewaySocialMessage) {
+    // at least one of the members must be part of the IM
+    DatafeedSession managedSession = datafeedSessionPool.getSession(gatewaySocialMessage.getFromUserId());
+    if (managedSession == null) {
+      managedSession = gatewaySocialMessage.getMembers().stream()
+        .map(datafeedSessionPool::getSession)
+        .filter(Objects::nonNull)
+        .findAny()
+        .orElse(null);
+    }
+    return managedSession;
   }
 
   private void notifyMaestroMessage(IEnvelope envelope) {
@@ -310,15 +324,6 @@ public class ForwarderQueueConsumer {
     String b64Payload = objectMapper.readTree(sqsObject.getJsonObject().get("Message").toString()).get("payload").asText();
     ImmutableByteArray payload = ImmutableByteArray.newInstance(Base64.decodeBase64(b64Payload));
     return Envelope.FACTORY.newInstance(payload, modelRegistry);
-  }
-
-  private String unescapeSpecialCharacters(String text) {
-    List<String> specialsCharacters = Arrays.asList("+", "-", "_", "*", "`");
-    for (String specialCharacter : specialsCharacters) {
-      text = text.replace("\\" + specialCharacter, specialCharacter);
-    }
-
-    return text;
   }
 
   private static class ForwarderQueueMetrics {

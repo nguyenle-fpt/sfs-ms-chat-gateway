@@ -231,7 +231,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       whatsAppUser,
       sender
     )));
-    when(messageDecryptor.decrypt(any(), eq(whatsAppUser.getSymphonyUserId()))).thenReturn("");
+    doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     forwarderQueueConsumer.consume(notification, "1");
 
     verify(symphonyMessageSender, times(1)).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
@@ -261,7 +261,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       whatsAppUser,
       sender
     )));
-    when(messageDecryptor.decrypt(any(), eq(whatsAppUser.getSymphonyUserId()))).thenReturn("");
+    doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     when(adminClient.canChat("1", "federatedUserId", "WHATSAPP")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     forwarderQueueConsumer.consume(notification, "1");
 
