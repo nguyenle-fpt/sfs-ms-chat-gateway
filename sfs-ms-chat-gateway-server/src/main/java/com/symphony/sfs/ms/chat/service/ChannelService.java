@@ -305,6 +305,7 @@ public class ChannelService implements DatafeedListener {
 
   private com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse generateDeleteChannelsResponse(Map<DeleteChannelRequest, BulkRemovalStatus> response) {
     com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse deleteChannelsResponse = new com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse();
+    deleteChannelsResponse.setReport(new ArrayList<>());
     for (Map.Entry<DeleteChannelRequest, BulkRemovalStatus> entry : response.entrySet()) {
       DeleteChannelRequest channel = entry.getKey();
       deleteChannelsResponse.addReportItem(
