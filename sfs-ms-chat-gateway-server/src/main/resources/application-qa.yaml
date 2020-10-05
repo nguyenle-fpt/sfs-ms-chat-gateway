@@ -1,0 +1,47 @@
+logging:
+  level:
+    com.symphony: INFO
+    org.springframework.web.filter.CommonsRequestLoggingFilter: INFO
+
+aws:
+  dynamodb:
+    tableName: ${DYNAMODB_MS_TABLENAME}
+    endpoint: https://dynamodb.us-east-1.amazonaws.com
+    signinRegion: us-east-1
+  paramstore:
+    prefix: /sfs
+    name: ${PARAMSTORE_NAME}
+  sqs:
+    endpoint: https://sqs.us-east-1.amazonaws.com
+    ingestion: ${SQS_INGESTION}
+    signinRegion: us-east-1
+  sharedtable:
+    name: ${DYNAMODB_SHARED_TABLENAME}
+
+pod:
+  id: ${POD_ID}
+  url: ${POD_URL}
+  sessionAuth: ${POD_SESSIONAUTH}
+  keyAuth: ${POD_KEYAUTH}
+
+bot:
+  username: ${BOT_USERNAME}
+  emailAddress: ${BOT_EMAIL}
+
+agent:
+  url: ${AGENT_URL}
+
+microservice:
+  chat:
+    msAdminUrl: ${ADMIN_URL}
+
+server:
+  servlet:
+    context-path: '/gateway'
+  ssl:
+    enabled-protocols: TLSv1.2
+    ciphers: ECDHE-RSA-AES256-GCM-SHA384,ECDHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-AES128-GCM-SHA256
+    key-store-type: PKCS12
+    key-store: file:certs/https-keystore.p12
+    key-store-password: nndjrdn
+    key-alias: localhost

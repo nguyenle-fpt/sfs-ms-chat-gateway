@@ -27,7 +27,6 @@ import com.symphony.sfs.ms.starter.util.RsaUtils;
 import model.UserInfo;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
