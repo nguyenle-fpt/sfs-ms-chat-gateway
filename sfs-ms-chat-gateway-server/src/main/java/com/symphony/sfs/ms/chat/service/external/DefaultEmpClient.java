@@ -110,11 +110,11 @@ public class DefaultEmpClient implements EmpClient {
       .isFederatedUser(true)
       .isInitiator(initiatorUserId.equals(account.getSymphonyUserId()))
     ));
-
     symphonyUsers.forEach(user -> members.add(new ChannelMember()
       .symphonyId(user.getId().toString())
       .firstName(user.getFirstName())
       .lastName(user.getSurname())
+      .displayName(user.getPrettyName())
       .companyName(Objects.requireNonNullElse(user.getCompany(), "Guest"))
       .isFederatedUser(false)
       .isInitiator(initiatorUserId.equals(user.getId().toString()))
