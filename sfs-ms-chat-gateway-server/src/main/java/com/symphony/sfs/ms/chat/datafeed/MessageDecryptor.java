@@ -38,7 +38,7 @@ public class MessageDecryptor {
       if (socialMessage.getText() != null) {
         gatewaySocialMessage.setTextContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getText()));
       }
-      if (StringUtils.isBlank(gatewaySocialMessage.getTextContent()) && socialMessage.getPresentationML() != null) { // decrypt PresentationML only if Text is blank
+      if (socialMessage.getPresentationML() != null) {
         gatewaySocialMessage.setPresentationMLContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getPresentationML()));
       }
     } catch (SymphonyInputException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException e) {

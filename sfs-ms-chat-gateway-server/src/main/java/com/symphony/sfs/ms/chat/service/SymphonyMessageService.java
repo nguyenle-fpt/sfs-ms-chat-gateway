@@ -76,7 +76,8 @@ import static com.symphony.sfs.ms.starter.util.ProblemUtils.newConstraintViolati
 @RequiredArgsConstructor
 public class SymphonyMessageService implements DatafeedListener {
 
-  private final long MAX_UPLOAD_SIZE = 25 * 1024 * 1024;
+  // The max size of attachments in a single message we accept is 25 MB ~ 34 MB when the file is encoded in base64
+  private final long MAX_UPLOAD_SIZE = 34 * 1024 * 1024;
   private final EmpClient empClient;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -186,6 +187,7 @@ public class SymphonyMessageService implements DatafeedListener {
         } else {
           List<Attachment> attachmentsContent = null;
           long totalsize = 0;
+          boolean sendAttachment = true;
           if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
             // retrieve the attachment
             try {
@@ -201,11 +203,13 @@ public class SymphonyMessageService implements DatafeedListener {
                 totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
                 if (totalsize > MAX_UPLOAD_SIZE) {
                   userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
-                  return;
+                  sendAttachment = false;
+                  break;
                 }
               }
             } catch (DataBufferLimitException dbe) {
               userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
+              sendAttachment = false;
             }
           }
 
@@ -229,7 +233,7 @@ public class SymphonyMessageService implements DatafeedListener {
             gatewaySocialMessage.getTimestamp(),
             gatewaySocialMessage.getMessageForEmp(),
             gatewaySocialMessage.getDisclaimerForEmp(),
-            attachmentsContent);
+            sendAttachment ? attachmentsContent : null);
           if (empMessageId.isEmpty()) {
             userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
           }

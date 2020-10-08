@@ -270,7 +270,7 @@ public class ChannelService implements DatafeedListener {
       for (DeleteChannelRequest req : currentEmp.getValue()) {
         Optional<Channel> channel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(req.getAdvisorSymphonyId(), req.getFederatedUserId(), req.getEntitlementType());
         if (channel.isEmpty()) {
-          response.put(req, BulkRemovalStatus.FAILURE);
+          response.put(req, BulkRemovalStatus.NOT_FOUND);
         } else {
           streamID2request.put(channel.get().getStreamId(), req);
           streamIDs.add(channel.get().getStreamId());
@@ -281,27 +281,33 @@ public class ChannelService implements DatafeedListener {
       // delete for all streams failed
       if (result.isEmpty()) {
         currentEmp.getValue().forEach(channel -> response.put(channel, BulkRemovalStatus.FAILURE));
+        // If the stream deletion failed, we will not attempt to remove the corresponding channels
+        streamIDs.forEach(channelsToDelete::remove);
       } else {
         for (com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse deleteChannelResponse : result.get().getReport()) {
           DeleteChannelRequest request = streamID2request.get(deleteChannelResponse.getStreamId());
-          response.put(request, deleteChannelResponse.getStatus());
           if (BulkRemovalStatus.FAILURE.equals(deleteChannelResponse.getStatus())) {
             channelsToDelete.remove(deleteChannelResponse.getStreamId());
+            response.put(request, BulkRemovalStatus.FAILURE);
+          } else {
+            // If the status is NOT_FOUND in EMP side, we still consider removal as a success because there are legitimate cases where that's possible
+            response.put(request, BulkRemovalStatus.SUCCESS);
           }
         }
       }
     }
 
-    // send messages for only streams for which the removal worked in the EMP
+    // send messages for only streams for which the removal didn't fail in the EMP
     for (Channel channel : channelsToDelete.values()) {
       Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(channel.getFederatedUserId(), channel.getEmp());
       if (federatedAccount.isPresent()) {
         symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", channel.getAdvisorSymphonyId());
       }
     }
-      channelRepository.delete(channelsToDelete.values());
-      return this.generateDeleteChannelsResponse(response);
-    }
+    //TODO deal with potential failure of batch delete and update status of corresponding channels accordingly (FAILURE)
+    channelRepository.delete(channelsToDelete.values());
+    return this.generateDeleteChannelsResponse(response);
+  }
 
   private com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse generateDeleteChannelsResponse(Map<DeleteChannelRequest, BulkRemovalStatus> response) {
     com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse deleteChannelsResponse = new com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse();

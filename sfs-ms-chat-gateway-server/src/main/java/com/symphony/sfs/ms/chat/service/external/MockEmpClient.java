@@ -65,9 +65,12 @@ public class MockEmpClient implements EmpClient {
   public Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp) {
     DeleteChannelsResponse response = new DeleteChannelsResponse();
     streamIds.forEach(streamId -> {
-      if(this.channels.remove(emp + ":" + streamId) == null){
+      //simulate failure
+      if (streamId.contains("failure")) {
         response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.FAILURE));
-      }else{
+      } else if (this.channels.remove(emp + ":" + streamId) == null) {
+        response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.NOT_FOUND));
+      } else {
         response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.SUCCESS));
       }
     });

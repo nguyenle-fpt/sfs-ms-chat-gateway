@@ -184,7 +184,7 @@ public class ForwarderQueueConsumer {
 
     try {
       messageDecryptor.decrypt(socialMessage, managedSession.getUserId(), gatewaySocialMessage);
-      //LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); To uncomment for local execution
+      //LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); //To uncomment for local execution
       datafeedListener.onIMMessage(gatewaySocialMessage);
 
       // time in milliseconds between now (the message is sent to WhatsApp) and the ingestion date
