@@ -6,8 +6,8 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
-import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
@@ -187,7 +187,6 @@ public class SymphonyMessageService implements DatafeedListener {
         } else {
           List<Attachment> attachmentsContent = null;
           long totalsize = 0;
-          boolean sendAttachment = true;
           if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
             // retrieve the attachment
             try {
@@ -202,14 +201,13 @@ public class SymphonyMessageService implements DatafeedListener {
 
                 totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
                 if (totalsize > MAX_UPLOAD_SIZE) {
-                  userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
-                  sendAttachment = false;
-                  break;
+                  userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
+                  return;
                 }
               }
             } catch (DataBufferLimitException dbe) {
-              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Attachment was not delivered; it exceeds 25MB limit (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
-              sendAttachment = false;
+              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
+              return;
             }
           }
 
@@ -233,7 +231,7 @@ public class SymphonyMessageService implements DatafeedListener {
             gatewaySocialMessage.getTimestamp(),
             gatewaySocialMessage.getMessageForEmp(),
             gatewaySocialMessage.getDisclaimerForEmp(),
-            sendAttachment ? attachmentsContent : null);
+            attachmentsContent);
           if (empMessageId.isEmpty()) {
             userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
           }
@@ -291,11 +289,11 @@ public class SymphonyMessageService implements DatafeedListener {
 
   private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments) {
     LOG.info("incoming message");
-    if(StringUtils.isEmpty(text)) {
+    if (StringUtils.isEmpty(text)) {
       text = " "; // this is the minimum message for symphony
     }
     String messageContent = "<messageML>" + text + "</messageML>";
-    if(attachments != null && attachments.size() > 0 ) {
+    if (attachments != null && attachments.size() > 0) {
       return symphonyMessageSender.sendRawMessageWithAttachments(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId, attachments);
     } else {
       if (formatting == null) {
@@ -394,5 +392,27 @@ public class SymphonyMessageService implements DatafeedListener {
     }
 
     return Optional.ofNullable(message);
+  }
+
+  /**
+   * Build the error message when there are more 25 MB attachments
+   *
+   * @param textIsEmpty True if there are only attachments, false if there is some text in the message
+   * @param messageId   Id of the symphony message
+   * @return The error message
+   */
+  private String errorMessageAttachmentsNotSent(boolean textIsEmpty, String messageId) {
+    // Prepare the error message for the advisor
+    StringBuilder errorMessage = new StringBuilder();
+    errorMessage.append("The full contents of your message could not be delivered. ");
+    if (!textIsEmpty) {
+      errorMessage.append("The text that you entered could not be delivered. ");
+    }
+    errorMessage
+      .append("Attachment was not delivered; it exceeds 25MB limit (messageId : ")
+      .append(messageId)
+      .append(")");
+
+    return errorMessage.toString();
   }
 }
