@@ -46,6 +46,7 @@ import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -175,15 +176,15 @@ public class ForwarderQueueConsumer {
       .parentRelationshipType(parentRelationshipType)
       .build();
 
-    DatafeedSession managedSession = getManagedSession(gatewaySocialMessage);
-    if (managedSession == null) {
+    Optional<DatafeedSession> managedSession = getManagedSession(gatewaySocialMessage);
+    if (managedSession.isEmpty()) {
       messageIOMonitor.onMessageBlockFromSymphony(NO_GATEWAY_MANAGED_ACCOUNT, streamId);
       LOG.warn("IM message with no gateway-managed accounts | stream={} members={} initiator={}", streamId, members, fromUser.getId());
       return;
     }
 
     try {
-      messageDecryptor.decrypt(socialMessage, managedSession.getUserId(), gatewaySocialMessage);
+      messageDecryptor.decrypt(socialMessage, managedSession.get().getUserId(), gatewaySocialMessage);
       //LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); //To uncomment for local execution
       datafeedListener.onIMMessage(gatewaySocialMessage);
 
@@ -200,7 +201,7 @@ public class ForwarderQueueConsumer {
     }
   }
 
-  private DatafeedSession getManagedSession(GatewaySocialMessage gatewaySocialMessage) {
+  private Optional<DatafeedSession> getManagedSession(GatewaySocialMessage gatewaySocialMessage) {
     // at least one of the members must be part of the IM
     DatafeedSession managedSession = datafeedSessionPool.getSession(gatewaySocialMessage.getFromUserId());
     if (managedSession == null) {
@@ -210,7 +211,7 @@ public class ForwarderQueueConsumer {
         .findAny()
         .orElse(null);
     }
-    return managedSession;
+    return Optional.ofNullable(managedSession);
   }
 
   private void notifyMaestroMessage(IEnvelope envelope) {

@@ -135,26 +135,30 @@ class MessageServiceTest {
     orderVerifier.verifyNoMoreInteractions();
   }
 
-  @Test
-  void onIMMessage() {
+  private static Stream<Arguments> textProvider() {
+    return Stream.of(
+      arguments("text", "text"),
+      arguments("<b onclick=\"alert('hello')\">text</b>", "&lt;b onclick=\"alert('hello')\"&gt;text&lt;/b&gt;")
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("textProvider")
+  void onIMMessage(String inputText, String expectedSentText) {
     EntitlementResponse response = new EntitlementResponse();
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
-    FederatedAccount toFederatedAccount = FederatedAccount.builder()
-      .emp("emp")
-      .symphonyUserId(TO_SYMPHONY_USER_ID)
-      .federatedUserId("fed")
-      .build();
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
 
-    IUser fromSymphonyUser = newIUser(FROM_SYMPHONY_USER_ID);
+    IUser fromSymphonyUser = buildDefaultFromUser();
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, "text", null, null)).thenReturn(Optional.of("leaseId"));
-    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").build();
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, expectedSentText, null, null)).thenReturn(Optional.of("leaseId"));
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent(inputText).build();
     messageService.onIMMessage(message);
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, expectedSentText, "", null);
   }
 
   @Test
@@ -217,7 +221,7 @@ class MessageServiceTest {
       .build();
   }
 
-  private static Stream<Arguments> gatewaySocialMessageProvider() {
+  private static Stream<Arguments> unsupportedGatewaySocialMessageProvider() {
     IUser fromSymphonyUser = buildDefaultFromUser();
     FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
     return Stream.of(
@@ -234,7 +238,7 @@ class MessageServiceTest {
   }
 
   @ParameterizedTest
-  @MethodSource("gatewaySocialMessageProvider")
+  @MethodSource("unsupportedGatewaySocialMessageProvider")
   void onIMMessage_UnsupportedContents(FederatedAccount toFederatedAccount, GatewaySocialMessage message, String expectedAlertMessage) {
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     //when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, "text", null, null)).thenReturn(Optional.of("leaseId"));

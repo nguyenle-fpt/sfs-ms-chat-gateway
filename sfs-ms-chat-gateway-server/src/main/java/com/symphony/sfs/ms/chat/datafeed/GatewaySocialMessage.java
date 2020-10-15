@@ -32,6 +32,7 @@ public class GatewaySocialMessage {
   @NonNull
   private final List<String> members;
   @Default
+  @Setter
   private List<String> toUserIds = new ArrayList<>();
   private final String streamId;
   private final String messageId;
@@ -56,12 +57,8 @@ public class GatewaySocialMessage {
     return this.fromUser.getId().toString();
   }
 
-  public void onPartiesValidated() {
-    this.toUserIds = this.members.stream().filter(id -> !id.equals(this.getFromUserId())).collect(Collectors.toList());
-  }
-
   public String getMessageForEmp() {
-    return unescapeSpecialCharacters(this.textContent);
+    return escape(unescapeSpecialCharacters(this.textContent));
   }
 
   public String getDisclaimerForEmp() {

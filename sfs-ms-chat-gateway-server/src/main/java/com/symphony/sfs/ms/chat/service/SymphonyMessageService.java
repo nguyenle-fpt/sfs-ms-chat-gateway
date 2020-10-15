@@ -125,7 +125,7 @@ public class SymphonyMessageService implements DatafeedListener {
       return false;
     }
     // Build recipient FederatedServiceAccount(s)
-    gatewaySocialMessage.onPartiesValidated();
+    gatewaySocialMessage.setToUserIds(gatewaySocialMessage.getMembers().stream().filter(id -> !id.equals(gatewaySocialMessage.getFromUserId())).collect(Collectors.toList()));
     return true;
   }
 
