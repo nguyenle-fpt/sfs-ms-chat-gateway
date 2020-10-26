@@ -7,7 +7,7 @@
   <parent>
     <artifactId>sfs-ms-parent</artifactId>
     <groupId>com.symphony.sfs</groupId>
-    <version>1.5.0-SNAPSHOT</version>
+    <version>1.6.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>sfs-ms-chat-gateway</artifactId>
