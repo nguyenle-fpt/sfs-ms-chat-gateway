@@ -1,9 +1,11 @@
 package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 
 import java.util.Collections;
@@ -74,4 +76,13 @@ public interface EmpClient {
   void deleteAccountOrFail(String emp, String symphonyId, String emailAddress);
 
   Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp);
+
+  /**
+   *
+   * @param streamId
+   * @param emp
+   * @param empRoomMemberRequest
+   * @return
+   */
+  Optional<RoomMemberResponse> addRoomMember(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest);
 }

@@ -9,7 +9,6 @@ import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
@@ -17,6 +16,7 @@ import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
 import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
+import com.symphony.sfs.ms.chat.service.RoomService;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
@@ -40,6 +40,7 @@ import com.symphony.sfs.ms.starter.testing.RestApiTest;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.opentracing.Tracer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -71,6 +72,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected ConnectionsService connectionsServices;
   protected ConnectionRequestManager connectionRequestManager;
   protected ChannelService channelService;
+  protected RoomService roomService;
   protected EmpSchemaService empSchemaService;
   protected ForwarderQueueConsumer forwarderQueueConsumer;
   protected FederatedAccountSessionService federatedAccountSessionService;
@@ -80,6 +82,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected AdminClient adminClient;
   protected MeterManager meterManager;
   protected SymphonyAuthFactory symphonyAuthFactory;
+  protected Tracer tracer = null;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -114,7 +117,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     handlebarsConfiguration = new HandlebarsConfiguration();
 
     // emp client
-    empClient = new MockEmpClient();
+    empClient = spy(new MockEmpClient());
     adminClient = new MockAdminClient();
 
     // authentication
@@ -144,6 +147,10 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     empSchemaService = new EmpSchemaService(adminClient);
     channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);
     channelService.registerAsDatafeedListener();
+
+    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, empClient);
+    roomService.registerAsDatafeedListener();
+
   }
 
   @AfterEach

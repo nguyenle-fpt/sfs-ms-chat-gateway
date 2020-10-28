@@ -1,6 +1,14 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import model.InboundMessage;
+import model.Stream;
+import model.events.RoomCreated;
+import model.events.RoomDeactivated;
+import model.events.RoomMemberDemotedFromOwner;
+import model.events.RoomMemberPromotedToOwner;
+import model.events.RoomUpdated;
+import model.events.UserLeftRoom;
 
 import java.util.List;
 
@@ -24,7 +32,7 @@ public interface DatafeedListener {
   default void onIMMessage(GatewaySocialMessage gatewaySocialMessage) {
   }
 
-  /*default void onRoomMessage(InboundMessage inboundMessage) {
+  default void onRoomMessage(InboundMessage inboundMessage) {
   }
 
   default void onRoomCreated(RoomCreated roomCreated) {
@@ -44,16 +52,14 @@ public interface DatafeedListener {
 
   default void onRoomUpdated(RoomUpdated roomUpdated) {
   }
-  */
 
   default void onUserJoinedRoom(String streamId, List<String> members, IUser fromSymphonyUser) {
   }
 
-  /*
   default void onUserLeftRoom(UserLeftRoom userLeftRoom) {
   }
 
-  default void onConnectionAccepted(User user) {
+  /*default void onConnectionAccepted(User user) {
   }
 
   default void onConnectionRequested(User user) {

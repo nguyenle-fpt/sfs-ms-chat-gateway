@@ -29,6 +29,10 @@ paths:
     $ref: './paths/messaging.yaml#/messages'
   /api/v1/internal/emps/reload:
     $ref: './paths/emps.yaml#/internal-reload-emps'
+  /api/v1/internal/rooms:
+    $ref: './paths/room.yaml#/rooms'
+  /api/v1/internal/rooms/{streamId}/members:
+    $ref: './paths/room.yaml#/room-members'
 
   /model:
     $ref: './paths/utils.yaml#/model'

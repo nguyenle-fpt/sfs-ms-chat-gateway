@@ -1,10 +1,13 @@
 package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
+import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import lombok.Getter;
@@ -75,5 +78,13 @@ public class MockEmpClient implements EmpClient {
       }
     });
     return Optional.of(response);
+  }
+
+  @Override
+  public Optional<RoomMemberResponse> addRoomMember(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest) {
+    RoomMemberResponse empRoomMemberResponse = RoomMemberDtoMapper.MAPPER.empRoomMemberRequestToEmpRoomMemberResponse(empRoomMemberRequest);
+    empRoomMemberResponse.setStreamId(streamId);
+    empRoomMemberResponse.setEmp(emp);
+    return Optional.of(empRoomMemberResponse);
   }
 }

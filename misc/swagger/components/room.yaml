@@ -1,0 +1,72 @@
+#Requests
+room-request:
+  type: object
+  required:
+    - roomName
+  properties:
+    roomName:
+      type: string
+      maxLength: 50
+
+room-member-request:
+  type: object
+  required:
+    - clientPodId
+    - symphonyId
+    - isFederatedUser
+  properties:
+    clientPodId:
+      type: string
+      pattern: '^\d+$'
+    symphonyId:
+      type: string
+      pattern: '^\d+$'
+    federatedUser:
+      type: boolean
+
+#Responses
+room-response:
+  type: object
+  properties:
+    roomName:
+      type: string
+    streamId:
+      type: string
+
+rooms-response:
+  type: object
+  properties:
+    rooms:
+      type: array
+      items:
+        $ref: '#/room-response'
+    pagination:
+      $ref: './entities.yaml#/pagination'
+
+room-member-response:
+  type: object
+  properties:
+    clientPodId:
+      type: string
+    streamId:
+      type: string
+    symphonyId:
+      type: string
+    federatedUserId:
+      type: string
+    emp:
+      type: string
+    phoneNumber:
+      type: string
+    emailAddress:
+      type: string
+
+room-members-response:
+  type: object
+  properties:
+    members:
+      type: array
+      items:
+        $ref: '#/room-member-response'
+    pagination:
+      $ref: './entities.yaml#/pagination'

@@ -1,0 +1,30 @@
+create-room-failed:
+  type: object
+  description: 'Unable to create the room'
+  properties:
+    type:
+      type: string
+      format: 'create.room.failed'
+    title:
+      type: string
+      format: 'Unable to create the room'
+    status:
+      type: integer
+      format: 500
+
+add-room-member-failed:
+  type: object
+  description: 'Unable to add the member in the room.'
+  properties:
+    type:
+      type: string
+      format: 'add.room.member.failed'
+    title:
+      type: string
+      format: 'Unable to add the member in the room.'
+    status:
+      type: integer
+      format: 500
+
+
+

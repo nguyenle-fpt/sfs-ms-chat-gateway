@@ -5,6 +5,7 @@ import com.symphony.sfs.ms.chat.generated.api.AccountsApi;
 import com.symphony.sfs.ms.chat.generated.api.ChannelsApi;
 import com.symphony.sfs.ms.chat.generated.api.EmpApi;
 import com.symphony.sfs.ms.chat.generated.api.MessagingApi;
+import com.symphony.sfs.ms.chat.generated.api.RoomApi;
 import com.symphony.sfs.ms.chat.generated.client.ApiClient;
 import lombok.Getter;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,6 +21,7 @@ public class SfsChatGatewayClient {
   private final ChannelsApi channelsApi;
   private final MessagingApi messagingApi;
   private final EmpApi empApi;
+  private final RoomApi roomApi;
 
   public SfsChatGatewayClient(String baseUri, WebClient webClient, ObjectMapper objectMapper) {
     this.webClient = webClient;
@@ -30,5 +32,6 @@ public class SfsChatGatewayClient {
     this.channelsApi = new ChannelsApi(baseUri, apiClient);
     this.messagingApi = new MessagingApi(baseUri, apiClient);
     this.empApi = new EmpApi(baseUri, apiClient);
+    this.roomApi = new RoomApi(baseUri, apiClient);
   }
 }
