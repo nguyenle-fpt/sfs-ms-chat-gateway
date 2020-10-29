@@ -89,6 +89,10 @@ public class RoomService implements DatafeedListener {
 
   public RoomMemberResponse addRoomMember(String streamId, RoomMemberRequest roomMemberRequest) {
 
+    // Add member in SymphonyRoom before delegating to EMPs because EMPs could send messages in the room directly after the room member is added
+    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+    streamService.addRoomMember(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, roomMemberRequest.getSymphonyId()).orElseThrow(AddRoomMemberFailedProblem::new);
+    
     RoomMemberResponse roomMemberResponse = RoomMemberDtoMapper.MAPPER.roomMemberRequestToRoomMemberResponse(roomMemberRequest);
     roomMemberResponse.setStreamId(streamId);
 
@@ -102,13 +106,7 @@ public class RoomService implements DatafeedListener {
       // Delegate to EMP
       com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount);
       empClient.addRoomMember(streamId, federatedAccount.getEmp(), empRoomMemberRequest).orElseThrow(AddRoomMemberFailedProblem::new);
-
     }
-
-    // Add member in SymphonyRoom
-    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-
-    streamService.addRoomMember(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, roomMemberRequest.getSymphonyId()).orElseThrow(AddRoomMemberFailedProblem::new);
 
     return roomMemberResponse;
   }
