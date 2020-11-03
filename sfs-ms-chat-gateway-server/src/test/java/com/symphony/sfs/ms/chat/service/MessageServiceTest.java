@@ -9,18 +9,25 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
+import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +46,9 @@ import java.util.stream.Stream;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,6 +71,7 @@ class MessageServiceTest {
   private EmpSchemaService empSchemaService;
   private SymphonyService symphonyService;
   private ChannelService channelService;
+  private StreamService streamService;
 
   private SymphonySession userSession;
 
@@ -90,6 +100,8 @@ class MessageServiceTest {
     symphonyMessageSender = mock(SymphonyMessageSender.class);
     symphonyService = mock(SymphonyService.class);
 
+    streamService = mock(StreamService.class);
+
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
@@ -100,7 +112,7 @@ class MessageServiceTest {
 
     channelService = mock(ChannelService.class);
 
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, null, new MessageIOMonitor(meterManager), channelService);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService);
   }
 
   @Test
@@ -257,6 +269,48 @@ class MessageServiceTest {
     when(federatedAccountRepository.findBySymphonyId(FROM_SYMPHONY_USER_ID)).thenReturn(Optional.empty());
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").build();
     Assertions.assertDoesNotThrow(() -> messageService.onIMMessage(message));
+  }
+
+  @Test
+  void sendMessage() {
+    FederatedAccount fromFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId(FROM_SYMPHONY_USER_ID)
+      .federatedUserId("fed")
+      .build();
+    when(federatedAccountRepository.findBySymphonyId(FROM_SYMPHONY_USER_ID)).thenReturn(Optional.of(fromFederatedAccount));
+    when(adminClient.canChat(TO_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
+    StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).build();
+    when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
+    when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
+
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+    verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, "<messageML>text</messageML>", TO_SYMPHONY_USER_ID);
+  }
+
+  @Test
+  void sendMessage_TextTooLong() {
+    String tooLongMsg = RandomStringUtils.random(30001);
+    FederatedAccount fromFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId(FROM_SYMPHONY_USER_ID)
+      .federatedUserId("fed")
+      .build();
+    when(federatedAccountRepository.findBySymphonyId(FROM_SYMPHONY_USER_ID)).thenReturn(Optional.of(fromFederatedAccount));
+    when(adminClient.canChat(TO_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
+    StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).build();
+    when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
+    when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
+    when(empClient.sendSystemMessage(eq("emp"), eq("streamId"), any(), anyString(), eq(TypeEnum.INFO))).thenReturn(Optional.of("leaseId"));
+    when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
+
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null);
+    String expectedTruncatedMsg = "<messageML>" + tooLongMsg.substring(0, 30000) + "</messageML>";
+    verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, expectedTruncatedMsg, TO_SYMPHONY_USER_ID);
+    verify(symphonyMessageSender, once()).sendInfoMessage("streamId", FROM_SYMPHONY_USER_ID, "The message was too long and was truncated. Only the first 30,000 characters were delivered", TO_SYMPHONY_USER_ID);
+    verify(empClient, once()).sendSystemMessage(eq("emp"), eq("streamId"), any(), eq("The message was too long and was truncated. Only the first 30,000 characters were delivered"), eq(TypeEnum.INFO));
   }
 
   /*

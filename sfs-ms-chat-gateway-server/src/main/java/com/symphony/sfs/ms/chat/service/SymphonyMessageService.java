@@ -29,6 +29,7 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
@@ -78,6 +79,8 @@ public class SymphonyMessageService implements DatafeedListener {
 
   // The max size of attachments in a single message we accept is 25 MB ~ 34 MB when the file is encoded in base64
   private final long MAX_UPLOAD_SIZE = 34 * 1024 * 1024;
+  private static final int MAX_TEXT_LENGTH = 30000;
+  private static final String TEXT_TOO_LONG_WARNING = "The message was too long and was truncated. Only the first %,d characters were delivered";
   private final EmpClient empClient;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -277,20 +280,29 @@ public class SymphonyMessageService implements DatafeedListener {
     String symphonyMessageId = null;
     if (notEntitled.isPresent()) {
       messageMetrics.onMessageBlockToSymphony(ADVISOR_NO_LONGER_AVAILABLE, streamId);
-      blockIncomingMessage(federatedAccount.getEmp(), streamId, notEntitled.get());
+      feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, notEntitled.get(), TypeEnum.ALERT);
     } else {
       // TODO fix this bad management of optional
       messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, advisorSymphonyUserId.get(), streamId);
-      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, advisorSymphonyUserId.get(), formatting, text, attachments).orElseThrow(SendMessageFailedProblem::new);
+      boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
+      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, advisorSymphonyUserId.get(), formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
+      // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
+      if (textTooLong) {
+        String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
+        feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, alertMessage, TypeEnum.INFO);
+        symphonyMessageSender.sendInfoMessage(streamId, fromSymphonyUserId, alertMessage, advisorSymphonyUserId.get());
+      }
     }
 
     return symphonyMessageId;
   }
 
-  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments) {
+  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean truncate) {
     LOG.info("incoming message");
     if (StringUtils.isEmpty(text)) {
       text = " "; // this is the minimum message for symphony
+    } else if (truncate) {
+      text = text.substring(0, MAX_TEXT_LENGTH);
     }
     String messageContent = "<messageML>" + text + "</messageML>";
     if (attachments != null && attachments.size() > 0) {
@@ -316,9 +328,9 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
-  private void blockIncomingMessage(String emp, String streamId, String reasonText) {
-    LOG.info("block incoming message");
-    empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, SendSystemMessageRequest.TypeEnum.ALERT);
+  private void feedbackAboutIncomingMessage(String emp, String streamId, String reasonText, SendSystemMessageRequest.TypeEnum feedbackType) {
+    LOG.info("FeedbackAboutIncomingMessage | emp={}, streamId={}, reason={}, type={}", emp, streamId, reasonText, feedbackType);
+    empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, feedbackType);
   }
 
   /**
