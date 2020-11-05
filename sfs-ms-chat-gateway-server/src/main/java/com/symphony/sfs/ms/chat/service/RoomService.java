@@ -68,7 +68,7 @@ public class RoomService implements DatafeedListener {
       .name(roomRequest.getRoomName())
       .description(roomRequest.getRoomName())
 //      .keywords(Arrays.asList(SymphonyKeyword.builder().key("key1").value("value1").build()))
-      .memberCanInvite(false)
+      .membersCanInvite(false)
       .discoverable(false) // FALSE mandatory for Cross Pod Room
       .isPublic(false) // FALSE mandatory for Cross Pod Room
       .readOnly(false) // FALSE mandatory for Cross Pod Room
@@ -91,8 +91,12 @@ public class RoomService implements DatafeedListener {
 
     // Add member in SymphonyRoom before delegating to EMPs because EMPs could send messages in the room directly after the room member is added
     SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+
+    // If member is already part of the room, we receive the following response from Symphony:
+    // "Member already part of the room or Xpod request will be processed asynchronously"
+    // It is not an error so we can ignore it
     streamService.addRoomMember(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, roomMemberRequest.getSymphonyId()).orElseThrow(AddRoomMemberFailedProblem::new);
-    
+
     RoomMemberResponse roomMemberResponse = RoomMemberDtoMapper.MAPPER.roomMemberRequestToRoomMemberResponse(roomMemberRequest);
     roomMemberResponse.setStreamId(streamId);
 
@@ -105,6 +109,7 @@ public class RoomService implements DatafeedListener {
 
       // Delegate to EMP
       com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount);
+      // TODO If EMP error maybe indicate that the user has been added on Symphony side but not EMP side?
       empClient.addRoomMember(streamId, federatedAccount.getEmp(), empRoomMemberRequest).orElseThrow(AddRoomMemberFailedProblem::new);
     }
 
