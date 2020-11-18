@@ -24,11 +24,6 @@ import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
-import com.symphony.sfs.ms.chat.service.symphony.AdminUserManagementService;
-import com.symphony.sfs.ms.chat.service.symphony.SymphonyUser;
-import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserAttributes;
-import com.symphony.sfs.ms.chat.service.symphony.SymphonyUserKeyRequest;
-import com.symphony.sfs.ms.chat.service.symphony.UserStatus;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
@@ -36,6 +31,12 @@ import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
+import com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement;
+import com.symphony.sfs.ms.starter.symphony.user.SymphonyUser;
+import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes;
+import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserKeyRequest;
+import com.symphony.sfs.ms.starter.symphony.user.UserStatus;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
@@ -49,15 +50,17 @@ import javax.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUser.ROLE_INDIVIDUAL;
-import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUserAttributes.ACCOUNT_TYPE_SYSTEM;
-import static com.symphony.sfs.ms.chat.service.symphony.SymphonyUserKeyRequest.ACTION_SAVE;
+import static com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement.ENTITLEMENT_IS_EXTERNAL_ROOM_ENABLED;
+import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUser.ROLE_INDIVIDUAL;
+import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes.ACCOUNT_TYPE_SYSTEM;
+import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUserKeyRequest.ACTION_SAVE;
 
 @Slf4j
 @Service
@@ -197,8 +200,17 @@ public class FederatedAccountService implements DatafeedListener {
       .roles(Arrays.asList(ROLE_INDIVIDUAL))
       .build();
 
-    return adminUserManagementService.createUser(podConfiguration.getUrl(), session, user)
+    SymphonyUser symphonyUser = adminUserManagementService.createUser(podConfiguration.getUrl(), session, user)
       .orElseThrow(CreateUserFailedProblem::new);
+
+    // CES-2442
+    // Add isExternalRoomEnabled entitlement
+    adminUserManagementService.updateUserFeatures(
+      podConfiguration.getUrl(),
+      session,
+      String.valueOf(symphonyUser.getUserSystemInfo().getId()),
+      Collections.singletonList(FeatureEntitlement.builder().entitlment(ENTITLEMENT_IS_EXTERNAL_ROOM_ENABLED).enabled(true).build()));
+    return symphonyUser;
   }
 
   private String displayName(String firstName, String lastName, String empName) {
