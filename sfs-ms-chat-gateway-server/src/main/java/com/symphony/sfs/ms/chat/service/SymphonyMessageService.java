@@ -289,8 +289,8 @@ public class SymphonyMessageService implements DatafeedListener {
       // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
       if (textTooLong) {
         String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
-        feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, alertMessage, TypeEnum.INFO);
-        symphonyMessageSender.sendInfoMessage(streamId, fromSymphonyUserId, alertMessage, advisorSymphonyUserId.get());
+        feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, alertMessage, TypeEnum.ALERT);
+        symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, alertMessage, advisorSymphonyUserId.get());
       }
     }
 

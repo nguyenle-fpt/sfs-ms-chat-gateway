@@ -309,8 +309,8 @@ class MessageServiceTest {
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null);
     String expectedTruncatedMsg = "<messageML>" + tooLongMsg.substring(0, 30000) + "</messageML>";
     verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, expectedTruncatedMsg, TO_SYMPHONY_USER_ID);
-    verify(symphonyMessageSender, once()).sendInfoMessage("streamId", FROM_SYMPHONY_USER_ID, "The message was too long and was truncated. Only the first 30,000 characters were delivered", TO_SYMPHONY_USER_ID);
-    verify(empClient, once()).sendSystemMessage(eq("emp"), eq("streamId"), any(), eq("The message was too long and was truncated. Only the first 30,000 characters were delivered"), eq(TypeEnum.INFO));
+    verify(symphonyMessageSender, once()).sendAlertMessage("streamId", FROM_SYMPHONY_USER_ID, "The message was too long and was truncated. Only the first 30,000 characters were delivered", TO_SYMPHONY_USER_ID);
+    verify(empClient, once()).sendSystemMessage(eq("emp"), eq("streamId"), any(), eq("The message was too long and was truncated. Only the first 30,000 characters were delivered"), eq(TypeEnum.ALERT));
   }
 
   /*
