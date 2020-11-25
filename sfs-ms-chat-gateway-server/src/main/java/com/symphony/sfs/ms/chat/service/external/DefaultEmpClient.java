@@ -19,6 +19,8 @@ import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageResponse;
+import com.symphony.sfs.ms.emp.generated.model.UpdateUserRequest;
+import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -92,6 +94,19 @@ public class DefaultEmpClient implements EmpClient {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     client.getUserApi().deleteUserOrFail(symphonyId, emailAddress);
+  }
+
+  @Override
+  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String firstName, String lastName, String companyName) {
+    EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
+
+    UpdateUserRequest request = new UpdateUserRequest()
+      .firstName(firstName)
+      .lastName(lastName)
+      .companyName(companyName);
+
+    client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    return client.getUserApi().updateUserOrFail(symphonyId, emailAddress, request);
   }
 
   @Override

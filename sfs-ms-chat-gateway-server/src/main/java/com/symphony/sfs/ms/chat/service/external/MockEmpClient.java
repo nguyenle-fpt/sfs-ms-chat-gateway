@@ -1,7 +1,6 @@
 package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
@@ -11,6 +10,7 @@ import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import lombok.Getter;
 import org.eclipse.jetty.util.ConcurrentHashSet;
@@ -64,6 +64,11 @@ public class MockEmpClient implements EmpClient {
   @Override
   public void deleteAccountOrFail(String emp, String symphonyId, String email) {
     deletedFederatedAccounts.add(symphonyId);
+  }
+
+  @Override
+  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String firstName, String lastName, String companyName) {
+    return Optional.of(new UpdateUserResponse().firstName(firstName).lastName(lastName).companyName(companyName));
   }
 
   @Override

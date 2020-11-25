@@ -7,6 +7,8 @@ import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
+import com.symphony.sfs.ms.chat.generated.model.UpdateAccountRequest;
+import com.symphony.sfs.ms.chat.generated.model.UpdateAccountResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.ChannelService;
@@ -52,6 +54,7 @@ import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getSnsMaestroMess
 import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.DELETEFEDERATEDACCOUNT_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.UPDATEFEDERATEDACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.CREATECHANNEL_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -128,14 +131,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
-    CreateAccountRequest createAccountRequest = new CreateAccountRequest()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .companyName("companyName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP");
+    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
 
     CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -228,14 +224,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
-    CreateAccountRequest createAccountRequest = new CreateAccountRequest()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .companyName("companyName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP");
+    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
 
     CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -312,14 +301,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
-    CreateAccountRequest createAccountRequest = new CreateAccountRequest()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .companyName("companyName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP");
+    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
 
     CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -356,6 +338,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     assertEquals(1, adminClient.getImRequests().size());
     verify(empClient).createChannel(any(), any(), any(), any(), any());
   }
+
   @Test
   public void createAccountWithAdvisor_ThenDelete() throws IOException {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
@@ -402,14 +385,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
-    CreateAccountRequest createAccountRequest = new CreateAccountRequest()
-      .emailAddress("emailAddress@symphony.com")
-      .phoneNumber("+33601020304")
-      .firstName("firstName")
-      .lastName("lastName")
-      .companyName("companyName")
-      .federatedUserId("federatedUserId")
-      .emp("WHATSAPP");
+    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
 
     CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -478,6 +454,111 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  public void createAccountWithAdvisor_ThenUpdate() throws IOException {
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
+    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
+
+    EmpEntity empEntity = new EmpEntity()
+      .name("WHATSAPP")
+      .serviceAccountSuffix("WHATSAPP");
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
+
+    SymphonyUser symphonyUser = new SymphonyUser();
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
+    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
+
+    mockServer.expect()
+      .post()
+      .withPath(ADMINCREATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    mockServer.expect()
+      .get()
+      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
+      .andReturn(HttpStatus.NOT_FOUND.value(), null)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
+    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
+    mockServer.expect()
+      .post()
+      .withPath(SENDCONNECTIONREQUEST)
+      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    mockServer.expect()
+      .post()
+      .withPath(GETIM)
+      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createAccountRequest)
+      .when()
+      .post(CREATEACCOUNT_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value());
+
+    mockServer.expect()
+      .post()
+      .withPath(ADMINUPDATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    UpdateAccountRequest updateAccountRequest = new UpdateAccountRequest()
+      .emailAddress(createAccountRequest.getEmailAddress())
+      .phoneNumber(createAccountRequest.getPhoneNumber())
+      .firstName("firstName2")
+      .lastName("lastName2")
+      .companyName("companyName2");
+
+    UpdateAccountResponse updateAccountResponse = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(updateAccountRequest)
+      .when()
+      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp())
+      .then()
+      .statusCode(HttpStatus.OK.value())
+      .extract().response().body()
+      .as(UpdateAccountResponse.class);
+
+    UpdateAccountResponse expectedUpdateAccountResponse = new UpdateAccountResponse()
+      .firstName(updateAccountRequest.getFirstName())
+      .lastName(updateAccountRequest.getLastName())
+      .companyName(updateAccountRequest.getCompanyName())
+      .emailAddress(createAccountRequest.getEmailAddress())
+      .phoneNumber(createAccountRequest.getPhoneNumber());
+    assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
+
+    FederatedAccount expectedAccount = FederatedAccount.builder()
+      .emailAddress(createAccountRequest.getEmailAddress())
+      .phoneNumber(createAccountRequest.getPhoneNumber())
+      .firstName(updateAccountRequest.getFirstName())
+      .lastName(updateAccountRequest.getLastName())
+      .companyName(updateAccountRequest.getCompanyName())
+      .federatedUserId(createAccountRequest.getFederatedUserId())
+      .emp(createAccountRequest.getEmp())
+      .symphonyUserId(accountSession.getUserId())
+      .symphonyUsername(accountSession.getUsername())
+      .kmToken(accountSession.getKmToken())
+      .sessionToken(accountSession.getSessionToken())
+      .build();
+
+    FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
+    assertEquals(expectedAccount, actualAccount);
+  }
+
+  @Test
   public void createAccountWithoutAdvisors_AlreadyExists() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
@@ -514,4 +595,22 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .then()
       .statusCode(HttpStatus.CONFLICT.value());
   }
+
+
+  //====================
+  // Helpers
+  //====================
+
+  CreateAccountRequest createDefaultAccountRequest() {
+    return new CreateAccountRequest()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .companyName("companyName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP");
+  }
+
+
 }

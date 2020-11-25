@@ -42,7 +42,7 @@ accounts:
                 - $ref: '../errors/accounts.yaml#/create-channel-failed'
                 - $ref: '../errors/accounts.yaml#/create-user-failed'
 
-delete-account:
+modify-account:
   delete:
     tags:
       - Accounts
@@ -68,3 +68,45 @@ delete-account:
     responses:
       '200':
         description: The account has been successfully deleted
+  put:
+    tags:
+      - Accounts
+    summary: Update a federated account
+    operationId: updateFederatedAccount
+    description: >
+      => Update a federated account given a federated user id and an emp. Updates the EMP user and the Symphony Service Account display name
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: federatedUserId
+        schema:
+          type: string
+        required: true
+        description: The federated user id
+      - in: path
+        name: emp
+        schema:
+          type: string
+        required: true
+        description: The EMP to send the update to
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/accounts.yaml#/update-account-request'
+    responses:
+      '200':
+        description: The account has been successfully updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/accounts.yaml#/update-account-response'
+      '404':
+        description: Federated account not found
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/accounts.yaml#/federated-account-not-found'
+                - $ref: '../errors/accounts.yaml#/emp-not-found'

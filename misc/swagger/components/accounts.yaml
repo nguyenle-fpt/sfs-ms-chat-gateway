@@ -27,6 +27,28 @@ create-account-request:
     emp:
       type: string
 
+update-account-request:
+  type: object
+  required:
+    - phoneNumber
+    - emailAddress
+    - firstName
+    - lastName
+    - companyName
+  properties:
+    phoneNumber:
+      type: string
+      format: phone
+    emailAddress:
+      type: string
+      format: email
+    firstName:
+      type: string
+    lastName:
+      type: string
+    companyName:
+      type: string
+
 #Responses
 create-account-response:
   type: object
@@ -34,4 +56,18 @@ create-account-response:
     symphonyUsername:
       type: string
     symphonyUserId:
+      type: string
+
+update-account-response:
+  type: object
+  properties:
+    phoneNumber:
+      type: string
+    emailAddress:
+      type: string
+    firstName:
+      type: string
+    lastName:
+      type: string
+    companyName:
       type: string

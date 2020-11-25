@@ -8,6 +8,7 @@ import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;
 
 import java.util.Collections;
 import java.util.List;
@@ -77,6 +78,18 @@ public interface EmpClient {
    * @param emailAddress
    */
   void deleteAccountOrFail(String emp, String symphonyId, String emailAddress);
+
+  /**
+   * EMP User
+   * @param emp
+   * @param symphonyId
+   * @param emailAddress
+   * @param firstName
+   * @param lastName
+   * @param companyName
+   * @return
+   */
+  Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String firstName, String lastName, String companyName);
 
   Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> deleteChannelRequests, String emp);
 

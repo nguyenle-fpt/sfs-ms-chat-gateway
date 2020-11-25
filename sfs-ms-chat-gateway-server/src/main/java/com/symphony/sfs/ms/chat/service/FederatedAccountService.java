@@ -43,12 +43,14 @@ import com.symphony.sfs.ms.starter.util.RsaUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -56,7 +58,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
 
 import static com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement.ENTITLEMENT_IS_EXTERNAL_ROOM_ENABLED;
 import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUser.ROLE_INDIVIDUAL;
@@ -135,6 +136,32 @@ public class FederatedAccountService implements DatafeedListener {
   }
 
   @NewSpan
+  public FederatedAccount updateAccount(String emp, String federatedUserId, String firstName, String lastName, String companyName) {
+    FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
+      .orElseThrow(FederatedAccountNotFoundProblem::new);
+
+    if (StringUtils.isNotBlank(firstName)) {
+      existingAccount.setFirstName(firstName);
+    }
+    if (StringUtils.isNotBlank(lastName)) {
+      existingAccount.setLastName(lastName);
+    }
+    if (StringUtils.isNotBlank(companyName)) {
+      existingAccount.setCompanyName(companyName);
+    }
+
+    // Check EMP against admin
+    String userDisplayName = displayName(existingAccount.getFirstName(), existingAccount.getLastName(), emp);
+    SymphonyUserAttributes attributes = SymphonyUserAttributes.builder().displayName(userDisplayName).build();
+
+    // All checks OK, update
+    empClient.updateAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), firstName, lastName, companyName);
+    adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), attributes);
+
+    return federatedAccountRepository.save(existingAccount);
+  }
+
+  @NewSpan
   public String createChannel(CreateChannelRequest request) {
     Optional<FederatedAccount> existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp());
     if (existingAccount.isEmpty()) {
@@ -165,7 +192,7 @@ public class FederatedAccountService implements DatafeedListener {
     Optional<FederatedAccount>  federatedAccount = federatedAccountRepository.findBySymphonyId(requesting.getId().toString());
     if(federatedAccount.isPresent()) {
       FederatedAccount account = federatedAccount.get();
-        Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
+      Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
       if(canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
         channelService.createIMChannel(account, requested);
       }
