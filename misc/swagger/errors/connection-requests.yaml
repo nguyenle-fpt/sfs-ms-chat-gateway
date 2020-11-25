@@ -1,0 +1,28 @@
+connection-request-creation-failed:
+  type: object
+  description: 'Connection request creation failed'
+  properties:
+    type:
+      type: string
+      format: 'connection.request.creation.failed'
+    title:
+      type: string
+      format: 'Connection request creation failed'
+    status:
+      type: integer
+      format: 500
+
+
+connection-request-not-found:
+  type: object
+  description: 'Connection request not found'
+  properties:
+    type:
+      type: string
+      format: 'connection.request.not.found'
+    title:
+      type: string
+      format: 'Connection request not found'
+    status:
+      type: integer
+      format: 404

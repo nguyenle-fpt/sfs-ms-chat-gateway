@@ -1,0 +1,63 @@
+connection-requests:
+  post:
+    tags:
+      - ConnectionRequests
+    summary: Sends a connection request to a symphony user from connectbot
+    operationId: sendConnectionRequest
+    description: >
+      => Sends a connection request to a symphony user from connectbot
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: symphonyId
+        schema:
+          type: string
+          pattern: '^\d+$'
+        required: true
+        description: symphonyId of user to send request to
+    responses:
+      '204':
+        description: The connection requests has been successfully created
+        content:
+          application/json:
+            schema:
+              $ref: '../components/connection-requests.yaml#/connection-request-response'
+      '500':
+        description: Server Error
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/connection-requests.yaml#/connection-request-creation-failed'
+  get:
+    tags:
+      - ConnectionRequests
+    summary: Get the status of a connection request between the given symphonyId and connectbot
+    operationId: getConnectionRequestStatus
+    description: >
+      => Get the status of a connection request between the given symphonyId and connectbot
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: symphonyId
+        schema:
+          type: string
+          pattern: '^\d+$'
+        required: true
+        description: symphonyId of user to send request to
+    responses:
+      '200':
+        description: The connection request has been found
+        content:
+          application/json:
+            schema:
+              $ref: '../components/connection-requests.yaml#/connection-request-response'
+      '404':
+        description: The connection request has not been found
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/connection-requests.yaml#/connection-request-not-found'

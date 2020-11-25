@@ -1,0 +1,13 @@
+connection-request-response:
+  type: object
+  properties:
+    userId:
+      type: string
+    status:
+      type: string
+      enum:
+        - PENDING_INCOMING
+        - PENDING_OUTGOING
+        - ACCEPTED
+        - REJECTED
+

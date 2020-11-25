@@ -34,11 +34,10 @@ public class MessageIOMonitor {
       .increment();
   }
 
-  public void onSendMessageToSymphony(String fromUserId, String toUserId, String streamId) {
+  public void onSendMessageToSymphony(String fromUserId, String streamId) {
     meterManager.register(Counter.builder("sfs.messages.sent.to.symphony")
       .tag("stream", streamId)
-      .tag("fromUser", fromUserId)
-      .tag("toUser", toUserId))
+      .tag("fromUser", fromUserId))
       .increment();
   }
 

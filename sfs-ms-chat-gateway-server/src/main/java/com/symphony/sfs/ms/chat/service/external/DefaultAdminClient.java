@@ -5,6 +5,8 @@ import com.symphony.sfs.ms.SfsAdminClient;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
+import com.symphony.sfs.ms.admin.generated.model.ImRequest;
+import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
 import lombok.extern.slf4j.Slf4j;
@@ -41,5 +43,11 @@ public class DefaultAdminClient implements AdminClient {
   public Optional<CanChatResponse> canChat(String advisorSymphonyId, String federatedUserId, String entitlementType) {
     adminClient.getContactApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return adminClient.getContactApi().canChat(advisorSymphonyId, federatedUserId, entitlementType);
+  }
+
+  @Override
+  public Optional<RoomResponse> createIMRoom(ImRequest imRequest) {
+    adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    return adminClient.getRoomApi().createIM(imRequest);
   }
 }

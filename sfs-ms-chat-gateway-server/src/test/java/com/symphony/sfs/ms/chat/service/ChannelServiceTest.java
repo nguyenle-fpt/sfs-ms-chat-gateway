@@ -5,6 +5,7 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
+import com.symphony.sfs.ms.admin.generated.model.ImRequest;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
@@ -22,9 +23,12 @@ import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.webclient.WebCallException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -58,13 +62,14 @@ class ChannelServiceTest {
   private AuthenticationService authenticationService;
   private SymphonySession userSession;
   private ChannelRepository channelRepository;
-  private MockAdminClient mockAdminClient;
+  private AdminClient mockAdminClient;
 
   private SymphonyService symphonyService;
   private EmpSchemaService empSchemaService;
 
   @BeforeEach
   public void setUp() {
+    mockAdminClient = mock(AdminClient.class);
     symphonyService = mock(SymphonyService.class);
     streamService = mock(StreamService.class);
     symphonyMessageSender = mock(SymphonyMessageSender.class);
@@ -88,7 +93,6 @@ class ChannelServiceTest {
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    mockAdminClient = new MockAdminClient();
     //empSchemaService = new EmpSchemaService(mockAdminClient);
     empSchemaService =  mock(EmpSchemaService.class);
 
@@ -118,8 +122,14 @@ class ChannelServiceTest {
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
 
+    ImRequest imRequest = new ImRequest();
+    imRequest.setEmp("emp1");
+    imRequest.setStreamId("streamId");
+    imRequest.setFederatedUserId(toFederatedAccount.getFederatedUserId());
+    imRequest.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
+
+    verify(mockAdminClient).createIMRoom(imRequest);
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
-    verify(channelRepository, once()).save(any());
   }
 
   @Test
@@ -146,16 +156,70 @@ class ChannelServiceTest {
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
     verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
-    verify(channelRepository, never()).save(any());
+    verify(mockAdminClient, never()).createIMRoom(any());
   }
 
   @Test
-  void onCreateIM_failed() throws UnknownDatafeedUserException {
+  void createIMChannel_ThrowsError() throws UnknownDatafeedUserException {
+
+    FederatedAccount toFederatedAccount = newFederatedAccount("emp1", "101");
+    IUser fromSymphonyUser = newIUser("1");
+    WebCallException internalError = new WebCallException(null, new WebClientResponseException(500, "internal server error", null, null, Charset.defaultCharset()));
+    when(empClient.createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser))).thenThrow(internalError);
+
+    DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
+    when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
+    doReturn(Optional.empty()).when(symphonyMessageSender).sendInfoMessage(any(SymphonySession.class), eq("streamId"), anyString());
+
+    String streamId = channelService.createIMChannel(
+      "streamId",
+      newIUser("1"),
+      toFederatedAccount
+    );
+
+    assertEquals("streamId", streamId);
+
+    verify(datafeedSessionPool, once()).refreshSession("101");
+    verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+    verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
+    verify(mockAdminClient, never()).createIMRoom(any());
+  }
+
+  @Test
+  void createIMChannel_ThrowsAlreadyExistError() throws UnknownDatafeedUserException {
+
+    FederatedAccount toFederatedAccount = newFederatedAccount("emp1", "101");
+    IUser fromSymphonyUser = newIUser("1");
+    WebCallException internalError = new WebCallException(null, new WebClientResponseException(409, "internal server error", null, null, Charset.defaultCharset()));
+    when(empClient.createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser))).thenThrow(internalError);
+
+    DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
+    when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
+    doReturn(Optional.empty()).when(symphonyMessageSender).sendInfoMessage(any(SymphonySession.class), eq("streamId"), anyString());
+
+    String streamId = channelService.createIMChannel(
+      "streamId",
+      newIUser("1"),
+      toFederatedAccount
+    );
+
+    assertEquals("streamId", streamId);
+
+    verify(datafeedSessionPool, once()).refreshSession("101");
+    verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
+    verify(symphonyMessageSender, never()).sendAlertMessage(eq(userSession101), eq("streamId"), anyString());
+    verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
+    verify(mockAdminClient, never()).createIMRoom(any());
+  }
+
+  @Test
+  void onCreateIM_no_entitlement() throws UnknownDatafeedUserException {
     FederatedAccount toFederatedAccount = newFederatedAccount("emp1", "101");
     IUser fromSymphonyUser = newIUser("1");
 
     when(federatedAccountRepository.findBySymphonyId("101")).thenReturn(Optional.of(toFederatedAccount));
-    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.NO_ENTITLEMENT));
+    when(mockAdminClient.canChat(any(), any(), any())).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
     DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
     when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
     when(empSchemaService.getEmpDisplayName("emp1")).thenReturn("External Messaging Platform");

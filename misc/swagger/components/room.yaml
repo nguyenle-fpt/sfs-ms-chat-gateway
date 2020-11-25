@@ -8,6 +8,32 @@ room-request:
       type: string
       maxLength: 50
 
+room-member-remove-request:
+  type: object
+  required:
+    - symphonyId
+    - isFederatedUser
+    - isRemoveChannel
+  properties:
+    symphonyId:
+      type: string
+      pattern: '^\d+$'
+    federatedUser:
+      type: boolean
+    removeChannel:
+      type: boolean
+    emp:
+      type: string
+
+
+room-remove-request:
+  type: object
+  properties:
+    members:
+      type: array
+      items:
+        $ref: '#/room-member-remove-request'
+
 room-member-request:
   type: object
   required:

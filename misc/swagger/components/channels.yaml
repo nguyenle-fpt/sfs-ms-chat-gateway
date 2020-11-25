@@ -16,13 +16,13 @@ create-channel-request:
 deleteChannel-request:
   type: object
   required:
-    - advisorSymphonyId
-    - federatedUserId
+    - streamId
+    - federatedSymphonyId
     - emp
   properties:
-    advisorSymphonyId:
+    streamId:
       type: string
-    federatedUserId: #TODO maybe move to symphonyID? Beware of the state of the DB
+    federatedSymphonyId: #TODO maybe move to symphonyID? Beware of the state of the DB
       type: string
     entitlementType:
       type: string

@@ -47,6 +47,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -138,8 +139,12 @@ public class ForwarderQueueConsumer {
     IUser fromUser = socialMessage.getFrom(); // or getActualFromUser()?
     MDC.put("streamId", streamId);
     MDC.put("messageId", messageId);
+    LOG.debug("ENVELOPE | envelope={}", envelope);
+
     IJsonObject<?> attributes = envelope.getPayload().getJsonObject().getObject("attributes");
-    if (attributes == null) {
+    String chatType = envelope.getPayload().getJsonObject().getString("chatType", "IM");
+    Set<PodAndUserId> distList = envelope.getDistributionList();
+    if (attributes == null && distList == null) {
       messageIOMonitor.onMessageBlockFromSymphony(SOCIAL_MESSAGE_MALFORMED, streamId);
       LOG.debug("No attributes in social message | envelope={}, payload={}", envelope, envelope.getPayload());
       return;
@@ -150,14 +155,17 @@ public class ForwarderQueueConsumer {
     if (Integer.parseInt(receiveCount) > 1) {
       forwarderQueueMetrics.onRetry(fromUser.getCompany());
     }
-
-    ImmutableJsonList memberJsonList = ((ImmutableJsonList) attributes.get("dist"));
     List<String> members = Collections.emptyList();
-    if (memberJsonList != null) {
-      members = StreamSupport
-        .stream(memberJsonList.spliterator(), false)
-        .map(Object::toString)
-        .collect(Collectors.toList());
+    if(attributes != null && attributes.containsKey("dist")) {
+      ImmutableJsonList memberJsonList = ((ImmutableJsonList) attributes.get("dist"));
+      if (memberJsonList != null) {
+        members = StreamSupport
+          .stream(memberJsonList.spliterator(), false)
+          .map(Object::toString)
+          .collect(Collectors.toList());
+      }
+    } else {
+      members = distList.stream().map(PodAndUserId::toString).collect(Collectors.toList());
     }
 
     LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getText()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getText());
@@ -174,6 +182,7 @@ public class ForwarderQueueConsumer {
       .disclaimer(socialMessage.getDisclaimer())
       .attachments(socialMessage.getAttachments())
       .parentRelationshipType(parentRelationshipType)
+      .chatType(chatType)
       .build();
 
     Optional<DatafeedSession> managedSession = getManagedSession(gatewaySocialMessage);

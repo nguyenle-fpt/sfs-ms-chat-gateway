@@ -9,6 +9,7 @@ import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
@@ -59,6 +60,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class AccountsApiTest extends AbstractIntegrationTest {
@@ -67,7 +70,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   protected FederatedAccountService federatedAccountService;
   protected AccountsApi accountsApi;
   protected EmpSchemaService empSchemaService;
-  protected MockAdminClient mockAdminClient;
   protected ChannelsApi channelApi;
   private Tracer tracer = mock(Tracer.class);
 
@@ -78,7 +80,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     empSchemaService = mock(EmpSchemaService.class);
 
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
-    mockAdminClient = new MockAdminClient();
 
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
     federatedAccountService = new FederatedAccountService(
@@ -96,7 +97,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       empSchemaService,
       empClient,
       symphonyAuthFactory,
-      mockAdminClient,
+      adminClient,
       channelRepository);
     federatedAccountService.registerAsDatafeedListener();
     channelApi = new ChannelsApi(federatedAccountService, channelService);
@@ -335,9 +336,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .symphonyUsername(accountSession.getUsername()), response);
 
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isEmpty());
-
+    when(empClient.createChannel(any(), any(), any(), any(), any())).thenReturn(Optional.of("streamId"));
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
       FederatedAccount.builder()
         .emailAddress(createAccountRequest.getEmailAddress())
@@ -351,11 +350,11 @@ public class AccountsApiTest extends AbstractIntegrationTest {
         .symphonyUserId("2")
         .build()
     )));
-    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
+    adminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isPresent());
-
+    assertEquals(1, adminClient.getImRequests().size());
+    verify(empClient).createChannel(any(), any(), any(), any(), any());
   }
   @Test
   public void createAccountWithAdvisor_ThenDelete() throws IOException {
@@ -443,11 +442,15 @@ public class AccountsApiTest extends AbstractIntegrationTest {
         .symphonyUserId("2")
         .build()
     )));
-    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
+    adminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
+    when(empClient.createChannel(any(), any(), any(), any(), any())).thenReturn(Optional.of("streamId"));
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
 
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isPresent());
+    verify(empClient).createChannel(any(), any(), any(), any(), any());
+    assertEquals(1, adminClient.getImRequests().size());
+
+    //assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isPresent());
 
     mockServer.expect()
       .post()

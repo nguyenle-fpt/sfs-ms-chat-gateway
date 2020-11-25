@@ -10,8 +10,10 @@ import com.symphony.sfs.ms.emp.generated.model.AsyncResult;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.CreateChannelRequest;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
+import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
@@ -47,11 +49,11 @@ public class DefaultEmpClient implements EmpClient {
       .members(toChannelMembers(federatedUsers, initiatorUserId, symphonyUsers));
 
     client.getChannelApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return client.getChannelApi().createChannel(request).map(AsyncResult::getOperationId);
+    return client.getChannelApi().createChannelOrFail(request).map(AsyncResult::getOperationId);
   }
 
   @Override
-  public Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
+  public Optional<List<OperationIdBySymId>> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     SendMessageRequest request = new SendMessageRequest()
@@ -66,15 +68,16 @@ public class DefaultEmpClient implements EmpClient {
 
     // TODO async result too?
     client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getOperationId);
+    return client.getMessagingApi().sendMessage(request).map(SendMessageResponse::getOperationIds);
   }
 
   @Override
-  public Optional<String> sendSystemMessage(String emp, String streamId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type) {
+  public Optional<String> sendSystemMessage(String emp, String streamId, String symphonyId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     SendSystemMessageRequest request = new SendSystemMessageRequest()
       .streamId(streamId)
+      .symphonyId(symphonyId)
       .timestamp(timestamp)
       .text(message)
       .type(type);
@@ -92,10 +95,10 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp) {
+  public Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> deleteChannelRequests, String emp) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return client.getChannelApi().deleteChannelsOrFail(new DeleteChannelsRequest().streamIds(streamIds));
+    return client.getChannelApi().deleteChannelsOrFail(new DeleteChannelsRequest().channels(deleteChannelRequests));
   }
 
   @Override

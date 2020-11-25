@@ -20,7 +20,6 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
-import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -28,6 +27,7 @@ import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
@@ -37,6 +37,7 @@ import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,7 +67,6 @@ import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFro
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_CONTACT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_FEDERATED_ACCOUNT;
-import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.TOO_MUCH_MEMBERS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.UNSUPPORTED_MESSAGE_CONTENTS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ADVISOR_NO_LONGER_AVAILABLE;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.FEDERATED_ACCOUNT_NOT_FOUND;
@@ -97,6 +97,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private final MessageIOMonitor messageMetrics;
   private final ChannelService channelService;
 
+
   @PostConstruct
   @VisibleForTesting
   public void registerAsDatafeedListener() {
@@ -110,7 +111,6 @@ public class SymphonyMessageService implements DatafeedListener {
       return;
     }
     // Here we know this is a (M)IM from Symphony to EMP(s)
-    // Reminder: channel is created on the fly if needed in EMPs
     if (gatewaySocialMessage.getToUserIds().size() > 1) {
       LOG.info("More than one recipient --> We are in MIM | recipients={}", gatewaySocialMessage.getToUserIds());
     }
@@ -123,7 +123,10 @@ public class SymphonyMessageService implements DatafeedListener {
       LOG.warn("(M)IM with has less than 2 members  | streamId={} messageId={}", gatewaySocialMessage.getStreamId(), gatewaySocialMessage.getMessageId());
       return false;
     }
-    if (federatedAccountRepository.findBySymphonyId(gatewaySocialMessage.getFromUserId()).isPresent()) {
+    if(botConfiguration.getSymphonyId().equals(gatewaySocialMessage.getFromUserId())) {
+      return false;
+    }
+    if (federatedAccountRepository.findBySymphonyId(gatewaySocialMessage.getFromUserId()).isPresent() && !gatewaySocialMessage.isRoom()) {
       // Message is from a Federated User
       return false;
     }
@@ -151,9 +154,18 @@ public class SymphonyMessageService implements DatafeedListener {
 
     try {
       // Check if message contents can be sent
-      List<SymphonySession> allUserSessions = new ArrayList<>(gatewaySocialMessage.getToUserIds().size());
-      for (FederatedAccount toFederatedAccount : federatedAccountsByEmp.values().stream().flatMap(Collection::stream).collect(Collectors.toList())) {
-        allUserSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
+      //TODO in case of a room allUserSessions will have only the bot session, in case if IM it has only one federated account's session.
+      //TODO maybe the code should be simplified accordingly
+      List<SymphonySession> allUserSessions;
+      if(gatewaySocialMessage.isRoom()) {
+        //TODO caching for botSession ?
+        SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+        allUserSessions = Collections.singletonList(botSession);
+      } else {
+        allUserSessions = new ArrayList<>(gatewaySocialMessage.getToUserIds().size());
+        for (FederatedAccount toFederatedAccount : federatedAccountsByEmp.values().stream().flatMap(Collection::stream).collect(Collectors.toList())) {
+          allUserSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
+        }
       }
       if (gatewaySocialMessage.isChime()) {
         allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Chimes are not supported currently, your contact was not notified."));
@@ -177,17 +189,10 @@ public class SymphonyMessageService implements DatafeedListener {
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
           userSessions.add(datafeedSessionPool.getSession(toFederatedAccount.getSymphonyUserId()));
         }
+        // not optimal, we call the canChat everytime here.
         Optional<CanChatResponse> canChat = adminClient.canChat(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), emp);
-        if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(emp) + " users."));
-          messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
-        } else if (canChat.get() == CanChatResponse.NO_CONTACT) {
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
-          messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
-        } else if (gatewaySocialMessage.getToUserIds().size() > 1) {// Check there are only 2 users
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + empSchemaService.getEmpDisplayName(emp) + " contact in a MIM."));
-          messageMetrics.onMessageBlockFromSymphony(TOO_MUCH_MEMBERS, streamId);
-        } else {
+
+        if(manageCanChat(gatewaySocialMessage, emp, streamId, userSessions, canChat)) {
           List<Attachment> attachmentsContent = null;
           long totalsize = 0;
           if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
@@ -198,18 +203,18 @@ public class SymphonyMessageService implements DatafeedListener {
                 Attachment result = new Attachment()
                   .contentType(attachment.getContentType())
                   .fileName(attachment.getName())
-                  .data(symphonyService.getAttachment(streamId, gatewaySocialMessage.getMessageId(), attachment.getFileId(), userSessions.get(0)));
+                  .data(symphonyService.getAttachment(streamId, gatewaySocialMessage.getMessageId(), attachment.getFileId(), allUserSessions.get(0)));
 
                 attachmentsContent.add(result);
 
                 totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
                 if (totalsize > MAX_UPLOAD_SIZE) {
-                  userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
+                  allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
                   return;
                 }
               }
             } catch (DataBufferLimitException dbe) {
-              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
+              allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
               return;
             }
           }
@@ -221,12 +226,16 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Example: a WhatsApp user must join a WhatsGroup to discuss in the associated
           //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
           //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
-          Optional<Channel> channel = channelService.retrieveChannel(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
-          if (channel.isEmpty()) {
+
+          // We will not create new channels if you have the permission CAN_CHAT_NO_CREATE_IM
+          // this means that old conversations should still work but the user won't be able to create a new one
+          // we don't know if the conversatio already exists so we cannot send a specific message.
+          // we let the normal mecanism take care of that.
+          if(!gatewaySocialMessage.isRoom() && canChat.isPresent() && canChat.get() != CanChatResponse.CAN_CHAT_NO_CREATE_IM) {
             channelService.createIMChannel(streamId, gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp.get(0));
           }
           messageMetrics.onSendMessageFromSymphony(gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp, streamId);
-          Optional<String> empMessageId = empClient.sendMessage(emp,
+          Optional<List<OperationIdBySymId>> empMessageIdsOptional = empClient.sendMessage(emp,
             streamId,
             gatewaySocialMessage.getMessageId(),
             gatewaySocialMessage.getFromUser(),
@@ -235,8 +244,10 @@ public class SymphonyMessageService implements DatafeedListener {
             gatewaySocialMessage.getMessageForEmp(),
             gatewaySocialMessage.getDisclaimerForEmp(),
             attachmentsContent);
-          if (empMessageId.isEmpty()) {
-            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
+          if (empMessageIdsOptional.isEmpty()) {
+            allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
+          } else {
+            this.dealWithMessageSentPartially(gatewaySocialMessage, empMessageIdsOptional.get(), allUserSessions);
           }
         }
       }
@@ -244,6 +255,49 @@ public class SymphonyMessageService implements DatafeedListener {
       // should never happen, as we have a FederatedAccount
       throw new IllegalStateException(e);
     }
+  }
+
+  private void dealWithMessageSentPartially(GatewaySocialMessage gatewaySocialMessage, List<OperationIdBySymId> empMessageIds, List<SymphonySession> allUserSessions) {
+    List<OperationIdBySymId> notDeliveredFor = empMessageIds
+      .stream()
+      .filter(op -> op.getOperationId() == null)
+      .collect(Collectors.toList());
+
+    if (notDeliveredFor.isEmpty()) {
+      return;
+    }
+    String errorMessage;
+    if (!gatewaySocialMessage.isRoom()) {
+      errorMessage = "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ").";
+    } else {
+      String users = notDeliveredFor.stream()
+        .map(op -> this.federatedAccountRepository.findBySymphonyId(op.getSymphonyId()))
+        .filter(Optional::isPresent)
+        .map(Optional::get)
+        .map(user -> user.getFirstName() + " " + user.getLastName())
+        .collect(Collectors.joining(", "));
+      errorMessage = "This message (messageId : " + gatewaySocialMessage.getMessageId() + ") was not delivered for the following users: " + users;
+    }
+    allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, gatewaySocialMessage.getStreamId(), errorMessage));
+  }
+
+
+  private boolean manageCanChat(GatewaySocialMessage gatewaySocialMessage, String emp, String streamId, List<SymphonySession> userSessions, Optional<CanChatResponse> canChat) {
+    if (gatewaySocialMessage.isRoom()) {
+      return true;
+    }
+
+    if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
+      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(emp) + " users."));
+      messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
+      return false;
+    } else if (canChat.get() == CanChatResponse.NO_CONTACT ) {
+      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
+      messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
+      return false;
+    }
+    // CAN_CHAT_NO_CREATE_IM is seen as a canchat for this function
+    return true;
   }
 
   @NewSpan
@@ -272,25 +326,28 @@ public class SymphonyMessageService implements DatafeedListener {
       return new FederatedAccountNotFoundProblem();
     });
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
-
-    Optional<String> advisorSymphonyUserId = findAdvisor(streamId, fromSymphonyUserId);
-    Optional<String> notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp(), formatting);
-    advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
-
     String symphonyMessageId = null;
+    StreamInfo streamInfo = getStreamInfo(streamId);
+    Optional<String> notEntitled = Optional.empty();
+    if(streamInfo.getStreamType().getType() != StreamTypes.ROOM) {
+      Optional<String> advisorSymphonyUserId = findAdvisor(streamInfo, streamId, fromSymphonyUserId);
+      notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp(), formatting);
+      advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
+    }
+
     if (notEntitled.isPresent()) {
       messageMetrics.onMessageBlockToSymphony(ADVISOR_NO_LONGER_AVAILABLE, streamId);
-      feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, notEntitled.get(), TypeEnum.ALERT);
+      feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, notEntitled.get(), TypeEnum.ALERT);
     } else {
       // TODO fix this bad management of optional
-      messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, advisorSymphonyUserId.get(), streamId);
+      messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
       boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
-      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, advisorSymphonyUserId.get(), formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
+      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
       // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
       if (textTooLong) {
         String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
-        feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, alertMessage, TypeEnum.ALERT);
-        symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, alertMessage, advisorSymphonyUserId.get());
+        feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, alertMessage, TypeEnum.ALERT);
+        symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, alertMessage, null);
       }
     }
 
@@ -328,9 +385,19 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
-  private void feedbackAboutIncomingMessage(String emp, String streamId, String reasonText, SendSystemMessageRequest.TypeEnum feedbackType) {
-    LOG.info("FeedbackAboutIncomingMessage | emp={}, streamId={}, reason={}, type={}", emp, streamId, reasonText, feedbackType);
-    empClient.sendSystemMessage(emp, streamId, new Date().getTime(), reasonText, feedbackType);
+  private void feedbackAboutIncomingMessage(String emp, String streamId, String symphonyId, String reasonText, SendSystemMessageRequest.TypeEnum feedbackType) {
+    LOG.info("FeedbackAboutIncomingMessage | emp={}, streamId={}, symphonyId={}, reason={}, type={}", emp, streamId, symphonyId, reasonText, feedbackType);
+    empClient.sendSystemMessage(emp, streamId, symphonyId, new Date().getTime(), reasonText, feedbackType);
+  }
+
+  private StreamInfo getStreamInfo(String streamId) {
+
+    SymphonySession botSession = authenticationService.authenticate(
+      podConfiguration.getSessionAuth(),
+      podConfiguration.getKeyAuth(),
+      botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+
+    return streamService.getStreamInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId).orElseThrow(CannotRetrieveStreamIdProblem::new);
   }
 
   /**
@@ -340,15 +407,7 @@ public class SymphonyMessageService implements DatafeedListener {
    * @param fromFederatedAccountSymphonyUserId
    * @return Optional with found advisor symphonyUserId. Empty if no advisor found
    */
-  private Optional<String> findAdvisor(String streamId, String fromFederatedAccountSymphonyUserId) {
-
-    SymphonySession botSession = authenticationService.authenticate(
-      podConfiguration.getSessionAuth(),
-      podConfiguration.getKeyAuth(),
-      botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-
-    StreamInfo streamInfo = streamService.getStreamInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId).orElseThrow(CannotRetrieveStreamIdProblem::new);
-
+  private Optional<String> findAdvisor(StreamInfo streamInfo, String streamId, String fromFederatedAccountSymphonyUserId) {
     List<Long> streamMemberIds = streamInfo.getStreamAttributes().getMembers();
     if (streamMemberIds.size() != 2) {
       LOG.warn("Unsupported stream {} with {} members (symphonyUserIds = {})", streamId, streamMemberIds.size(), streamMemberIds);
@@ -385,6 +444,7 @@ public class SymphonyMessageService implements DatafeedListener {
     // We can still send notifications to advisors without contacts. Useful for onboarding when we need to send a notification before the contact is created
     // TODO REFACTOR, adding a message type and checking on that might make more sense than checking the formatting to change behaviour
     if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT ||
+      canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM ||
       canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.NO_CONTACT && formatting != null) {
       return Optional.empty();
     }

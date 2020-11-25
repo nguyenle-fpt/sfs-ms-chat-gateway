@@ -40,6 +40,7 @@ public class GatewaySocialMessage {
   private final List<IAttachment> attachments;
   private final Long timestamp;
   private final boolean chime;
+  private final String chatType;
   private final ParentRelationshipType parentRelationshipType;
   private boolean table;
 
@@ -63,6 +64,10 @@ public class GatewaySocialMessage {
 
   public String getDisclaimerForEmp() {
     return escape(this.disclaimer);
+  }
+
+  public boolean isRoom() {
+    return "CHATROOM".equals(chatType);
   }
 
   private static String unescapeSpecialCharacters(String text) {

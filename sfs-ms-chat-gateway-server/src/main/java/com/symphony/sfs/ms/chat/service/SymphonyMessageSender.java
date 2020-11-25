@@ -67,7 +67,7 @@ public class SymphonyMessageSender {
       return new SendMessageFailedProblem();
     });
 
-    messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, toSymphonyUserId, streamId);
+    messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
 
     SymphonySession userSession = authenticationService.authenticate(
       podConfiguration.getSessionAuth(),
@@ -119,7 +119,7 @@ public class SymphonyMessageSender {
       return new SendMessageFailedProblem();
     });
 
-    messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, toSymphonyUserId, streamId);
+    messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
 
     SymphonySession userSession = authenticationService.authenticate(
       podConfiguration.getSessionAuth(),

@@ -142,108 +142,6 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
     )));
   }
 
-  @Test
-  public void deleteChannelTest() throws IOException {
-    SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSessionPool.DatafeedSession accountSession1 = new DatafeedSessionPool.DatafeedSession(getSession("username1"), "1");
-    DatafeedSessionPool.DatafeedSession accountSession2 = new DatafeedSessionPool.DatafeedSession(getSession("username2"), "2");
-    DatafeedSessionPool.DatafeedSession accountSession3 = new DatafeedSessionPool.DatafeedSession(getSession("username3"), "3");
-    DatafeedSessionPool.DatafeedSession accountSession4 = new DatafeedSessionPool.DatafeedSession(getSession("username4"), "4");
-
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession1.getUsername()), anyString())).thenReturn(accountSession1);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession2.getUsername()), anyString())).thenReturn(accountSession2);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession3.getUsername()), anyString())).thenReturn(accountSession3);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession4.getUsername()), anyString())).thenReturn(accountSession4);
-
-
-    mockServer.expect()
-      .get()
-      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "99"))
-      .andReturn(HttpStatus.NOT_FOUND.value(), null)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
-    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
-    mockServer.expect()
-      .post()
-      .withPath(SENDCONNECTIONREQUEST)
-      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    FederatedAccount existingAccount1 = this.createAndSaveFederatedAccount("federatedUserId1", "username1", "1", "WHATSAPP");
-    FederatedAccount existingAccount2 = this.createAndSaveFederatedAccount("federatedUserId2", "username2", "2", "WHATSAPP");
-    FederatedAccount existingAccount3 = this.createAndSaveFederatedAccount("federatedUserId3", "username3", "3", "WHATSAPPGROUPS");
-    FederatedAccount existingAccount4 = this.createAndSaveFederatedAccount("federatedUserId4", "username4", "4", "WHATSAPP");
-
-    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-
-
-    this.createChannel(existingAccount1.getFederatedUserId(), existingAccount1.getEmp());
-    this.createChannel(existingAccount2.getFederatedUserId(), existingAccount2.getEmp());
-    this.createChannel(existingAccount3.getFederatedUserId(), existingAccount3.getEmp());
-    this.createChannel(existingAccount4.getFederatedUserId(), existingAccount4.getEmp());
-
-    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
-    forwarderQueueConsumer.consume(this.createNotification(existingAccount1, accountSession1), "1");
-    forwarderQueueConsumer.consume(this.createNotification(existingAccount2, accountSession2), "2");
-    forwarderQueueConsumer.consume(this.createNotification(existingAccount3, accountSession3), "3");
-    forwarderQueueConsumer.consume(this.createNotification(existingAccount4, accountSession4), "4");
-    assertEquals(2, ((MockEmpClient) empClient).getChannels().size());
-    this.setStreamID("2", "federatedUserId1", "WHATSAPP", "streamID1");
-    this.setStreamID("2", "federatedUserId2", "WHATSAPP", "streamID2");
-    this.setStreamID("2", "federatedUserId3", "WHATSAPPGROUPS", "streamID3");
-    this.setStreamID("2", "federatedUserId4", "WHATSAPP", "streamID4_failure");
-      empClient.deleteChannels(List.of("streamId"), "WHATSAPPGROUPS");
-      empClient.deleteChannels(List.of("streamId"), "WHATSAPP");
-
-    DeleteChannelRequest request1 = new DeleteChannelRequest().advisorSymphonyId("2").federatedUserId("federatedUserId1").entitlementType("WHATSAPP");
-    DeleteChannelRequest request2 = new DeleteChannelRequest().advisorSymphonyId("2").federatedUserId("federatedUserId2").entitlementType("WHATSAPP");
-    DeleteChannelRequest request3 = new DeleteChannelRequest().advisorSymphonyId("2").federatedUserId("federatedUserId3").entitlementType("WHATSAPPGROUPS");
-    DeleteChannelRequest request4 = new DeleteChannelRequest().advisorSymphonyId("2").federatedUserId("blabla").entitlementType("WHATSAPPGROUPS");
-    DeleteChannelRequest request5 = new DeleteChannelRequest().advisorSymphonyId("2").federatedUserId("federatedUserId4").entitlementType("WHATSAPP");
-    DeleteChannelsRequest deleteChannelsRequest = new DeleteChannelsRequest().channels(List.of(request1, request2, request3, request4, request5));
-
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount1.getFederatedUserId(), existingAccount1.getEmp()).isPresent());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount2.getFederatedUserId(), existingAccount2.getEmp()).isPresent());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount3.getFederatedUserId(), existingAccount3.getEmp()).isPresent());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount4.getFederatedUserId(), existingAccount4.getEmp()).isPresent());
-
-    DeleteChannelsResponse result = configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
-      .contentType(MediaType.APPLICATION_JSON_VALUE)
-      .body(deleteChannelsRequest)
-      .when()
-      .post(DELETECHANNELS_ENDPOINT)
-      .then()
-      .statusCode(HttpStatus.OK.value())
-      .extract().response().body()
-      .as(DeleteChannelsResponse.class);
-
-    assertNotNull(result);
-    assertEquals(5, result.getReport().size());
-    this.testsStatusMatches(result, BulkRemovalStatus.SUCCESS, request1);
-    this.testsStatusMatches(result, BulkRemovalStatus.SUCCESS, request2);
-    this.testsStatusMatches(result, BulkRemovalStatus.SUCCESS, request3);
-    this.testsStatusMatches(result, BulkRemovalStatus.NOT_FOUND, request4);
-    this.testsStatusMatches(result, BulkRemovalStatus.FAILURE, request5);
-
-
-    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount1.getFederatedUserId(), existingAccount1.getEmp()).isEmpty());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount2.getFederatedUserId(), existingAccount2.getEmp()).isEmpty());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount3.getFederatedUserId(), existingAccount3.getEmp()).isEmpty());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount4.getFederatedUserId(), existingAccount4.getEmp()).isPresent());
-  }
-
   // a hack to set the streamID that we want
   private void setStreamID(String advisorSymphonyId, String federatedUserId, String emp, String streamID) {
     Channel channel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(advisorSymphonyId, federatedUserId, emp).get();
@@ -347,13 +245,6 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
     mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
-    assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", existingAccount.getFederatedUserId(), existingAccount.getEmp()).isPresent());
-
-    configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
-      .contentType(MediaType.APPLICATION_JSON_VALUE)
-      .when()
-      .get(RETRIEVECHANNEL_ENDPOINT, "2", "federatedUserId", "WHATSAPP")
-      .then()
-      .statusCode(HttpStatus.OK.value());
-  }
+    assertEquals(1, adminClient.getImRequests().size());
+   }
 }

@@ -57,6 +57,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+
 import static com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement.ENTITLEMENT_IS_EXTERNAL_ROOM_ENABLED;
 import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUser.ROLE_INDIVIDUAL;
 import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes.ACCOUNT_TYPE_SYSTEM;
@@ -164,7 +165,7 @@ public class FederatedAccountService implements DatafeedListener {
     Optional<FederatedAccount>  federatedAccount = federatedAccountRepository.findBySymphonyId(requesting.getId().toString());
     if(federatedAccount.isPresent()) {
       FederatedAccount account = federatedAccount.get();
-      Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
+        Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
       if(canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
         channelService.createIMChannel(account, requested);
       }

@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.generated.api.AccountsApi;
 import com.symphony.sfs.ms.chat.generated.api.ChannelsApi;
+import com.symphony.sfs.ms.chat.generated.api.ConnectionRequestsApi;
 import com.symphony.sfs.ms.chat.generated.api.EmpApi;
 import com.symphony.sfs.ms.chat.generated.api.MessagingApi;
 import com.symphony.sfs.ms.chat.generated.api.RoomApi;
@@ -22,6 +23,7 @@ public class SfsChatGatewayClient {
   private final MessagingApi messagingApi;
   private final EmpApi empApi;
   private final RoomApi roomApi;
+  private final ConnectionRequestsApi connectionRequestsApi;
 
   public SfsChatGatewayClient(String baseUri, WebClient webClient, ObjectMapper objectMapper) {
     this.webClient = webClient;
@@ -33,5 +35,6 @@ public class SfsChatGatewayClient {
     this.messagingApi = new MessagingApi(baseUri, apiClient);
     this.empApi = new EmpApi(baseUri, apiClient);
     this.roomApi = new RoomApi(baseUri, apiClient);
+    this.connectionRequestsApi = new ConnectionRequestsApi(baseUri, apiClient);
   }
 }

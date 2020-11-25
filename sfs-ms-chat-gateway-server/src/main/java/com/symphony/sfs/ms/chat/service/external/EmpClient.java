@@ -1,10 +1,11 @@
 package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 
@@ -21,6 +22,7 @@ public interface EmpClient {
   String SEND_MESSAGE_ENDPOINT = "/api/v1/messages";
   String SEND_SYSTEM_MESSAGE_ENDPOINT = "/api/v1/system-messages";
 
+  // TODO MAKE IT THROW
   Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers);
 
   /**
@@ -36,7 +38,7 @@ public interface EmpClient {
    * @param disclaimer
    * @return
    */
-  public default Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
+  public default Optional<List<OperationIdBySymId>> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
     return sendMessage(emp, streamId, messageId, fromSymphonyUser, Collections.singletonList(toFederatedAccount), timestamp, message, disclaimer, attachments);
   }
 
@@ -53,19 +55,20 @@ public interface EmpClient {
    * @param disclaimer
    * @return
    */
-  Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments);
+  Optional<List<OperationIdBySymId>> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments);
 
   /**
    * IM
    *
    * @param emp
    * @param streamId
+   * @param symphonyId
    * @param timestamp
    * @param message
    * @param type
    * @return
    */
-  Optional<String> sendSystemMessage(String emp, String streamId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type);
+  Optional<String> sendSystemMessage(String emp, String streamId, String symphonyId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type);
 
   /**
    * Internal usage for QA
@@ -75,7 +78,7 @@ public interface EmpClient {
    */
   void deleteAccountOrFail(String emp, String symphonyId, String emailAddress);
 
-  Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp);
+  Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> deleteChannelRequests, String emp);
 
   /**
    *

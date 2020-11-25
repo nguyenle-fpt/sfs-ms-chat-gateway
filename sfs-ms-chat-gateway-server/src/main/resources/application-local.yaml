@@ -26,6 +26,7 @@ bot:
   username: sfs-admin
   emailAddress: sfs-admin@symphony.com
   privateKey: file:../misc/certs/sfs-admin-bot_privatekey.pem
+  symphonyId: 13469017444294
 
 agent:
   url: https://ces3-dev.symphony.com

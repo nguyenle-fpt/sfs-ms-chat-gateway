@@ -75,3 +75,52 @@ room-members:
           application/json:
             schema:
               $ref: '../errors/room.yaml#/add-room-member-failed'
+  delete:
+    tags:
+      - Room
+    summary: Removes a member from a room
+    operationId: removeMember
+    description: '=> Remove a member from a room'
+    security:
+      - sfsAuthentication: []
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - in: path
+        name: streamId
+        schema:
+          type: string
+        required: true
+        description: StreamId
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/room.yaml#/room-member-remove-request'
+room:
+  delete:
+    tags:
+      - Room
+    summary: Deletes a room
+    operationId: deleteRoom
+    description: '=> deletes a room'
+    security:
+      - sfsAuthentication: []
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - in: path
+        name: streamId
+        schema:
+          type: string
+        required: true
+        description: StreamId
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/room.yaml#/room-remove-request'

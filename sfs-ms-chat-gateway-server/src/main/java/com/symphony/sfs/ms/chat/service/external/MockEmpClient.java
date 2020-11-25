@@ -4,9 +4,11 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
@@ -38,18 +40,18 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<String> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
+  public Optional<List<OperationIdBySymId>> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
     // For now use the same mock implementation as channels
     String operationId = messages.get(emp + ":" + streamId + ":" + messageId + ":" + fromSymphonyUser.getId().toString());
     if (operationId == null) {
       operationId = UUID.randomUUID().toString();
       messages.putIfAbsent(emp + ":" + streamId + ":" + messageId + ":" + fromSymphonyUser.getId().toString(), operationId);
     }
-    return Optional.ofNullable(operationId);
+    return Optional.of(List.of(new OperationIdBySymId().operationId(operationId)));
   }
 
   @Override
-  public Optional<String> sendSystemMessage(String emp, String streamId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type) {
+  public Optional<String> sendSystemMessage(String emp, String streamId, String fromSymphonyUserId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type) {
     // For now use the same mock implementation as channels
     String operationId = messages.get(emp + ":" + streamId + ":" + message + ":" + type);
     if (operationId == null) {
@@ -65,16 +67,16 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<DeleteChannelsResponse> deleteChannels(List<String> streamIds, String emp) {
+  public Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> channels, String emp) {
     DeleteChannelsResponse response = new DeleteChannelsResponse();
-    streamIds.forEach(streamId -> {
+    channels.forEach(channel -> {
       //simulate failure
-      if (streamId.contains("failure")) {
-        response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.FAILURE));
-      } else if (this.channels.remove(emp + ":" + streamId) == null) {
-        response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.NOT_FOUND));
+      if (channel.getStreamId().contains("failure")) {
+        response.addReportItem(new DeleteChannelResponse().streamId(channel.getStreamId()).status(BulkRemovalStatus.FAILURE));
+      } else if (this.channels.remove(emp + ":" + channel) == null) {
+        response.addReportItem(new DeleteChannelResponse().streamId(channel.getStreamId()).status(BulkRemovalStatus.NOT_FOUND));
       } else {
-        response.addReportItem(new DeleteChannelResponse().streamId(streamId).status(BulkRemovalStatus.SUCCESS));
+        response.addReportItem(new DeleteChannelResponse().streamId(channel.getStreamId()).status(BulkRemovalStatus.SUCCESS));
       }
     });
     return Optional.of(response);

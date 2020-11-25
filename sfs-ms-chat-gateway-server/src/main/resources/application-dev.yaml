@@ -29,6 +29,7 @@ pod:
 bot:
   username: ${BOT_USERNAME}
   emailAddress: ${BOT_EMAIL}
+  symphonyId: ${BOT_SYMPHONYID}
 
 agent:
   url: ${AGENT_URL}

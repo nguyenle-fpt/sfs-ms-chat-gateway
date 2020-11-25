@@ -14,7 +14,7 @@ aws sqs set-queue-attributes --queue-url <QUEUE_URL> --attributes $SQS_POLICY
 Subscribe the SQS queue to the SNS topic
 ```
 POD_ID=196
-aws sns subscribe --topic-arn <SNS_TOPIC_ARN> --protocol sqs --notification-endpoint <SQS_QUEUE_ARN> --attributes '{"RawMessageDelivery": "false", "FilterPolicy": "{\"payloadType\": [\"com.symphony.s2.model.chat.SocialMessage\",\"com.symphony.s2.model.chat.MaestroMessage\"], \"podId\": [{\"numeric\": [\"=\",'$POD_ID'.0]}]}"}'
+aws sns subscribe --topic-arn <SNS_TOPIC_ARN> --protocol sqs --notification-endpoint <SQS_QUEUE_ARN> --attributes '{"RawMessageDelivery": "false", "FilterPolicy": "{\"podId\": [{\"numeric\": [\"=\",'$POD_ID'.0]}]}"}'
 ```
 
 Test that the queue receive data:

@@ -79,7 +79,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected FederatedAccountRepository federatedAccountRepository;
   protected ChannelRepository channelRepository;
   protected KeyPair keyPair;
-  protected AdminClient adminClient;
+  protected MockAdminClient adminClient;
   protected MeterManager meterManager;
   protected SymphonyAuthFactory symphonyAuthFactory;
   protected Tracer tracer = null;
@@ -143,7 +143,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
     symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager)));
     connectionsServices = new ConnectionsService(sessionManager);
-    connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration));
+    connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, authenticationService, botConfiguration));
     empSchemaService = new EmpSchemaService(adminClient);
     channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);
     channelService.registerAsDatafeedListener();

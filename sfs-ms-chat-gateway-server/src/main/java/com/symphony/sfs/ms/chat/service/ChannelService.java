@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
+import com.symphony.sfs.ms.admin.generated.model.ImRequest;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -18,18 +19,23 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
+import com.symphony.sfs.ms.starter.webclient.WebCallException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
@@ -43,6 +49,7 @@ import java.util.function.Function;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
 
 @Service
 @RequiredArgsConstructor
@@ -98,18 +105,26 @@ public class ChannelService implements DatafeedListener {
   public String createIMChannel(SymphonySession session, FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
     String streamId = streamService.getIM(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), toSymphonyUser.getId().toString())
       .orElseThrow(CannotRetrieveStreamIdProblem::new);
-    Channel channel =  Channel.builder()
-                              .streamId(streamId)
-                              .advisorSymphonyId(toSymphonyUser.getId().toString())
-                              .federatedUserId(fromFederatedAccount.getFederatedUserId())
-                              .emp(fromFederatedAccount.getEmp())
-                              .build();
 
-    Optional<String> channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
+    Optional<String> channelId = Optional.empty();
+    try {
+      channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
+    } catch(WebCallException wbe) {
+      if(wbe.getStatusCode() != HttpStatus.CONFLICT) {
+        symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+      }
+      return streamId;
+    }
+
     if (channelId.isEmpty()) {
       symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
     } else {
-      channelRepository.save(channel);
+      ImRequest imRequest = new ImRequest();
+      imRequest.setAdvisorSymphonyId(toSymphonyUser.getId().toString());
+      imRequest.setFederatedUserId(fromFederatedAccount.getFederatedUserId());
+      imRequest.setStreamId(streamId);
+      imRequest.setEmp(fromFederatedAccount.getEmp());
+      adminClient.createIMRoom(imRequest);
     }
     return streamId;
   }
@@ -139,22 +154,26 @@ public class ChannelService implements DatafeedListener {
 
         // Check there are only 2 users
         if (toFederatedAccounts.size() == 1 && toSymphonyUsers.size() == 1 && toSymphonyUsers.get(0) == fromSymphonyUser) {
-          Optional<Channel>  existingChannel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(fromSymphonyUser.getId().toString(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), entry.getKey());
-          if (existingChannel.isEmpty()) { // avoid recreating an already present channel
-            Channel channel = Channel.builder()
-              .advisorSymphonyId(fromSymphonyUser.getId().toString())
-              .federatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId())
-              .emp(entry.getKey())
-              .streamId(streamId)
-              .build();
-            // TODO need a recovery mechanism to re-trigger the failed channel creation
-            //  Short term proposition: recovery is manual - display a System message in the MIM indicating that channel creation has failed for some EMPs and to contact an administrator
-            Optional<String> channelId = empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers);
-            if (channelId.isEmpty()) {
+
+          Optional<String> channelId = Optional.empty();
+          try {
+            channelId = empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers);
+          } catch(WebCallException wbe) {
+            if(wbe.getStatusCode() != HttpStatus.CONFLICT) {
               userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
-            } else {
-              channelRepository.save(channel);
             }
+            return streamId;
+          }
+
+          if (channelId.isEmpty()) {
+            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
+          } else {
+            ImRequest imRequest = new ImRequest();
+            imRequest.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
+            imRequest.setFederatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId());
+            imRequest.setStreamId(streamId);
+            imRequest.setEmp(entry.getKey());
+            adminClient.createIMRoom(imRequest);
           }
         } else {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
@@ -170,14 +189,7 @@ public class ChannelService implements DatafeedListener {
   @Override
   @NewSpan
   public void onUserJoinedRoom(String streamId, List<String> members, IUser fromSymphonyUser) {
-    MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
-    List<IUser> symphonyUsers = new ArrayList<>();
 
-    for (String symphonyId : members) {
-      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(SymphonyUserUtils.newIUser(symphonyId)));
-    }
-
-    refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, true);
   }
 
   @NewSpan
@@ -224,7 +236,7 @@ public class ChannelService implements DatafeedListener {
           // send error message
           try {
             String createChannelErrorMessage = null;
-            if(canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT) {
+            if(canChatResponse.isPresent() && ( canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT || canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM) ) { // TODO ask for a better message
               createChannelErrorMessage = "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp()) + " users";
             } else {
               createChannelErrorMessage = "This message will not be delivered. You no longer have the entitlement for this.";
@@ -256,56 +268,46 @@ public class ChannelService implements DatafeedListener {
   @NewSpan
   public com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse deleteChannels(List<DeleteChannelRequest> deleteChannelRequests) {
     Map<DeleteChannelRequest, BulkRemovalStatus> response = new HashMap<>();
-    Map<String, Channel> channelsToDelete = new HashMap<>();
-
+    List<DeleteChannelRequest> channelsToNotify = new ArrayList<>();
     // a map where the key is the emp and the value is the list of all requests related to it
     Map<String, List<DeleteChannelRequest>> channelsMap = deleteChannelRequests.stream()
       .collect(groupingBy(DeleteChannelRequest::getEntitlementType, mapping(Function.identity(), toList())));
     // a map to link each stream to the request related to it
-    Map<String, DeleteChannelRequest> streamID2request = new HashMap<>();
+    Map<Pair<String, String>, DeleteChannelRequest> streamID2request = deleteChannelRequests.stream()
+      .collect(toMap(r -> Pair.of(r.getStreamId(), r.getFederatedSymphonyId()), Function.identity(), (r1, r2) -> r1 ));
+
 
     for (Map.Entry<String, List<DeleteChannelRequest>> currentEmp : channelsMap.entrySet()) {
-      List<String> streamIDs = new ArrayList<>();
       // call to EMP to delete streams
-      for (DeleteChannelRequest req : currentEmp.getValue()) {
-        Optional<Channel> channel = channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp(req.getAdvisorSymphonyId(), req.getFederatedUserId(), req.getEntitlementType());
-        if (channel.isEmpty()) {
-          response.put(req, BulkRemovalStatus.NOT_FOUND);
-        } else {
-          streamID2request.put(channel.get().getStreamId(), req);
-          streamIDs.add(channel.get().getStreamId());
-          channelsToDelete.put(channel.get().getStreamId(), channel.get());
-        }
-      }
-      Optional<DeleteChannelsResponse> result = empClient.deleteChannels(streamIDs, currentEmp.getKey());
+      List<com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest> deleteChannelsRequest =  currentEmp.getValue().stream()
+        .map(d -> new com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest().streamId(d.getStreamId()).symphonyId(d.getFederatedSymphonyId()))
+        .collect(toList());
+      Optional<DeleteChannelsResponse> result =  empClient.deleteChannels(deleteChannelsRequest, currentEmp.getKey());
       // delete for all streams failed
       if (result.isEmpty()) {
         currentEmp.getValue().forEach(channel -> response.put(channel, BulkRemovalStatus.FAILURE));
         // If the stream deletion failed, we will not attempt to remove the corresponding channels
-        streamIDs.forEach(channelsToDelete::remove);
       } else {
         for (com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse deleteChannelResponse : result.get().getReport()) {
-          DeleteChannelRequest request = streamID2request.get(deleteChannelResponse.getStreamId());
+          DeleteChannelRequest request = streamID2request.get(Pair.of(deleteChannelResponse.getStreamId(), deleteChannelResponse.getSymphonyId()));
           if (BulkRemovalStatus.FAILURE.equals(deleteChannelResponse.getStatus())) {
-            channelsToDelete.remove(deleteChannelResponse.getStreamId());
             response.put(request, BulkRemovalStatus.FAILURE);
           } else {
             // If the status is NOT_FOUND in EMP side, we still consider removal as a success because there are legitimate cases where that's possible
             response.put(request, BulkRemovalStatus.SUCCESS);
+            channelsToNotify.add(request);
           }
         }
       }
     }
 
-    // send messages for only streams for which the removal didn't fail in the EMP
-    for (Channel channel : channelsToDelete.values()) {
-      Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(channel.getFederatedUserId(), channel.getEmp());
+   // send msgs
+    for (DeleteChannelRequest channel : channelsToNotify) {
+      Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findBySymphonyId(channel.getFederatedSymphonyId());
       if (federatedAccount.isPresent()) {
-        symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", channel.getAdvisorSymphonyId());
+        symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", null);
       }
     }
-    //TODO deal with potential failure of batch delete and update status of corresponding channels accordingly (FAILURE)
-    channelRepository.delete(channelsToDelete.values());
     return this.generateDeleteChannelsResponse(response);
   }
 
@@ -315,8 +317,7 @@ public class ChannelService implements DatafeedListener {
     for (Map.Entry<DeleteChannelRequest, BulkRemovalStatus> entry : response.entrySet()) {
       DeleteChannelRequest channel = entry.getKey();
       deleteChannelsResponse.addReportItem(
-        new com.symphony.sfs.ms.chat.generated.model.DeleteChannelResponse().channel(new DeleteChannelRequest().advisorSymphonyId(channel.getAdvisorSymphonyId())
-          .entitlementType(channel.getEntitlementType()).federatedUserId(channel.getFederatedUserId()))
+        new com.symphony.sfs.ms.chat.generated.model.DeleteChannelResponse().channel(channel)
           .status(entry.getValue()));
     }
     return deleteChannelsResponse;

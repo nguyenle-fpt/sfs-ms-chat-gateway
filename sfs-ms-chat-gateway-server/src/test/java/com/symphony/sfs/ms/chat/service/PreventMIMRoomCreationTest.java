@@ -1,12 +1,14 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
@@ -31,13 +33,21 @@ import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,7 +58,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
   protected ForwarderQueueConsumer forwarderQueueConsumer;
   private SymphonyMessageSender symphonyMessageSender;
-  private EmpClient empClient;
+  private MockEmpClient empClient;
   private DatafeedSessionPool datafeedSessionPool;
   private SymphonyService symphonyService;
   private AdminClient adminClient;
@@ -65,12 +75,12 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     channelRepository = mock(ChannelRepository.class);
 
-    AuthenticationService authenticationService = mock(AuthenticationService.class);
 
     BotConfiguration botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
     botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
+    botConfiguration.setSymphonyId("1234567890");
 
     PodConfiguration podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
@@ -247,7 +257,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     sender.setId(1L);
 
     UserInfo receipter = new UserInfo();
-    sender.setId(3L);
+    receipter.setId(3L);
 
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
@@ -257,7 +267,11 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       sender
     )));
 
-    doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    doAnswer(answer -> {
+      GatewaySocialMessage message = answer.getArgument(2);
+      message.setTextContent("message decrypted");
+      return answer;
+    }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     when(adminClient.canChat("1", "federatedUserId", "WHATSAPP")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
 
@@ -265,6 +279,94 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
     verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString());
   }
+
+  @Test
+  public void onRoomMessage() throws Exception {
+    FederatedAccount whatsAppUser = FederatedAccount.builder()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP")
+      .symphonyUserId("3")
+      .symphonyUsername("username")
+      .build();
+
+    UserInfo sender = new UserInfo();
+    sender.setId(1L);
+
+    UserInfo receipter = new UserInfo();
+    receipter.setId(3L);
+
+    UserInfo bot = new UserInfo();
+    bot.setId(1234567890L);
+
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
+    federatedAccountRepository.save(whatsAppUser);
+
+    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageMaestroMessage(
+      whatsAppUser,
+      sender,
+      bot
+    )));
+    // this method is annoying to mock
+    doAnswer(answer -> {
+      GatewaySocialMessage message = answer.getArgument(2);
+      message.setTextContent("message decrypted");
+      return answer;
+    }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
+    long messageNumber = empClient.getMessages().size();
+    forwarderQueueConsumer.consume(notification, "1");
+    assertEquals(messageNumber + 1, empClient.getMessages().size());
+    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString());
+  }
+
+  @Test
+  public void onRoomMessage_fromBot() throws Exception {
+    FederatedAccount whatsAppUser = FederatedAccount.builder()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP")
+      .symphonyUserId("3")
+      .symphonyUsername("username")
+      .build();
+
+    UserInfo sender = new UserInfo();
+    sender.setId(1L);
+
+    UserInfo receipter = new UserInfo();
+    receipter.setId(3L);
+
+    UserInfo bot = new UserInfo();
+    bot.setId(1234567890L);
+
+    SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
+    federatedAccountRepository.save(whatsAppUser);
+
+    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageMaestroMessage(
+      whatsAppUser,
+      bot,
+      sender
+    )));
+    // this method is annoying to mock
+    doAnswer(answer -> {
+      GatewaySocialMessage message = answer.getArgument(2);
+      message.setTextContent("message decrypted");
+      return answer;
+    }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
+    long messageNumber = empClient.getMessages().size();
+    forwarderQueueConsumer.consume(notification, "1");
+    assertEquals(messageNumber, empClient.getMessages().size());
+    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString());
+  }
+
+
 
   private String getCreateMIMMaestroMessage(FederatedAccount whatsAppUserInvited, UserInfo symphonyUserInvited, UserInfo inviter) {
     return " {" +
@@ -622,37 +724,27 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "  \"version\":\"MAESTRO\"" +
       "}";
   }
-
-  private String getMIMMessageMaestroMessage(FederatedAccount whatsAppUser, UserInfo sender) {
+  private String getRoomMessageMaestroMessage(FederatedAccount whatsAppUser, UserInfo... otherParticipants) {
+    return getMessageMaestroMessage(whatsAppUser, Arrays.asList(otherParticipants), "CHATROOM");
+  }
+  private String getMIMMessageMaestroMessage(FederatedAccount whatsAppUser, UserInfo... otherParticipants) {
+    return getMessageMaestroMessage(whatsAppUser, Arrays.asList(otherParticipants), "INSTANT_CHAT");
+  }
+  private String getMessageMaestroMessage(FederatedAccount whatsAppUser, List<UserInfo> participants, String chatType) {
     return "{" +
       "  \"_type\":\"com.symphony.s2.model.chat.SocialMessage\"," +
       "  \"attributes\":{" +
       "    \"dist\":[" +
       "      " + whatsAppUser.getSymphonyUserId() + "," +
-      "      " + sender.getId() +
+      participants.stream().map(UserInfo::getId).map(Object::toString).collect(Collectors.joining(",")) +
       "    ]" +
       "  }," +
-      "  \"chatType\":\"INSTANT_CHAT\"," +
+      "  \"chatType\":\""+chatType+"\"," +
       "  \"clientId\":\"web-1530171158851-1719\"," +
       "  \"clientVersionInfo\":\"DESKTOP-36.0.0-6541-MacOSX-10.12.6-Chrome-67.0.3396.99\"," +
       "  \"copyDisabled\":false," +
       "  \"encrypted\":true," +
       "  \"attachments\":[" +
-      " {" +
-      "        \"messageId\": \"GUrHhnXNMHd9OBIJzyciiX///pu5qv1FbQ==\"," +
-      "        \"userId\": \"" + sender + "\"," +
-      "        \"ingestionDate\": 1548089933946," +
-      "        \"fileId\": \"internal_14362370637825%2FT2vTuh%2BgWTtZFQtI%2FHDXYg%3D%3D\"," +
-      "        \"name\": \"butterfly.jpg\"," +
-      "        \"size\": 70186," +
-      "        \"contentType\": \"image/jpeg\"," +
-      "        \"previews\": [" +
-      "            {" +
-      "                \"fileId\": \"internal_14362370637825%2F7hTa3TGPSGtiFunpolPnBg%3D%3D\"," +
-      "                \"width\": 600" +
-      "            }" +
-      "        ]" +
-      "    }" +
       "  ]," +
       "  \"encryptedEntities\":\"AgAAAKcAAAAAAAAAAJ6O1SMRXgf68fdt6/pZaSHQvxIWpgq2hbHDhAiuAbnQow8SgdSrv4WAFYyUIHqT3EFBYK6AC4ZG/YfxEAVM9IJfKZ5pU5dXxoTjxU5VmpASlXY=\"," +
       "  \"encryptedMedia\":\"AgAAAKcAAAAAAAAAAP5fS7NnNyx1o+gq5kzQQ2XshB3EF3nTsDxvM2uD6yMebqWOnRdUSRCbz/dfMQ0UBVHpYBy7CxuXJm6g3bhJ2glBdl3VO9Kmn+gzn7EpJ1todA==\"," +
@@ -662,16 +754,16 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "  \"externalOrigination\":false," +
       "  \"format\":\"com.symphony.markdown\"," +
       "  \"from\":{" +
-      "    \"emailAddress\":\"" + sender.getEmailAddress() + "\"," +
-      "    \"firstName\":\"" + sender.getFirstName() + "\"," +
-      "    \"id\":" + sender.getId() + "," +
+      "    \"emailAddress\":\"" + participants.get(0).getEmailAddress() + "\"," +
+      "    \"firstName\":\"" + participants.get(0).getFirstName() + "\"," +
+      "    \"id\":" + participants.get(0).getId() + "," +
       "    \"imageUrl\":\"https://s3.amazonaws.com/user-pics-demo/small/symphony_small.png\"," +
       "    \"imageUrlSmall\":\"https://s3.amazonaws.com/user-pics-demo/creepy/symphony_creepy.png\"," +
-      "    \"prettyName\":\"" + sender.getFirstName() + " " + sender.getLastName() + "\"," +
+      "    \"prettyName\":\"" + participants.get(0).getFirstName() + " " + participants.get(0).getLastName() + "\"," +
       "    \"principalBaseHash\":\"dUTW4YYIa6vxg0_zzD-J8Rbj2P2Jsevlc5PRvSwBHx4BAQ\"," +
-      "    \"surname\":\"" + sender.getLastName() + "\"," +
+      "    \"surname\":\"" + participants.get(0).getLastName() + "\"," +
       "    \"userType\":\"lc\"," +
-      "    \"username\":\"" + sender.getEmailAddress() + "\"," +
+      "    \"username\":\"" + participants.get(0).getEmailAddress() + "\"," +
       "    \"company\":\"symphony\"" +
       "  }," +
       "  \"fromPod\":196," +

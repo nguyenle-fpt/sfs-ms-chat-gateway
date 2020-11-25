@@ -33,6 +33,10 @@ paths:
     $ref: './paths/room.yaml#/rooms'
   /api/v1/internal/rooms/{streamId}/members:
     $ref: './paths/room.yaml#/room-members'
+  /api/v1/internal/rooms/{streamId}:
+    $ref: './paths/room.yaml#/room'
+  /api/v1/internal/connection-requests/{symphonyId}:
+    $ref: './paths/connection-requests.yaml#/connection-requests'
 
   /model:
     $ref: './paths/utils.yaml#/model'
