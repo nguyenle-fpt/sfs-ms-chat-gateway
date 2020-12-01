@@ -18,6 +18,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoom;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomSystemInfo;
 import com.symphony.sfs.ms.starter.util.UserIdUtils;
+import model.UserInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -168,6 +169,14 @@ class RoomApiTest extends AbstractIntegrationTest {
 
     createRoom_OK();
 
+    UserInfo advisorInfo = new UserInfo();
+    advisorInfo.setFirstName("firstName");
+    advisorInfo.setLastName("lastName");
+    advisorInfo.setDisplayName("displayName");
+    advisorInfo.setCompany("companyName");
+
+    when(usersInfoService.getUserFromId(any(), any(), any())).thenReturn(Optional.of(advisorInfo));
+
     String podUrl = podConfiguration.getUrl();
 
     SymphonyResponse symphonyResponse = SymphonyResponse.builder().format("TEXT").message("Member added").build();
@@ -191,7 +200,7 @@ class RoomApiTest extends AbstractIntegrationTest {
     assertEquals(phoneNumber("11"), roomMemberResponse.getPhoneNumber());
     assertEquals(emailAddress("11"), roomMemberResponse.getEmailAddress());
 
-    com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount);
+    com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
     verify(empClient, once()).addRoomMember(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
   }
 

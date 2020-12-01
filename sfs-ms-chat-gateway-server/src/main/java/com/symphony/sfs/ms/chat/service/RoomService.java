@@ -24,10 +24,13 @@ import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoom;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomAttributes;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import model.UserInfo;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 
@@ -36,6 +39,7 @@ import javax.validation.constraints.NotNull;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,6 +55,7 @@ public class RoomService implements DatafeedListener {
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final StreamService streamService;
   private final AuthenticationService authenticationService;
+  private final UsersInfoService usersInfoService;
 
   private final EmpClient empClient;
 
@@ -119,8 +124,8 @@ public class RoomService implements DatafeedListener {
       roomMemberResponse.setEmp(federatedAccount.getEmp());
       roomMemberResponse.setEmailAddress(federatedAccount.getEmailAddress());
       roomMemberResponse.setPhoneNumber(federatedAccount.getPhoneNumber());
-
-      com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount);
+      UserInfo advisorInfo = getUserInfo(roomMemberRequest.getAdvisorSymphonyId(), botSession);
+      com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
       // TODO If EMP error maybe indicate that the user has been added on Symphony side but not EMP side?
       empClient.addRoomMember(streamId, federatedAccount.getEmp(), empRoomMemberRequest).orElseThrow(AddRoomMemberFailedProblem::new);
     }
@@ -159,5 +164,10 @@ public class RoomService implements DatafeedListener {
 
     //TODO do we need to remove everyone from the room if it is deleted ?
     streamService.setRoomActive(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, false);
+  }
+
+  private UserInfo getUserInfo(String symphonyId, SymphonySession session) {
+    return usersInfoService.getUserFromId(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), symphonyId)
+      .orElseThrow(() -> new IllegalStateException("Error retrieving customer info"));
   }
 }

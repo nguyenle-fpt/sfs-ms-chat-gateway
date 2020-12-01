@@ -49,6 +49,8 @@ room-member-request:
       pattern: '^\d+$'
     federatedUser:
       type: boolean
+    advisorSymphonyId:
+      type: string
 
 #Responses
 room-response:

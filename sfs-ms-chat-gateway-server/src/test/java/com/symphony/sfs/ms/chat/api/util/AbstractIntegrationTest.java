@@ -34,6 +34,7 @@ import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
 import com.symphony.sfs.ms.starter.testing.LocalProfileTest;
 import com.symphony.sfs.ms.starter.testing.RestApiTest;
@@ -83,6 +84,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected MeterManager meterManager;
   protected SymphonyAuthFactory symphonyAuthFactory;
   protected Tracer tracer = null;
+  protected UsersInfoService usersInfoService;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -147,8 +149,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     empSchemaService = new EmpSchemaService(adminClient);
     channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);
     channelService.registerAsDatafeedListener();
-
-    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, empClient);
+    usersInfoService = mock(UsersInfoService.class);
+    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient);
     roomService.registerAsDatafeedListener();
 
   }
