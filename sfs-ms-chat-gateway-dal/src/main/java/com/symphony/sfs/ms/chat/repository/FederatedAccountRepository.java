@@ -1,11 +1,9 @@
 package com.symphony.sfs.ms.chat.repository;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.starter.dynamo.AbstractRawDynamoRepository;
 import com.symphony.sfs.ms.starter.dynamo.schema.DynamoSchema;
-import com.symphony.sfs.ms.starter.dynamo.util.AttributeMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Repository;
@@ -37,19 +35,7 @@ public class FederatedAccountRepository extends AbstractRawDynamoRepository {
     String pkName = schema.getPrimaryKey().getPartitionKeyName();
     String skName = schema.getPrimaryKey().getSortKeyName();
 
-    AttributeMap map = entity.toAttributeMap();
-    amazonDynamoDB.putItem(new PutItemRequest()
-      .withTableName(schema.getTableName())
-      .withItem(map)
-      .withConditionExpression("attribute_not_exists(" + pkName + ") AND attribute_not_exists(" + skName + ")")
-    );
-
-    LOG.debug("Document {}={}, {}={} successfully inserted",
-      pkName, map.getString(pkName),
-      skName, map.getString(skName)
-    );
-
-    return entity; // should it be a copy?
+    return super.save(entity, "attribute_not_exists(" + pkName + ") AND attribute_not_exists(" + skName + ")");
   }
 
   @NewSpan
