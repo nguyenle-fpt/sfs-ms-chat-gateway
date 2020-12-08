@@ -19,6 +19,10 @@ public interface RoomMemberDtoMapper {
   @Mapping(source= "onboarderInfo.lastName", target = "onboarderLastName")
   @Mapping(source= "onboarderInfo.displayName", target = "onboarderDisplayName")
   @Mapping(source= "onboarderInfo.company", target = "onboarderCompanyName")
+  @Mapping(source= "federatedAccount.companyName", target = "companyName")
+  @Mapping(source= "federatedAccount.firstName", target = "firstName")
+  @Mapping(source= "federatedAccount.lastName", target = "lastName")
+
   com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest toEmpRoomMemberRequest(RoomMemberRequest chatRoomMemberRequest, FederatedAccount federatedAccount, UserInfo onboarderInfo);
 
   com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse empRoomMemberRequestToEmpRoomMemberResponse(com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest);
