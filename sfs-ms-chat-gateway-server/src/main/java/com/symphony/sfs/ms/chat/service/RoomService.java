@@ -127,7 +127,12 @@ public class RoomService implements DatafeedListener {
       UserInfo advisorInfo = getUserInfo(roomMemberRequest.getAdvisorSymphonyId(), botSession);
       com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
       // TODO If EMP error maybe indicate that the user has been added on Symphony side but not EMP side?
-      empClient.addRoomMember(streamId, federatedAccount.getEmp(), empRoomMemberRequest).orElseThrow(AddRoomMemberFailedProblem::new);
+      Optional<com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse> response = empClient.addRoomMember(streamId, federatedAccount.getEmp(), empRoomMemberRequest);
+      if (response.isEmpty()) { // rollback if there is an error
+        LOG.error("error creating channel in add room member | federatedSymphonyId={} streamId={}", federatedAccount.getSymphonyUserId(), streamId);
+        streamService.removeRoomMember(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, roomMemberRequest.getSymphonyId());
+        throw new AddRoomMemberFailedProblem();
+      }
     }
 
     return roomMemberResponse;

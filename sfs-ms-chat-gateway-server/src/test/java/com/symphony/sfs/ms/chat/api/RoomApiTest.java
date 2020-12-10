@@ -9,6 +9,7 @@ import com.symphony.sfs.ms.chat.generated.model.RoomRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomResponse;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
@@ -202,8 +203,47 @@ class RoomApiTest extends AbstractIntegrationTest {
 
     com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
     verify(empClient, once()).addRoomMember(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
+    verify(streamService, never()).removeRoomMember(any(), any(), any(), any());
   }
 
+  @Test
+  public void addRoomMember_ErrorCreatingChannel() {
+
+    createRoom_OK();
+
+    UserInfo advisorInfo = new UserInfo();
+    advisorInfo.setFirstName("firstName");
+    advisorInfo.setLastName("lastName");
+    advisorInfo.setDisplayName("displayName");
+    advisorInfo.setCompany("companyName");
+
+    when(usersInfoService.getUserFromId(any(), any(), any())).thenReturn(Optional.of(advisorInfo));
+    String podUrl = podConfiguration.getUrl();
+
+    SymphonyResponse symphonyResponse = SymphonyResponse.builder().format("TEXT").message("Member added").build();
+    doReturn(Optional.of(symphonyResponse)).when(streamService).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
+
+    FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
+      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("11"))
+      .emp(emp("11"))
+      .emailAddress(emailAddress("11"))
+      .phoneNumber((phoneNumber("11")))
+      .build());
+
+    MockEmpClient mockEmpClient = (MockEmpClient) empClient;
+    mockEmpClient.getFederatedUserFailing().add(federatedAccount.getFederatedUserId());
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true);
+    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR);
+
+
+
+    com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
+    verify(empClient, once()).addRoomMember(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
+    verify(streamService, once()).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
+    verify(streamService, once()).removeRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
+
+  }
 
   @Test
   public void removeRoomMemberNotFederated() {

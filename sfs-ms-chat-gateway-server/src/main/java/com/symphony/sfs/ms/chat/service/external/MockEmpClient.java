@@ -13,8 +13,10 @@ import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import lombok.Getter;
+import lombok.Setter;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,9 +30,20 @@ public class MockEmpClient implements EmpClient {
   private Map<String, String> channels = new ConcurrentHashMap<>();
   private Map<String, String> messages = new ConcurrentHashMap<>();
   private Set<String> deletedFederatedAccounts = new ConcurrentHashSet<>();
+  @Getter
+  @Setter
+  private Set<String> federatedUserFailing = new HashSet<>();
+
 
   @Override
   public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
+    if(federatedUsers != null) {
+      for (FederatedAccount federatedAccount : federatedUsers) {
+        if (federatedUserFailing.contains(federatedAccount.getFederatedUserId())) {
+          return Optional.empty();
+        }
+      }
+    }
     String operationId = channels.get(emp + ":" + streamId);
     if (operationId == null) {
       operationId = UUID.randomUUID().toString();
@@ -89,6 +102,9 @@ public class MockEmpClient implements EmpClient {
 
   @Override
   public Optional<RoomMemberResponse> addRoomMember(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest) {
+    if(federatedUserFailing.contains(empRoomMemberRequest.getFederatedUserId())) {
+      return Optional.empty();
+    }
     RoomMemberResponse empRoomMemberResponse = RoomMemberDtoMapper.MAPPER.empRoomMemberRequestToEmpRoomMemberResponse(empRoomMemberRequest);
     empRoomMemberResponse.setStreamId(streamId);
     empRoomMemberResponse.setEmp(emp);
