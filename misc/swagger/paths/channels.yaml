@@ -20,14 +20,18 @@ channels:
           application/json:
             schema:
               $ref: '../components/channels.yaml#/create-channel-response'
+      '400':
+        description: Unknown federated account
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/channels.yaml#/unknown-federated-account'
       '500':
         description: Server Error
         content:
           application/json:
             schema:
-              oneOf:
-                - $ref: '../errors/channels.yaml#/federated-account-not-found'
-                - $ref: '../errors/accounts.yaml#/create-channel-failed'
+              $ref: '../errors/accounts.yaml#/create-channel-failed'
 
 retrieve-channel:
   get:

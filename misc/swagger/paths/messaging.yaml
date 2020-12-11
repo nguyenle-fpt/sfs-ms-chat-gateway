@@ -28,6 +28,7 @@ messages:
               oneOf:
                 - $ref: '../errors/messaging.yaml#/message-send-error'
                 - $ref: '../errors/messaging.yaml#/message-recipient-not-found'
+                - $ref: '../errors/messaging.yaml#/message-sender-not-found'
       '500':
         description: Technical Error
         content:

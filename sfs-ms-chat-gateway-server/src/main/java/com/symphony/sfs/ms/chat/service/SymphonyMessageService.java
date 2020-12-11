@@ -20,6 +20,7 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
+import com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -323,7 +324,7 @@ public class SymphonyMessageService implements DatafeedListener {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
-      return new FederatedAccountNotFoundProblem();
+      return new MessageSenderNotFoundProblem();
     });
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
     String symphonyMessageId = null;

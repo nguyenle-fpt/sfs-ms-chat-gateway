@@ -68,7 +68,7 @@ room-members:
         content:
           application/json:
             schema:
-              $ref: '../errors/channels.yaml#/federated-account-not-found'
+              $ref: '../errors/channels.yaml#/unknown-federated-account'
       '500':
         description: Add member to room failed
         content:

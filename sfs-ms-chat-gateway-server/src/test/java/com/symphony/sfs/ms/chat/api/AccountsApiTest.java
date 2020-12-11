@@ -7,6 +7,7 @@ import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
+import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -26,6 +27,7 @@ import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserSystemAttributes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
+import com.symphony.sfs.ms.starter.testing.TestUtils;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import io.opentracing.Tracer;
 import model.InboundConnectionRequest;
@@ -36,6 +38,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.zalando.problem.DefaultProblem;
+import org.zalando.problem.Problem;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -596,6 +600,49 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .statusCode(HttpStatus.CONFLICT.value());
   }
 
+  @Test
+  public void deleteAccount() {
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+
+    FederatedAccount existingAccount = FederatedAccount.builder()
+      .emailAddress("emailAddress@symphony.com")
+      .phoneNumber("+33601020304")
+      .firstName("firstName")
+      .lastName("lastName")
+      .companyName("companyName")
+      .federatedUserId("federatedUserId")
+      .emp("WHATSAPP")
+      .symphonyUserId("userId")
+      .symphonyUsername("username")
+      .build();
+    federatedAccountRepository.save(existingAccount);
+
+    configuredGiven(objectMapper, new ExceptionHandling(null), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .when()
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP")
+      .then()
+      .statusCode(HttpStatus.OK.value());
+  }
+
+  @Test
+  public void deleteAccount_NotFound() {
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+
+    Problem actualProblem = configuredGiven(objectMapper, new ExceptionHandling(null), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .when()
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP")
+      .then()
+      .statusCode(HttpStatus.NOT_FOUND.value())
+      .extract().response().body()
+      .as(DefaultProblem.class);
+
+    FederatedAccountNotFoundProblem expectedProblem = new FederatedAccountNotFoundProblem();
+    TestUtils.testProblemEquality(expectedProblem, actualProblem);
+  }
 
   //====================
   // Helpers

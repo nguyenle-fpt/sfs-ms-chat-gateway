@@ -19,6 +19,7 @@ import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.EmpNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
+import com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
@@ -163,14 +164,11 @@ public class FederatedAccountService implements DatafeedListener {
 
   @NewSpan
   public String createChannel(CreateChannelRequest request) {
-    Optional<FederatedAccount> existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp());
-    if (existingAccount.isEmpty()) {
-      throw new FederatedAccountNotFoundProblem();
-    }
+    FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp()).orElseThrow(UnknownFederatedAccountProblem::new);
 
     String advisorSymphonyId = request.getAdvisorUserId();
     SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-    DatafeedSession session = datafeedSessionPool.listenDatafeed(existingAccount.get());
+    DatafeedSession session = datafeedSessionPool.listenDatafeed(existingAccount);
 
     // If for whatever reason the connection request is already accepted
     // Maybe in case of offboarding and re-onboarding?
@@ -179,7 +177,7 @@ public class FederatedAccountService implements DatafeedListener {
     LOG.info("sending connection request | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
     if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
       LOG.info("Connection request already accepted | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
-      return channelService.createIMChannel(session, existingAccount.get(), getCustomerInfo(advisorSymphonyId, botSession));
+      return channelService.createIMChannel(session, existingAccount, getCustomerInfo(advisorSymphonyId, botSession));
     }
 
     return null;

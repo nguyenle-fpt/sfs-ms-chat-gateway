@@ -68,6 +68,12 @@ modify-account:
     responses:
       '200':
         description: The account has been successfully deleted
+      '404':
+        description: Federated account not found
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/accounts.yaml#/federated-account-not-found'
   put:
     tags:
       - Accounts

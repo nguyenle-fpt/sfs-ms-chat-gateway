@@ -12,6 +12,7 @@ import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomResponse;
+import com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem;
 import com.symphony.sfs.ms.chat.mapper.RoomDtoMapper;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -119,7 +120,7 @@ public class RoomService implements DatafeedListener {
     streamService.addRoomMember(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, roomMemberRequest.getSymphonyId()).orElseThrow(AddRoomMemberFailedProblem::new);
 
     if (roomMemberRequest.isFederatedUser()) {
-      FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(roomMemberRequest.getSymphonyId()).orElseThrow(FederatedAccountNotFoundProblem::new);
+      FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(roomMemberRequest.getSymphonyId()).orElseThrow(UnknownFederatedAccountProblem::new);
       roomMemberResponse.setFederatedUserId(federatedAccount.getFederatedUserId());
       roomMemberResponse.setEmp(federatedAccount.getEmp());
       roomMemberResponse.setEmailAddress(federatedAccount.getEmailAddress());

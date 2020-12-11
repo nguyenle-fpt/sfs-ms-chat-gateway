@@ -1,13 +1,13 @@
-federated-account-not-found:
+unknown-federated-account:
   type: object
-  description: 'Federated account not found'
+  description: 'Unknown federated account'
   properties:
     type:
       type: string
-      format: 'federated.account.not.found'
+      format: 'unknown.federated.account'
     title:
       type: string
-      format: 'Federated account not found'
+      format: 'Unknown federated account'
     status:
       type: integer
       format: 400

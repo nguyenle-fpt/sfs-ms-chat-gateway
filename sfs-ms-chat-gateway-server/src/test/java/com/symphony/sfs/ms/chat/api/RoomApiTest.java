@@ -161,7 +161,7 @@ class RoomApiTest extends AbstractIntegrationTest {
     doReturn(Optional.of(symphonyResponse)).when(streamService).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
 
     RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true);
-    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem.class.getName(), HttpStatus.BAD_REQUEST);
+    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem.class.getName(), HttpStatus.BAD_REQUEST);
 
   }
 
