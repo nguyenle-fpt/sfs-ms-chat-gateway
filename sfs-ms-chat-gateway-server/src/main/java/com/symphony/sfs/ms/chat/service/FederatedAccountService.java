@@ -121,7 +121,7 @@ public class FederatedAccountService implements DatafeedListener {
     FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
       .orElseThrow(FederatedAccountNotFoundProblem::new);
 
-    empClient.deleteAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress());
+    empClient.deleteAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), existingAccount.getPhoneNumber());
 
 
     SymphonyUserAttributes attributes = new SymphonyUserAttributes();
@@ -156,7 +156,7 @@ public class FederatedAccountService implements DatafeedListener {
     SymphonyUserAttributes attributes = SymphonyUserAttributes.builder().displayName(userDisplayName).build();
 
     // All checks OK, update
-    empClient.updateAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), firstName, lastName, companyName);
+    empClient.updateAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), existingAccount.getPhoneNumber(), firstName, lastName, companyName);
     adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), attributes);
 
     return federatedAccountRepository.save(existingAccount);

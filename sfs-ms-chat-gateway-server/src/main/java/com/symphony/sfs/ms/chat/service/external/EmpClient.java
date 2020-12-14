@@ -77,7 +77,7 @@ public interface EmpClient {
    * @param symphonyId
    * @param emailAddress
    */
-  void deleteAccountOrFail(String emp, String symphonyId, String emailAddress);
+  void deleteAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber);
 
   /**
    * EMP User
@@ -89,7 +89,7 @@ public interface EmpClient {
    * @param companyName
    * @return
    */
-  Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String firstName, String lastName, String companyName);
+  Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber, String firstName, String lastName, String companyName);
 
   Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> deleteChannelRequests, String emp);
 
