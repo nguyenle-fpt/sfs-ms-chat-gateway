@@ -43,37 +43,6 @@ accounts:
                 - $ref: '../errors/accounts.yaml#/create-user-failed'
 
 modify-account:
-  delete:
-    tags:
-      - Accounts
-    summary: Delete a federated account.
-    operationId: deleteFederatedAccount
-    description: >
-      => Delete a federated account (including all channels, messages and directory data), given a federated user id and an emp.
-    security:
-      - sfsAuthentication: []
-    parameters:
-      - in: path
-        name: federatedUserId
-        schema:
-          type: string
-        required: true
-        description: The federated user id
-      - in: path
-        name: emp
-        schema:
-          type: string
-        required: true
-        description: The EMP to send the deletion to
-    responses:
-      '200':
-        description: The account has been successfully deleted
-      '404':
-        description: Federated account not found
-        content:
-          application/json:
-            schema:
-              $ref: '../errors/accounts.yaml#/federated-account-not-found'
   put:
     tags:
       - Accounts
@@ -116,3 +85,44 @@ modify-account:
               oneOf:
                 - $ref: '../errors/accounts.yaml#/federated-account-not-found'
                 - $ref: '../errors/accounts.yaml#/emp-not-found'
+
+
+delete-account:
+  delete:
+    tags:
+      - Accounts
+    summary: Delete federated account.
+    operationId: deleteFederatedAccount
+    description: >
+      => Delete federated account (including  messages and directory data), given a federated user id and an emp.
+      => Can also delete EMP side account if you set deleteEMPAccount flag
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: federatedUserId
+        schema:
+          type: string
+        required: true
+        description: The federated user id
+      - in: path
+        name: emp
+        schema:
+          type: string
+        required: true
+        description: The EMP to send the update to
+      - in: path
+        name: deleteEMPAccount
+        schema:
+          type: boolean
+        required: true
+        description: whether or not to delete the EMP side account
+    responses:
+      '200':
+        description: The account has been successfully deleted
+      '404':
+        description: Federated account not found
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/accounts.yaml#/federated-account-not-found'

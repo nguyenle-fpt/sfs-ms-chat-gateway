@@ -447,7 +447,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .when()
-      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp())
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp(), true)
       .then()
       .statusCode(HttpStatus.OK.value());
 
@@ -621,7 +621,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     configuredGiven(objectMapper, new ExceptionHandling(null), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .when()
-      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP")
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP", true)
       .then()
       .statusCode(HttpStatus.OK.value());
   }
@@ -634,7 +634,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     Problem actualProblem = configuredGiven(objectMapper, new ExceptionHandling(null), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .when()
-      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP")
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP", true)
       .then()
       .statusCode(HttpStatus.NOT_FOUND.value())
       .extract().response().body()

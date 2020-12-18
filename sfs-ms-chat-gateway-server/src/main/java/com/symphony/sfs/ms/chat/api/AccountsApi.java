@@ -41,16 +41,18 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
       .symphonyUsername(account.getSymphonyUsername());
     return ResponseEntity.ok(response);
   }
-
+/*
   @Override
-  @ContinueSpan
-  public ResponseEntity<Void> deleteFederatedAccount(String federatedUserId, String emp) {
-    MDC.put("federatedUserId", federatedUserId);
-    MDC.put("emp", emp);
-    LOG.info("delete account ");
-    federatedAccountService.deleteAccount(emp, federatedUserId);
+  public ResponseEntity<Void> deleteFederatedAccounts(@Valid DeleteAccountsRequest body) {
+    federatedAccountService.deleteAccounts(body.getAccounts());
     return ResponseEntity.ok().build();
   }
+*/
+
+  @Override
+  public ResponseEntity<Void> deleteFederatedAccount(String federatedUserId, String emp, Boolean deleteEMPAccount) {
+    federatedAccountService.deleteAccount(emp, federatedUserId, deleteEMPAccount);
+    return ResponseEntity.ok().build();  }
 
   @Override
   @ContinueSpan

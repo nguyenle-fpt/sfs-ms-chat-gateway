@@ -116,13 +116,16 @@ public class FederatedAccountService implements DatafeedListener {
     }
   }
 
+
+
   @NewSpan
-  public void deleteAccount(String emp, String federatedUserId) {
+  public void deleteAccount(String emp, String federatedUserId, boolean deleteEMPAccount) {
+    LOG.info("Deleting account | federatedUserId={} emp={} deleteEMPAccount={}", federatedUserId, emp, deleteEMPAccount);
     FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
       .orElseThrow(FederatedAccountNotFoundProblem::new);
-
-    empClient.deleteAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), existingAccount.getPhoneNumber());
-
+    if (deleteEMPAccount) {
+      empClient.deleteAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), existingAccount.getPhoneNumber());
+    }
 
     SymphonyUserAttributes attributes = new SymphonyUserAttributes();
     attributes.setDisplayName("DEACTIVATED");
