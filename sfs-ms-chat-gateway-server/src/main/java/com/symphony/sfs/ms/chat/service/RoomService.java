@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem;
@@ -17,6 +18,7 @@ import com.symphony.sfs.ms.chat.mapper.RoomDtoMapper;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
@@ -40,6 +42,7 @@ import javax.validation.constraints.NotNull;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -59,6 +62,7 @@ public class RoomService implements DatafeedListener {
   private final UsersInfoService usersInfoService;
 
   private final EmpClient empClient;
+  private final AdminClient adminClient;
 
 
   @PostConstruct
@@ -175,5 +179,19 @@ public class RoomService implements DatafeedListener {
   private UserInfo getUserInfo(String symphonyId, SymphonySession session) {
     return usersInfoService.getUserFromId(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), symphonyId)
       .orElseThrow(() -> new IllegalStateException("Error retrieving customer info"));
+  }
+
+  @Override
+  public void onUserLeftRoom(String streamId, IUser requestor, List<IUser> leavingUsers) {
+    if(botConfiguration.getSymphonyId().equals(String.valueOf(requestor.getId()))) {
+      LOG.info("On user left room ignoring bot action | streamId={}", streamId);
+      return;
+    }
+    adminClient.notifyLeaveRoom(
+      streamId,
+      requestor.getId().toString(),
+      leavingUsers.stream().map(user -> user.getId().toString()).collect(Collectors.toList())
+    );
+
   }
 }

@@ -3,7 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
-import com.symphony.sfs.ms.admin.generated.model.ImRequest;
+import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -119,12 +119,12 @@ public class ChannelService implements DatafeedListener {
     if (channelId.isEmpty()) {
       symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
     } else {
-      ImRequest imRequest = new ImRequest();
-      imRequest.setAdvisorSymphonyId(toSymphonyUser.getId().toString());
-      imRequest.setFederatedUserId(fromFederatedAccount.getFederatedUserId());
-      imRequest.setStreamId(streamId);
-      imRequest.setEmp(fromFederatedAccount.getEmp());
-      adminClient.createIMRoom(imRequest);
+      ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
+      imCreatedNotification.setAdvisorSymphonyId(toSymphonyUser.getId().toString());
+      imCreatedNotification.setFederatedUserId(fromFederatedAccount.getFederatedUserId());
+      imCreatedNotification.setStreamId(streamId);
+      imCreatedNotification.setEmp(fromFederatedAccount.getEmp());
+      adminClient.createIMRoom(imCreatedNotification);
     }
     return streamId;
   }
@@ -168,12 +168,12 @@ public class ChannelService implements DatafeedListener {
           if (channelId.isEmpty()) {
             userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
           } else {
-            ImRequest imRequest = new ImRequest();
-            imRequest.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
-            imRequest.setFederatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId());
-            imRequest.setStreamId(streamId);
-            imRequest.setEmp(entry.getKey());
-            adminClient.createIMRoom(imRequest);
+            ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
+            imCreatedNotification.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
+            imCreatedNotification.setFederatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId());
+            imCreatedNotification.setStreamId(streamId);
+            imCreatedNotification.setEmp(entry.getKey());
+            adminClient.createIMRoom(imCreatedNotification);
           }
         } else {
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));

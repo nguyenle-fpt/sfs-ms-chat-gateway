@@ -106,7 +106,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     ObjectMapper objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
 
     messageDecryptor = mock(MessageDecryptor.class);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
 
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     empSchemaService = new EmpSchemaService(adminClient);

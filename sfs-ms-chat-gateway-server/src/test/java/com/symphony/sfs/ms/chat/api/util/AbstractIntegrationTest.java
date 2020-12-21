@@ -133,7 +133,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     ContentKeyManager contentKeyManager = new ContentKeyManager(podConfiguration, datafeedSessionPool);
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
 
     SymphonyAuthFactory symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
@@ -150,7 +150,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);
     channelService.registerAsDatafeedListener();
     usersInfoService = mock(UsersInfoService.class);
-    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient);
+    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient);
     roomService.registerAsDatafeedListener();
 
   }

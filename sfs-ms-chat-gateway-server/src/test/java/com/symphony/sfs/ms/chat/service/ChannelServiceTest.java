@@ -5,7 +5,7 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
-import com.symphony.sfs.ms.admin.generated.model.ImRequest;
+import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
@@ -122,13 +122,13 @@ class ChannelServiceTest {
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
 
-    ImRequest imRequest = new ImRequest();
-    imRequest.setEmp("emp1");
-    imRequest.setStreamId("streamId");
-    imRequest.setFederatedUserId(toFederatedAccount.getFederatedUserId());
-    imRequest.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
+    ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
+    imCreatedNotification.setEmp("emp1");
+    imCreatedNotification.setStreamId("streamId");
+    imCreatedNotification.setFederatedUserId(toFederatedAccount.getFederatedUserId());
+    imCreatedNotification.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
 
-    verify(mockAdminClient).createIMRoom(imRequest);
+    verify(mockAdminClient).createIMRoom(imCreatedNotification);
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
   }
 

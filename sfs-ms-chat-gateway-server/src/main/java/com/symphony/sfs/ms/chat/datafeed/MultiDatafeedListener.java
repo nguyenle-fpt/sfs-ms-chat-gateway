@@ -45,4 +45,7 @@ public class MultiDatafeedListener implements DatafeedListener {
     listeners.forEach(l -> l.onUserJoinedRoom(streamId, members, initiator));
   }
 
+  public void onUserLeftRoom(String streamId, IUser requestor, List<IUser> leavingUsers) {
+    listeners.forEach(l -> l.onUserLeftRoom(streamId, requestor, leavingUsers));
+  }
 }

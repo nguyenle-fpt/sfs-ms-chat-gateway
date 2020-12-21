@@ -5,7 +5,8 @@ import com.symphony.sfs.ms.SfsAdminClient;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
-import com.symphony.sfs.ms.admin.generated.model.ImRequest;
+import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
+import com.symphony.sfs.ms.admin.generated.model.RoomLeftNotification;
 import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -46,8 +48,19 @@ public class DefaultAdminClient implements AdminClient {
   }
 
   @Override
-  public Optional<RoomResponse> createIMRoom(ImRequest imRequest) {
+  public Optional<RoomResponse> createIMRoom(ImCreatedNotification imRequest) {
     adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return adminClient.getRoomApi().createIM(imRequest);
+    return adminClient.getWebhookApi().imCreated(imRequest);
+  }
+
+  @Override
+  public void notifyLeaveRoom(String streamId, String requester, List<String> leavers) {
+    adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+
+    RoomLeftNotification roomLeft = new RoomLeftNotification()
+      .requester(requester)
+      .leavers(leavers)
+      .streamId(streamId);
+    adminClient.getWebhookApi().usersLeftRoom(roomLeft);
   }
 }

@@ -11,6 +11,7 @@ import com.symphony.oss.commons.immutable.ImmutableByteArray;
 import com.symphony.oss.models.chat.canon.ChatModel;
 import com.symphony.oss.models.chat.canon.IMaestroMessage;
 import com.symphony.oss.models.chat.canon.ISNSSQSWireObject;
+import com.symphony.oss.models.chat.canon.IUserEntity;
 import com.symphony.oss.models.chat.canon.MaestroEventType;
 import com.symphony.oss.models.chat.canon.MaestroMessage;
 import com.symphony.oss.models.chat.canon.SNSSQSWireObjectEntity;
@@ -27,11 +28,13 @@ import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
+import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.health.MeterManager;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import model.events.UserLeftRoom;
 import org.apache.commons.codec.binary.Base64;
 import org.slf4j.MDC;
 import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
@@ -70,11 +73,15 @@ public class ForwarderQueueConsumer {
   private final ForwarderQueueMetrics forwarderQueueMetrics;
   private final MessageIOMonitor messageIOMonitor;
 
-  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool, MessageIOMonitor messageIOMonitor, MeterManager meterManager) {
+  private final BotConfiguration botConfiguration;
+
+
+  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool, MessageIOMonitor messageIOMonitor, MeterManager meterManager, BotConfiguration botConfiguration) {
     this.objectMapper = objectMapper;
     this.messageDecryptor = messageDecryptor;
     this.datafeedSessionPool = datafeedSessionPool;
     this.messageIOMonitor = messageIOMonitor;
+    this.botConfiguration = botConfiguration;
     this.forwarderQueueMetrics = new ForwarderQueueMetrics(meterManager);
 
     // Hell...
@@ -111,7 +118,7 @@ public class ForwarderQueueConsumer {
     String payloadType = envelope.getPayload().getCanonType();
 
     forwarderQueueMetrics.incomingMessages.increment();
-    LOG.debug("Message received | payloadType={} notification={}", payloadType, notification);
+    //LOG.debug("Message received | payloadType={} notification={}", payloadType, notification);
 
     System.out.println(payloadType);
     switch (payloadType) {
@@ -240,14 +247,41 @@ public class ForwarderQueueConsumer {
       case JOIN_ROOM:
         notifyJoinRoom(maestroMessage);
         break;
-
-      case CREATE_ROOM:
       case LEAVE_ROOM:
+        notifyLeaveRoom(maestroMessage);
+        break;
+      case CREATE_ROOM:
         // TODO implement these events
-        LOG.info("Create and Leave room events not supported");
+        LOG.info("Create room events not supported");
         LOG.debug("Room event | envelope={} maestroMessage={}", envelope, maestroMessage);
         break;
     }
+  }
+
+  private void notifyLeaveRoom(IMaestroMessage message) {
+    IJsonObject<?> maestroObject = message.getJsonObject().getRequiredObject("maestroObject");
+    String streamId = Base64.encodeBase64URLSafeString(Base64.decodeBase64(maestroObject.getRequiredString("threadId").getBytes(StandardCharsets.UTF_8)));
+    MDC.put("streamId", streamId);
+
+    List<String> members = message.getAffectedUsers().stream()
+      .map(IUser::getId)
+      .map(PodAndUserId::toString)
+      .collect(Collectors.toList());
+
+    IUser initiator = message.getRequestingUser();
+
+    // Check if this is a room that we manage
+    // Note: we cannot check if there are federated users in the room as in this event we only receive the concerned users
+    // and not all members of the room
+    if (!botConfiguration.getSymphonyId().equals(Long.toString(maestroObject.getRequiredLong("creator")))) {
+      LOG.warn("Leave room not managed by bot | creator={} initiator={}",maestroObject.getRequiredLong("creator"), initiator.getId());
+      return;
+    }
+    LOG.info("Users leave room | requestingUser={} affectedUsers={}",
+      initiator.getId(),
+      message.getAffectedUsers().stream().map(IUserEntity::getId).collect(Collectors.toList())
+    );
+    datafeedListener.onUserLeftRoom(streamId, initiator, message.getAffectedUsers());
   }
 
   private void notifyConnectionRequest(IMaestroMessage message) {

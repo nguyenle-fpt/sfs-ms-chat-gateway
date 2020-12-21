@@ -56,7 +56,7 @@ public interface DatafeedListener {
   default void onUserJoinedRoom(String streamId, List<String> members, IUser fromSymphonyUser) {
   }
 
-  default void onUserLeftRoom(UserLeftRoom userLeftRoom) {
+  default void onUserLeftRoom(String streamId, IUser requestor, List<IUser> leavingUsers) {
   }
 
   /*default void onConnectionAccepted(User user) {
