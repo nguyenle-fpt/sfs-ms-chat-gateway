@@ -25,4 +25,6 @@ public class ChatConfiguration {
 
   @NotNull
   private PemResource privateKey;
+
+  private String stopImCreationAt;
 }

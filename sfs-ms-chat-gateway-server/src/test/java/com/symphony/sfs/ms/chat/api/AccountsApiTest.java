@@ -18,9 +18,11 @@ import com.symphony.sfs.ms.chat.service.FederatedAccountService;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
+import com.symphony.sfs.ms.starter.health.PodVersionChecker;
 import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StringId;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUser;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes;
@@ -105,7 +107,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       empClient,
       symphonyAuthFactory,
       adminClient,
-      channelRepository);
+      channelRepository,
+      podVersionChecker,
+      tenantDetailRepository);
     federatedAccountService.registerAsDatafeedListener();
     channelApi = new ChannelsApi(federatedAccountService, channelService);
 

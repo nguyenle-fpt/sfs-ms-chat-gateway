@@ -7,7 +7,6 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.DeleteChannelResponse;
-import com.symphony.sfs.ms.chat.generated.model.DeleteChannelsRequest;
 import com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -34,7 +33,6 @@ import org.springframework.http.MediaType;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
 
 import static clients.symphony.api.constants.PodConstants.GETCONNECTIONSTATUS;
@@ -44,16 +42,16 @@ import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getAcceptedConnec
 import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getEnvelopeMessage;
 import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getSnsMaestroMessage;
 import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.CREATECHANNEL_ENDPOINT;
-import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.DELETECHANNELS_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.RETRIEVECHANNEL_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 
@@ -89,7 +87,9 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
       empClient,
       symphonyAuthFactory,
       mockAdminClient,
-      channelRepository);
+      channelRepository,
+      podVersionChecker,
+      tenantDetailRepository);
     federatedAccountService.registerAsDatafeedListener();
     channelApi = new ChannelsApi(federatedAccountService, channelService);
     accountsApi = new AccountsApi(federatedAccountService);
@@ -172,8 +172,90 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
 
   @Test
   public void retrieveChannelTest() throws IOException {
+    DatafeedSessionPool.DatafeedSession accountSession = initDataFeedSession();
+    FederatedAccount existingAccount = prepareRetrieveChannel(accountSession);
+
+    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
+      FederatedAccount.builder()
+        .emailAddress(existingAccount.getEmailAddress())
+        .phoneNumber(existingAccount.getPhoneNumber())
+        .firstName(existingAccount.getFirstName())
+        .lastName(existingAccount.getLastName())
+        .symphonyUserId(accountSession.getUserId())
+        .symphonyUsername(accountSession.getUsername())
+        .build(),
+      FederatedAccount.builder()
+        .symphonyUserId("2")
+        .build()
+    )));
+    CreateChannelRequest createChannelRequest = new CreateChannelRequest()
+      .federatedUserId(existingAccount.getFederatedUserId())
+      .advisorUserId("2")
+      .emp("WHATSAPP");
+
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createChannelRequest)
+      .when()
+      .post(CREATECHANNEL_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value());
+
+    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
+    forwarderQueueConsumer.consume(notification, "1");
+    verify(empClient, times(1)).createChannel(any(), any(), any(), any(), any());
+    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
+    assertEquals(1, adminClient.getImRequests().size());
+   }
+
+  @Test
+  public void retrieveChannelDoNotCreateChannelTest() throws IOException {
+    DatafeedSessionPool.DatafeedSession accountSession = initDataFeedSession();
+    FederatedAccount existingAccount = prepareRetrieveChannel(accountSession);
+
+    // let's make the minimal pod version (to stop creating IM) lower
+    chatConfiguration.setStopImCreationAt("1.0.0");
+
+    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
+      FederatedAccount.builder()
+        .emailAddress(existingAccount.getEmailAddress())
+        .phoneNumber(existingAccount.getPhoneNumber())
+        .firstName(existingAccount.getFirstName())
+        .lastName(existingAccount.getLastName())
+        .symphonyUserId(accountSession.getUserId())
+        .symphonyUsername(accountSession.getUsername())
+        .build(),
+      FederatedAccount.builder()
+        .symphonyUserId("2")
+        .build()
+    )));
+
+    CreateChannelRequest createChannelRequest = new CreateChannelRequest()
+      .federatedUserId(existingAccount.getFederatedUserId())
+      .advisorUserId("2")
+      .emp("WHATSAPP");
+
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createChannelRequest)
+      .when()
+      .post(CREATECHANNEL_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value());
+
+    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
+    forwarderQueueConsumer.consume(notification, "1");
+    verify(empClient, times(0)).createChannel(any(), any(), any(), any(), any());
+    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
+    assertEquals(0, adminClient.getImRequests().size());
+  }
+
+  private DatafeedSessionPool.DatafeedSession initDataFeedSession(){
+    return new DatafeedSessionPool.DatafeedSession(getSession("username"), "1");
+  }
+
+  private FederatedAccount prepareRetrieveChannel(DatafeedSessionPool.DatafeedSession accountSession){
     SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSessionPool.DatafeedSession accountSession = new DatafeedSessionPool.DatafeedSession(getSession("username"), "1");
 
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
@@ -216,35 +298,6 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
 
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
 
-    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
-      FederatedAccount.builder()
-        .emailAddress(existingAccount.getEmailAddress())
-        .phoneNumber(existingAccount.getPhoneNumber())
-        .firstName(existingAccount.getFirstName())
-        .lastName(existingAccount.getLastName())
-        .symphonyUserId(accountSession.getUserId())
-        .symphonyUsername(accountSession.getUsername())
-        .build(),
-      FederatedAccount.builder()
-        .symphonyUserId("2")
-        .build()
-    )));
-    CreateChannelRequest createChannelRequest = new CreateChannelRequest()
-      .federatedUserId(existingAccount.getFederatedUserId())
-      .advisorUserId("2")
-      .emp("WHATSAPP");
-
-    configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
-      .contentType(MediaType.APPLICATION_JSON_VALUE)
-      .body(createChannelRequest)
-      .when()
-      .post(CREATECHANNEL_ENDPOINT)
-      .then()
-      .statusCode(HttpStatus.OK.value());
-
-    mockAdminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
-    forwarderQueueConsumer.consume(notification, "1");
-    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
-    assertEquals(1, adminClient.getImRequests().size());
-   }
+    return existingAccount;
+  }
 }

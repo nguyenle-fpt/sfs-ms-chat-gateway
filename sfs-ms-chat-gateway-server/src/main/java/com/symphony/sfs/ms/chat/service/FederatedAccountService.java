@@ -27,11 +27,15 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
+import com.symphony.sfs.ms.starter.health.PodVersionChecker;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantSettings;
 import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
 import com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUser;
@@ -40,7 +44,9 @@ import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserKeyRequest;
 import com.symphony.sfs.ms.starter.symphony.user.UserStatus;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
+import com.symphony.sfs.ms.starter.util.PodVersion;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
+import com.symphony.sfs.ms.starter.util.UserIdUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
@@ -51,7 +57,6 @@ import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -86,6 +91,8 @@ public class FederatedAccountService implements DatafeedListener {
   private final SymphonyAuthFactory symphonyAuthFactory;
   private final AdminClient adminClient;
   private final ChannelRepository channelRepository;
+  private final PodVersionChecker podVersionChecker;
+  private final TenantDetailRepository tenantDetailRepository;
 
   @PostConstruct
   @VisibleForTesting
@@ -190,13 +197,18 @@ public class FederatedAccountService implements DatafeedListener {
   @NewSpan
   public void onConnectionAccepted(IUser requesting, IUser requested) {
     LOG.info("Connection request accepted | requesting={} requested={}", requesting.getId(), requested.getId());
-    Optional<FederatedAccount>  federatedAccount = federatedAccountRepository.findBySymphonyId(requesting.getId().toString());
-    if(federatedAccount.isPresent()) {
-      FederatedAccount account = federatedAccount.get();
-      Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
-      if(canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
-        channelService.createIMChannel(account, requested);
+    if (shouldWeCreateIM(requested.getId().longValue())) {
+      Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findBySymphonyId(requesting.getId().toString());
+      if (federatedAccount.isPresent()) {
+        FederatedAccount account = federatedAccount.get();
+        Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
+        if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
+          LOG.info("Let's create an IM between {} and {} ", requesting.getId(), requested.getId());
+          channelService.createIMChannel(account, requested);
+        }
       }
+    } else {
+      LOG.info("We won't create an IM between {} and {} ", requesting.getId(), requested.getId());
     }
   }
 
@@ -304,6 +316,52 @@ public class FederatedAccountService implements DatafeedListener {
       .withSurname(info.getLastName())
       .withCompany(info.getCompany())
       .build();
+  }
+
+  /**
+   * Starting from a given pod version we should not create IM anymore
+   * as they will be created by the customer pod when accepting the connection request
+   * @param advisorSymphonyId
+   * @return
+   */
+  private boolean shouldWeCreateIM(long advisorSymphonyId) {
+    try {
+      int externalPodId = UserIdUtils.extractPodId(advisorSymphonyId);
+      Optional<TenantDetailEntity> optTenantDetail = tenantDetailRepository.findByPodId(Integer.toString(externalPodId));
+      if (optTenantDetail.isPresent()) {
+        TenantDetailEntity tenantDetail = optTenantDetail.get();
+        TenantSettings.ImCreation imCreation = TenantSettings.parseImCreationSetting(tenantDetail.getImCreationSetting());
+        switch (imCreation) {
+          case ALWAYS:
+            return true;
+          case NEVER:
+            return false;
+          // otherwise we'll create the IM only the the tenant won't
+          case ACCORDING_TO_POD_VERSION:
+            return !willTenantCreateTheIM(tenantDetail);
+          default:
+            return !willTenantCreateTheIM(tenantDetail);
+        }
+      }
+    } catch (RuntimeException ex) {
+      LOG.error("Failed to determine if IM needs to be created", ex);
+    }
+    // whatever went wrong we'll return true
+    return true;
+  }
+
+  /**
+   * Check a tenant SBE version to determine if it will create the IM itself
+   */
+  private boolean willTenantCreateTheIM(TenantDetailEntity tenantDetail) {
+    String podUrl = tenantDetail.getPodUrl();
+    PodVersion podVersion = podVersionChecker.retrievePodVersion(podUrl);
+    if (podVersion.compareTo(new PodVersion(chatConfiguration.getStopImCreationAt())) > -1) {
+      // this pod reached 2.10.1 or higher
+      LOG.info("Tenant {} version ({}) is at equals of hiher than {}, it will create the IM", tenantDetail.getPodId(), podVersion, chatConfiguration.getStopImCreationAt());
+      return true;
+    }
+    return false;
   }
 
 }

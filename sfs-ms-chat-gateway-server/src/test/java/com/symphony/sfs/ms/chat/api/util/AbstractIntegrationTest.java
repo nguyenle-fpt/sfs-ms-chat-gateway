@@ -29,15 +29,20 @@ import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.health.MeterManager;
+import com.symphony.sfs.ms.starter.health.PodVersionChecker;
 import com.symphony.sfs.ms.starter.security.SessionManager;
+import com.symphony.sfs.ms.starter.symphony.SharedTableSchema;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
 import com.symphony.sfs.ms.starter.testing.LocalProfileTest;
 import com.symphony.sfs.ms.starter.testing.RestApiTest;
+import com.symphony.sfs.ms.starter.util.PodVersion;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -52,8 +57,10 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfileTest, RestApiTest {
   protected AuthenticationService authenticationService;
@@ -85,6 +92,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected SymphonyAuthFactory symphonyAuthFactory;
   protected Tracer tracer = null;
   protected UsersInfoService usersInfoService;
+  protected PodVersionChecker podVersionChecker;
+  protected TenantDetailRepository tenantDetailRepository;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -115,6 +124,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     chatConfiguration = new ChatConfiguration();
     chatConfiguration.setSharedPrivateKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
     chatConfiguration.setSharedPublicKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPublic())));
+    chatConfiguration.setStopImCreationAt("20.0.1-SNAPSHOT");
 
     handlebarsConfiguration = new HandlebarsConfiguration();
 
@@ -152,6 +162,16 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     usersInfoService = mock(UsersInfoService.class);
     roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient);
     roomService.registerAsDatafeedListener();
+
+    tenantDetailRepository = new TenantDetailRepository(db, new SharedTableSchema(dynamoConfiguration.getDynamoSchema().getTableName()));
+    TenantDetailEntity tenantDetail = new TenantDetailEntity();
+    tenantDetail.setPodUrl("https://www.pod198.com");
+    tenantDetail.setPodId("0");
+    tenantDetail.setCompanyShortName("Symphony");
+    tenantDetailRepository.save(tenantDetail);
+
+    podVersionChecker = mock(PodVersionChecker.class);
+    when(podVersionChecker.retrievePodVersion(anyString())).thenReturn(new PodVersion("2.0.1"));
 
   }
 

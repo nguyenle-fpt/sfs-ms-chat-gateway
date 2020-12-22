@@ -20,6 +20,11 @@ spring:
 extensionapp:
   id: com.symphony.sfs.admin-app
 
+microservice:
+  chat:
+    # SBE version at which we stop issuing IM
+    stopImCreationAt: "20.10.1"
+
 aws:
   dynamodb:
     tableName: sfs-ms-chat-gateway
