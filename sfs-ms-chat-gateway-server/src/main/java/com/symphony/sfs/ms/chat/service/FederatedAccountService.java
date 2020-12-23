@@ -337,8 +337,6 @@ public class FederatedAccountService implements DatafeedListener {
           case NEVER:
             return false;
           // otherwise we'll create the IM only the the tenant won't
-          case ACCORDING_TO_POD_VERSION:
-            return !willTenantCreateTheIM(tenantDetail);
           default:
             return !willTenantCreateTheIM(tenantDetail);
         }

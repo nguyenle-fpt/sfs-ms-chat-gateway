@@ -18,6 +18,8 @@ import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StringId;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantSettings;
 import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
@@ -45,6 +47,7 @@ import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.CREATECHANNEL_E
 import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.RETRIEVECHANNEL_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -212,6 +215,13 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
   public void retrieveChannelDoNotCreateChannelTest() throws IOException {
     DatafeedSessionPool.DatafeedSession accountSession = initDataFeedSession();
     FederatedAccount existingAccount = prepareRetrieveChannel(accountSession);
+
+    // let say tenant config wants us to check the pod version
+    Optional<TenantDetailEntity> optTenant = tenantDetailRepository.findByPodId("0");
+    assertTrue(optTenant.isPresent());
+    TenantDetailEntity tenantDetailEntity = optTenant.get();
+    tenantDetailEntity.setImCreationSetting(TenantSettings.ImCreation.ACCORDING_TO_POD_VERSION.name());
+    tenantDetailRepository.save(tenantDetailEntity);
 
     // let's make the minimal pod version (to stop creating IM) lower
     chatConfiguration.setStopImCreationAt("1.0.0");
