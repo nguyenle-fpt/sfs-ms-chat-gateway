@@ -5,6 +5,7 @@ import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
+import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
@@ -292,6 +293,9 @@ class MessageServiceTest {
         "Chimes are not supported currently, your contact was not notified."),
       arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").parentRelationshipType(ParentRelationshipType.REPLY).build(),
+        "Your message was not sent to your contact. Inline replies are not supported currently."),
+      arguments(toFederatedAccount,
+        GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").customEntities(Collections.singletonList(new CustomEntity(CustomEntity.QUOTE_TYPE))).build(),
         "Your message was not sent to your contact. Inline replies are not supported currently."),
       arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").table(true).build(),

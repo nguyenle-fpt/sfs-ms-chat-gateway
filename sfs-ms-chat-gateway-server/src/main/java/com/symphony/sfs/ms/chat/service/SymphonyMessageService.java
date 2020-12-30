@@ -4,6 +4,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
+import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -176,7 +177,8 @@ public class SymphonyMessageService implements DatafeedListener {
         allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Your message was not sent. Sending tables is not supported currently."));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
-      } else if (gatewaySocialMessage.getParentRelationshipType() == ParentRelationshipType.REPLY) {
+      } else if (gatewaySocialMessage.getParentRelationshipType() == ParentRelationshipType.REPLY ||
+                    gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
         allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Your message was not sent to your contact. Inline replies are not supported currently."));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;

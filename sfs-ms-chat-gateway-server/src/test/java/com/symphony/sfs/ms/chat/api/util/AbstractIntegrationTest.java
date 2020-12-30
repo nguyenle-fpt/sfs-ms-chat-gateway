@@ -142,7 +142,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
 
     ContentKeyManager contentKeyManager = new ContentKeyManager(podConfiguration, datafeedSessionPool);
-    MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager);
+    MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager, objectMapper);
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
 
     SymphonyAuthFactory symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);

@@ -1,5 +1,7 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.security.clientsdk.transport.CiphertextFactory;
 import com.symphony.security.clientsdk.transport.ICiphertextTransport;
@@ -23,10 +25,12 @@ public class MessageDecryptor {
 
   private IClientCryptoHandler cryptoHandler;
   private ContentKeyManager contentKeyManager;
+  private ObjectMapper objectMapper;
 
-  public MessageDecryptor(ContentKeyManager contentKeyManager) {
+  public MessageDecryptor(ContentKeyManager contentKeyManager, ObjectMapper objectMapper) {
     this.contentKeyManager = contentKeyManager;
     this.cryptoHandler = new ClientCryptoHandler();
+    this.objectMapper = objectMapper;
   }
 
   public void decrypt(ISocialMessage socialMessage, String userId, GatewaySocialMessage gatewaySocialMessage) throws UnknownDatafeedUserException, ContentKeyRetrievalException, DecryptionException {
@@ -37,12 +41,19 @@ public class MessageDecryptor {
       byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), userId, msgCipherTransport.getRotationId());
       if (socialMessage.getText() != null) {
         gatewaySocialMessage.setTextContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getText()));
+
       }
       if (socialMessage.getPresentationML() != null) {
         gatewaySocialMessage.setPresentationMLContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getPresentationML()));
       }
+      if(socialMessage.getCustomEntities() != null) {
+        String customEntitiesJson = new String(cryptoHandler.decryptMsg(contentKey, socialMessage.getCustomEntities().toByteArray()));
+        gatewaySocialMessage.setCustomEntities(CustomEntity.fromJSONString(customEntitiesJson, objectMapper));
+      }
     } catch (SymphonyInputException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException e) {
       throw new DecryptionException(e);
+    } catch (JsonProcessingException e) {
+      LOG.error("Error parsing custom entities in social message | {} ", e.getMessage());
     }
   }
 

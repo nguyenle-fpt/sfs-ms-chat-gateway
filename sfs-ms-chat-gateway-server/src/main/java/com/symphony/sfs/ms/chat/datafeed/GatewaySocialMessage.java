@@ -43,6 +43,9 @@ public class GatewaySocialMessage {
   private final String chatType;
   private final ParentRelationshipType parentRelationshipType;
   private boolean table;
+  @Setter
+  @Default
+  private List<CustomEntity> customEntities = new ArrayList<>();
 
   public void setPresentationMLContent(String presentationMLContent) {
     this.presentationMLContent = presentationMLContent;
@@ -68,6 +71,10 @@ public class GatewaySocialMessage {
 
   public boolean isRoom() {
     return "CHATROOM".equals(chatType);
+  }
+
+  public boolean containsCustomEntityType(String entityType) {
+    return customEntities.stream().anyMatch(customEntity -> entityType.equals(customEntity.getType()));
   }
 
   private static String unescapeSpecialCharacters(String text) {
