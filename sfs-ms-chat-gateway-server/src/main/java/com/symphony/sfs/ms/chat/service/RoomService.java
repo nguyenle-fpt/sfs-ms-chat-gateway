@@ -97,9 +97,9 @@ public class RoomService implements DatafeedListener {
       .build();
 
     SymphonyRoom symphonyRoom = streamService.createRoom(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), roomAttributes).orElseThrow(CreateRoomFailedProblem::new);
-
-    RoomResponse roomResponse = RoomDtoMapper.MAPPER.roomRequestToRoomResponse(roomRequest);
+    RoomResponse roomResponse = new RoomResponse();
     roomResponse.setStreamId(symphonyRoom.getRoomSystemInfo().getId());
+    roomResponse.setRoomName(symphonyRoom.getRoomAttributes().getName());
 
     return roomResponse;
 
