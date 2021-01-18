@@ -4,7 +4,6 @@ import com.symphony.oss.models.chat.canon.UserEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.chat.canon.facade.User;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
-import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -13,9 +12,7 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
-import com.symphony.sfs.ms.chat.service.external.DefaultAdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
-import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -39,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -51,40 +47,36 @@ class ChannelServiceTest {
 
   private ChannelService channelService;
 
-  private StreamService streamService;
   private SymphonyMessageSender symphonyMessageSender;
-  private PodConfiguration podConfiguration;
   private EmpClient empClient;
   private DatafeedSessionPool datafeedSessionPool;
   private FederatedAccountRepository federatedAccountRepository;
 
-  private BotConfiguration botConfiguration;
-  private AuthenticationService authenticationService;
   private SymphonySession userSession;
-  private ChannelRepository channelRepository;
   private AdminClient mockAdminClient;
 
-  private SymphonyService symphonyService;
   private EmpSchemaService empSchemaService;
+
+  private SymphonySession botSession;
 
   @BeforeEach
   public void setUp() {
     mockAdminClient = mock(AdminClient.class);
-    symphonyService = mock(SymphonyService.class);
-    streamService = mock(StreamService.class);
+    SymphonyService symphonyService = mock(SymphonyService.class);
+    StreamService streamService = mock(StreamService.class);
     symphonyMessageSender = mock(SymphonyMessageSender.class);
     empClient = mock(EmpClient.class);
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
-    channelRepository = mock(ChannelRepository.class);
-    authenticationService = mock(AuthenticationService.class);
+    ChannelRepository channelRepository = mock(ChannelRepository.class);
+    AuthenticationService authenticationService = mock(AuthenticationService.class);
 
-    botConfiguration = new BotConfiguration();
+    BotConfiguration botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
     botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
 
-    podConfiguration = new PodConfiguration();
+    PodConfiguration podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
@@ -96,7 +88,10 @@ class ChannelServiceTest {
     //empSchemaService = new EmpSchemaService(mockAdminClient);
     empSchemaService =  mock(EmpSchemaService.class);
 
-    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository, mockAdminClient, empSchemaService, symphonyService, channelRepository);
+    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository,
+      mockAdminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration);
+
+    botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
 
   @Test
@@ -229,7 +224,6 @@ class ChannelServiceTest {
     members.add("101");
     channelService.onIMCreated("streamId", members, fromSymphonyUser, false);
     verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "You are not entitled to send messages to External Messaging Platform users");
-
   }
 
 //  @Test

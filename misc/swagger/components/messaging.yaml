@@ -19,12 +19,30 @@ send-message-request:
       items:
         $ref: '#/symphony-attachment'
     formatting:
+      $ref: '#/formatting-enum'
+
+send-system-message-request:
+  type: object
+  required:
+    - streamId
+    - fromSymphonyUserId
+  properties:
+    streamId:
       type: string
-      enum:
-        - simple
-        - notification
-        - info
-        - alert
+    fromSymphonyUserId:
+      type: string
+    text:
+      type: string
+    formatting:
+      $ref: '#/formatting-enum'
+
+formatting-enum:
+  type: string
+  enum:
+    - simple
+    - notification
+    - info
+    - alert
 
 retrieve-messages-request:
   type: object

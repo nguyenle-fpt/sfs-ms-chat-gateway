@@ -12,13 +12,13 @@ import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
+import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
 import com.symphony.sfs.ms.chat.generated.model.MessageSenderNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
-import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
@@ -124,7 +124,7 @@ public class SymphonyMessageService implements DatafeedListener {
       LOG.warn("(M)IM with has less than 2 members  | streamId={} messageId={}", gatewaySocialMessage.getStreamId(), gatewaySocialMessage.getMessageId());
       return false;
     }
-    if(botConfiguration.getSymphonyId().equals(gatewaySocialMessage.getFromUserId())) {
+    if (botConfiguration.getSymphonyId().equals(gatewaySocialMessage.getFromUserId())) {
       return false;
     }
     if (federatedAccountRepository.findBySymphonyId(gatewaySocialMessage.getFromUserId()).isPresent() && !gatewaySocialMessage.isRoom()) {
@@ -154,11 +154,10 @@ public class SymphonyMessageService implements DatafeedListener {
     }
 
     try {
-      // Check if message contents can be sent
       //TODO in case of a room allUserSessions will have only the bot session, in case if IM it has only one federated account's session.
       //TODO maybe the code should be simplified accordingly
       List<SymphonySession> allUserSessions;
-      if(gatewaySocialMessage.isRoom()) {
+      if (gatewaySocialMessage.isRoom()) {
         //TODO caching for botSession ?
         SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
         allUserSessions = Collections.singletonList(botSession);
@@ -168,6 +167,8 @@ public class SymphonyMessageService implements DatafeedListener {
           allUserSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
       }
+
+      // Check if message contents can be sent
       if (gatewaySocialMessage.isChime()) {
         allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Chimes are not supported currently, your contact was not notified."));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
@@ -177,12 +178,13 @@ public class SymphonyMessageService implements DatafeedListener {
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       } else if (gatewaySocialMessage.getParentRelationshipType() == ParentRelationshipType.REPLY ||
-                    gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
+        gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
         allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Your message was not sent to your contact. Inline replies are not supported currently."));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       }
 
+      // Forward the message to all EMP users
       for (Map.Entry<String, List<FederatedAccount>> entry : federatedAccountsByEmp.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
         String emp = entry.getKey();
@@ -202,7 +204,7 @@ public class SymphonyMessageService implements DatafeedListener {
         // not optimal, we call the canChat everytime here.
         Optional<CanChatResponse> canChat = adminClient.canChat(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), emp);
 
-        if(manageCanChat(gatewaySocialMessage, emp, streamId, userSessions, canChat)) {
+        if (manageCanChat(gatewaySocialMessage, emp, streamId, userSessions, canChat)) {
           List<Attachment> attachmentsContent = null;
           long totalsize = 0;
           if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
@@ -239,12 +241,13 @@ public class SymphonyMessageService implements DatafeedListener {
 
           // We will not create new channels if you have the permission CAN_CHAT_NO_CREATE_IM
           // this means that old conversations should still work but the user won't be able to create a new one
-          // we don't know if the conversatio already exists so we cannot send a specific message.
-          // we let the normal mecanism take care of that.
-          if(!gatewaySocialMessage.isRoom() && canChat.isPresent() && canChat.get() != CanChatResponse.CAN_CHAT_NO_CREATE_IM) {
+          // we don't know if the conversation already exists so we cannot send a specific message.
+          // we let the normal mechanism take care of that.
+          if (!gatewaySocialMessage.isRoom() && canChat.isPresent() && canChat.get() != CanChatResponse.CAN_CHAT_NO_CREATE_IM) {
             channelService.createIMChannel(streamId, gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp.get(0));
           }
           messageMetrics.onSendMessageFromSymphony(gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp, streamId);
+
           Optional<List<OperationIdBySymId>> empMessageIdsOptional = empClient.sendMessage(emp,
             streamId,
             gatewaySocialMessage.getMessageId(),
@@ -301,7 +304,7 @@ public class SymphonyMessageService implements DatafeedListener {
       userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(emp) + " users."));
       messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
       return false;
-    } else if (canChat.get() == CanChatResponse.NO_CONTACT ) {
+    } else if (canChat.get() == CanChatResponse.NO_CONTACT) {
       userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
       messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
       return false;
@@ -339,29 +342,84 @@ public class SymphonyMessageService implements DatafeedListener {
     String symphonyMessageId = null;
     StreamInfo streamInfo = getStreamInfo(streamId);
     Optional<String> notEntitled = Optional.empty();
-    if(streamInfo.getStreamType().getType() != StreamTypes.ROOM) {
+    if (streamInfo.getStreamType().getType() != StreamTypes.ROOM) {
       Optional<String> advisorSymphonyUserId = findAdvisor(streamInfo, streamId, fromSymphonyUserId);
       notEntitled = notEntitledMessage(advisorSymphonyUserId, federatedAccount.getFederatedUserId(), federatedAccount.getEmp(), formatting);
       advisorSymphonyUserId.ifPresent(s -> MDC.put("advisor", s));
     }
 
-    if (notEntitled.isPresent()) {
-      messageMetrics.onMessageBlockToSymphony(ADVISOR_NO_LONGER_AVAILABLE, streamId);
-      feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, notEntitled.get(), TypeEnum.ALERT);
-    } else {
-      // TODO fix this bad management of optional
-      messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
-      boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
-      symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
-      // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
-      if (textTooLong) {
-        String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
-        feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, alertMessage, TypeEnum.ALERT);
-        symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, alertMessage, null);
+    try {
+      if (notEntitled.isPresent()) {
+        messageMetrics.onMessageBlockToSymphony(ADVISOR_NO_LONGER_AVAILABLE, streamId);
+        feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, notEntitled.get(), TypeEnum.ALERT);
+      } else {
+        // TODO fix this bad management of optional
+        messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
+        boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
+        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
+        // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
+        if (textTooLong) {
+          String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
+          feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, alertMessage, TypeEnum.ALERT);
+
+          boolean isRoom = streamInfo.getStreamType().getType() == StreamTypes.ROOM;
+
+          SymphonySession session;
+          if (isRoom) {
+            session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+          } else {
+            session = datafeedSessionPool.refreshSession(fromSymphonyUserId);
+          }
+          symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage);
+        }
       }
+    } catch (UnknownDatafeedUserException e) {
+      // should never happen, as we have a FederatedAccount
+      throw new IllegalStateException(e);
     }
 
     return symphonyMessageId;
+  }
+
+  @NewSpan
+  public String sendSystemMessage(String streamId, FormattingEnum formatting, String text, String fromSymphonyUserId) {
+    boolean isRoom = getStreamInfo(streamId).getStreamType().getType() == StreamTypes.ROOM;
+
+    try {
+      SymphonySession session;
+      if (isRoom) {
+        session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+      } else {
+        session = datafeedSessionPool.refreshSession(fromSymphonyUserId);
+      }
+
+      Optional<String> symphonyMessageId;
+      if (formatting == null) {
+        return symphonyMessageSender.sendRawMessage(session, streamId, "<messageML>" + text + "</messageML>").orElseThrow(SendMessageFailedProblem::new);
+      }
+
+      switch (formatting) {
+        case SIMPLE:
+          symphonyMessageId = symphonyMessageSender.sendSimpleMessage(session, streamId, text);
+          break;
+        case NOTIFICATION:
+          symphonyMessageId = symphonyMessageSender.sendNotificationMessage(session, streamId, text);
+          break;
+        case INFO:
+          symphonyMessageId = symphonyMessageSender.sendInfoMessage(session, streamId, text);
+          break;
+        case ALERT:
+          symphonyMessageId = symphonyMessageSender.sendAlertMessage(session, streamId, text);
+          break;
+        default:
+          throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));
+      }
+
+      return symphonyMessageId.orElseThrow(SendMessageFailedProblem::new);
+    } catch (UnknownDatafeedUserException e) {
+      // should never happen, as we have a FederatedAccount
+      throw new IllegalStateException(e);
+    }
   }
 
   private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean truncate) {

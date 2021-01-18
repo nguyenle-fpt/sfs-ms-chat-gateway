@@ -54,6 +54,20 @@ message-sender-not-found:
       type: integer
       format: 400
 
+room-not-found:
+  type: object
+  description: 'Room not found'
+  properties:
+    type:
+      type: string
+      format: 'room.not.found'
+    title:
+      type: string
+      format: 'Room not found'
+    status:
+      type: integer
+      format: 400
+
 retrieve-message-failed:
   type: object
   description: 'Retrieve message failed'

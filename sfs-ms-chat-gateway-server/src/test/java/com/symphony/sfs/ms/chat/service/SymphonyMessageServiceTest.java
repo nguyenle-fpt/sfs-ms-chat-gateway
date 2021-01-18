@@ -2,16 +2,13 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
-import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
-import com.symphony.sfs.ms.chat.generated.model.MessageId;
-import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
-import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
+import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.health.MeterManager;
@@ -21,6 +18,7 @@ import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
+import com.symphony.sfs.ms.starter.util.RsaUtils;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,8 +31,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.springframework.http.MediaType;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -44,7 +43,6 @@ import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESS
 import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -62,6 +60,7 @@ class SymphonyMessageServiceTest {
   private SymphonySession userSession;
   private AuthenticationService authenticationService;
   private PodConfiguration podConfiguration;
+  private BotConfiguration botConfiguration;
   private ChatConfiguration chatConfiguration;
 
   private FederatedAccountRepository federatedAccountRepository;
@@ -74,8 +73,13 @@ class SymphonyMessageServiceTest {
   private DatafeedSessionPool datafeedSessionPool;
 
   @BeforeEach
-  public void setUp() {
+  public void setUp() throws Exception {
     MeterManager meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
+
+    // keys
+    KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+    kpg.initialize(2048);
+    KeyPair keyPair = kpg.generateKeyPair();
 
     podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
@@ -84,6 +88,10 @@ class SymphonyMessageServiceTest {
 
     chatConfiguration = new ChatConfiguration();
     chatConfiguration.setSharedPrivateKey(new PemResource("-----sharedPrivateKey"));
+
+    botConfiguration = new BotConfiguration();
+    botConfiguration.setPrivateKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
+    botConfiguration.setUsername("bot");
 
     authenticationService = mock(AuthenticationService.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);

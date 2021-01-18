@@ -5,19 +5,18 @@ import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
+import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
-import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
-import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -79,6 +78,8 @@ class MessageServiceTest {
 
   private SymphonySession userSession;
 
+  private SymphonySession botSession;
+
   private static final long NOW = OffsetDateTime.now().toEpochSecond();
   public static final String FROM_SYMPHONY_USER_ID = "123456789";
   public static final String TO_SYMPHONY_USER_ID = "234567891";
@@ -118,6 +119,8 @@ class MessageServiceTest {
     channelService = mock(ChannelService.class);
 
     messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService);
+
+    botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
 
   @Test
@@ -242,10 +245,8 @@ class MessageServiceTest {
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(id1, id2, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chatType("CHATROOM").build();
 
     messageService.onIMMessage(message);
-//
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(new SymphonySession("username", "kmToken", "sessionToken"), "streamId", "This message (messageId : messageId) was not delivered for the following users: firstName 2 lastName 2");
-  }
+    verify(symphonyMessageSender, once()).sendAlertMessage(new SymphonySession("username", "kmToken", "sessionToken"), "streamId", "This message (messageId : messageId) was not delivered for the following users: firstName 2 lastName 2");  }
 
   @Test
   void onIMMessage_No_Contact() {
@@ -300,7 +301,7 @@ class MessageServiceTest {
       arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").table(true).build(),
         "Your message was not sent. Sending tables is not supported currently.")
-      );
+    );
   }
 
   @ParameterizedTest
@@ -312,8 +313,7 @@ class MessageServiceTest {
 
     verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", expectedAlertMessage);
-  }
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", expectedAlertMessage);   }
 
   @Test
   void onIMMessage_FederatedServiceAccountNotFound() {
@@ -359,13 +359,13 @@ class MessageServiceTest {
     when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of("msgId"));
     when(empClient.sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), anyString(), eq(TypeEnum.INFO))).thenReturn(Optional.of("leaseId"));
     when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
+    RoomResponse roomResponse = new RoomResponse().roomType(RoomResponse.RoomTypeEnum.ROOM);
 
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null);
     String expectedTruncatedMsg = "<messageML>" + tooLongMsg.substring(0, 30000) + "</messageML>";
     verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, expectedTruncatedMsg, null);
-    verify(symphonyMessageSender, once()).sendAlertMessage("streamId", FROM_SYMPHONY_USER_ID, "The message was too long and was truncated. Only the first 30,000 characters were delivered", null);
-    verify(empClient, once()).sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), eq("The message was too long and was truncated. Only the first 30,000 characters were delivered"), eq(TypeEnum.ALERT));
-  }
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "The message was too long and was truncated. Only the first 30,000 characters were delivered");
+    verify(empClient, once()).sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), eq("The message was too long and was truncated. Only the first 30,000 characters were delivered"), eq(TypeEnum.ALERT));  }
 
   /*
   @Test

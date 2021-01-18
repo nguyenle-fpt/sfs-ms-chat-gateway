@@ -4,6 +4,7 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesRequest;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
+import com.symphony.sfs.ms.chat.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,13 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @ContinueSpan
   public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
     String symphonyMessageId = symphonyMessageService.sendMessage(request.getStreamId(), request.getFromSymphonyUserId(), request.getFormatting(), request.getText(), request.getAttachments());
+    return ResponseEntity.ok(new SendMessageResponse().id(symphonyMessageId));
+  }
+
+  @Override
+  public ResponseEntity<SendMessageResponse> sendSystemMessage(SendSystemMessageRequest request) {
+    LOG.info("Send system message | streamId={}", request.getStreamId());
+    String symphonyMessageId = symphonyMessageService.sendSystemMessage(request.getStreamId(), request.getFormatting(), request.getText(), request.getFromSymphonyUserId());
     return ResponseEntity.ok(new SendMessageResponse().id(symphonyMessageId));
   }
 

@@ -2,9 +2,9 @@ package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
+import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
-import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
@@ -39,40 +39,31 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   protected MessagingApi symphonyMessagingApi;
   private SymphonyMessageSender symphonyMessageSender;
-  private SymphonyMessageService symphonyMessageService;
-  private StreamService streamService;
-  private PodConfiguration podConfiguration;
-  private BotConfiguration botConfiguration;
-  private FederatedAccountRepository federatedAccountRepository;
-  private AuthenticationService authenticationService;
-  private AdminClient adminClient;
-  private EmpClient empClient;
-  private UsersInfoService usersInfoService;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
     super.setUp(db, mockServer);
 
     symphonyMessageSender = mock(SymphonyMessageSender.class);
-    streamService = mock(StreamService.class);
+    StreamService streamService = mock(StreamService.class);
 
-    botConfiguration = new BotConfiguration();
+    BotConfiguration botConfiguration = new BotConfiguration();
     botConfiguration.setUsername("username");
     botConfiguration.setEmailAddress("emailAddress");
     botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
 
-    podConfiguration = new PodConfiguration();
+    PodConfiguration podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
 
-    federatedAccountRepository = mock(FederatedAccountRepository.class);
-    authenticationService = mock(AuthenticationService.class);
-    adminClient = mock(AdminClient.class);
-    empClient = mock(EmpClient.class);
-    usersInfoService = mock(UsersInfoService.class);
+    FederatedAccountRepository federatedAccountRepository = mock(FederatedAccountRepository.class);
+    AuthenticationService authenticationService = mock(AuthenticationService.class);
+    AdminClient adminClient = mock(AdminClient.class);
+    EmpClient empClient = mock(EmpClient.class);
+    UsersInfoService usersInfoService = mock(UsersInfoService.class);
 
-    symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, null, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, null, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService);
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
 
     FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUserId("fromSymphonyUserId").build();

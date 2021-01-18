@@ -29,6 +29,7 @@ messages:
                 - $ref: '../errors/messaging.yaml#/message-send-error'
                 - $ref: '../errors/messaging.yaml#/message-recipient-not-found'
                 - $ref: '../errors/messaging.yaml#/message-sender-not-found'
+                - $ref: '../errors/messaging.yaml#/room-not-found'
       '500':
         description: Technical Error
         content:
@@ -65,3 +66,42 @@ messages:
               oneOf:
                 - $ref: '../errors/messaging.yaml#/message-sender-not-found'
                 - $ref: '../errors/messaging.yaml#/retrieve-message-failed'
+
+system-messages:
+  post:
+    tags:
+      - Messaging
+    summary: Send a system message from EMP to Symphony
+    operationId: sendSystemMessage
+    description: >
+      => Send a system message from EMP to Symphony.
+    security:
+      - sfsAuthentication: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/messaging.yaml#/send-system-message-request'
+    responses:
+      '200':
+        description: Message successfully sent
+        content:
+          application/json:
+            schema:
+              $ref: '../components/messaging.yaml#/send-message-response'
+      '400':
+        description: Bad Request
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/messaging.yaml#/message-send-error'
+                - $ref: '../errors/messaging.yaml#/message-recipient-not-found'
+                - $ref: '../errors/messaging.yaml#/message-sender-not-found'
+      '500':
+        description: Technical Error
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/messaging.yaml#/message-send-failed'
+

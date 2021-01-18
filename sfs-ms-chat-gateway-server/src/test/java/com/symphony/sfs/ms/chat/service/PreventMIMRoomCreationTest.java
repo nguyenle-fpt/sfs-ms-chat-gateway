@@ -1,7 +1,6 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
@@ -14,7 +13,6 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.DefaultAdminClient;
-import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
@@ -22,7 +20,6 @@ import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
-import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
@@ -36,15 +33,11 @@ import java.security.KeyPairGenerator;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -62,8 +55,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   private DatafeedSessionPool datafeedSessionPool;
   private SymphonyService symphonyService;
   private AdminClient adminClient;
-  private EmpSchemaService empSchemaService;
-  private ChannelRepository channelRepository;
   private MessageDecryptor messageDecryptor;
 
   @BeforeEach
@@ -73,7 +64,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     symphonyMessageSender = mock(SymphonyMessageSender.class);
     empClient = new MockEmpClient();
     datafeedSessionPool = mock(DatafeedSessionPool.class);
-    channelRepository = mock(ChannelRepository.class);
+    ChannelRepository channelRepository = mock(ChannelRepository.class);
 
 
     BotConfiguration botConfiguration = new BotConfiguration();
@@ -109,12 +100,12 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
 
     when(adminClient.getEmpList()).thenReturn(new EmpList());
-    empSchemaService = new EmpSchemaService(adminClient);
+    EmpSchemaService empSchemaService = new EmpSchemaService(adminClient);
 
     SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService);
     messageService.registerAsDatafeedListener();
 
-    ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);
+    ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration);
     channelService.registerAsDatafeedListener();
   }
 
@@ -146,7 +137,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     )));
 
     forwarderQueueConsumer.consume(notification, "1");
-    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
+    assertEquals(0, empClient.getChannels().size());
 //    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.");
   }
 

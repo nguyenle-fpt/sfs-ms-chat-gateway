@@ -18,11 +18,11 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
-import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
-import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
+import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
+import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
@@ -35,7 +35,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
@@ -67,6 +66,8 @@ public class ChannelService implements DatafeedListener {
   private final EmpSchemaService empSchemaService;
   private final SymphonyService symphonyService;
   private final ChannelRepository channelRepository;
+  private final AuthenticationService authenticationService;
+  private final BotConfiguration botConfiguration;
 
   @PostConstruct
   @VisibleForTesting
@@ -106,17 +107,19 @@ public class ChannelService implements DatafeedListener {
     String streamId = streamService.getIM(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), toSymphonyUser.getId().toString())
       .orElseThrow(CannotRetrieveStreamIdProblem::new);
 
-    Optional<String> channelId = Optional.empty();
+    Optional<String> channelId;
     try {
       channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
-    } catch(WebCallException wbe) {
-      if(wbe.getStatusCode() != HttpStatus.CONFLICT) {
+    } catch (WebCallException wbe) {
+      if (wbe.getStatusCode() != HttpStatus.CONFLICT) {
+        // We are in an iM, the connect bot is not a member
         symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
       }
       return streamId;
     }
 
     if (channelId.isEmpty()) {
+      // We are in an iM, the connect bot is not a member
       symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
     } else {
       ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
@@ -155,17 +158,19 @@ public class ChannelService implements DatafeedListener {
         // Check there are only 2 users
         if (toFederatedAccounts.size() == 1 && toSymphonyUsers.size() == 1 && toSymphonyUsers.get(0) == fromSymphonyUser) {
 
-          Optional<String> channelId = Optional.empty();
+          Optional<String> channelId;
           try {
             channelId = empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers);
-          } catch(WebCallException wbe) {
-            if(wbe.getStatusCode() != HttpStatus.CONFLICT) {
+          } catch (WebCallException wbe) {
+            if (wbe.getStatusCode() != HttpStatus.CONFLICT) {
+              // We are in an IM, the connect bot is not a member
               userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
             }
             return streamId;
           }
 
           if (channelId.isEmpty()) {
+            // We are in an IM, the connect bot is not a member
             userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
           } else {
             ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
@@ -176,6 +181,7 @@ public class ChannelService implements DatafeedListener {
             adminClient.createIMRoom(imCreatedNotification);
           }
         } else {
+          // We are in an IM, the connect bot is not a member
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
         }
       }
@@ -195,6 +201,8 @@ public class ChannelService implements DatafeedListener {
   @NewSpan
   public void refuseToJoinRoomOrMIM(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts, boolean isRoom) {
     try {
+      SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+
       for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
         List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
@@ -207,11 +215,11 @@ public class ChannelService implements DatafeedListener {
 
         // Remove all federated users
         if (isRoom) {
-          // Send message to alert it is impossible to add WhatsApp user into a room
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a chat room."));
+          // Send message to alert it is impossible to add EMP user into a room
+          symphonyMessageSender.sendAlertMessage(botSession, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a chat room.");
           userSessions.forEach(session -> symphonyService.removeMemberFromRoom(streamId, session));
         } else {
-          // Send message to alert it is impossible to add WhatsApp user into a MIM
+          // Send message to alert it is impossible to add EMP user into a MIM
           userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
         }
       }
@@ -235,12 +243,13 @@ public class ChannelService implements DatafeedListener {
         } else {
           // send error message
           try {
-            String createChannelErrorMessage = null;
-            if(canChatResponse.isPresent() && ( canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT || canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM) ) { // TODO ask for a better message
+            String createChannelErrorMessage;
+            if (canChatResponse.isPresent() && (canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT || canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM)) { // TODO ask for a better message
               createChannelErrorMessage = "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp()) + " users";
             } else {
               createChannelErrorMessage = "This message will not be delivered. You no longer have the entitlement for this.";
             }
+            // We are in a IM, the connect bot is not a member
             symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, createChannelErrorMessage);
           } catch (UnknownDatafeedUserException e) {
             throw new IllegalStateException();
@@ -274,15 +283,15 @@ public class ChannelService implements DatafeedListener {
       .collect(groupingBy(DeleteChannelRequest::getEntitlementType, mapping(Function.identity(), toList())));
     // a map to link each stream to the request related to it
     Map<Pair<String, String>, DeleteChannelRequest> streamID2request = deleteChannelRequests.stream()
-      .collect(toMap(r -> Pair.of(r.getStreamId(), r.getFederatedSymphonyId()), Function.identity(), (r1, r2) -> r1 ));
+      .collect(toMap(r -> Pair.of(r.getStreamId(), r.getFederatedSymphonyId()), Function.identity(), (r1, r2) -> r1));
 
 
     for (Map.Entry<String, List<DeleteChannelRequest>> currentEmp : channelsMap.entrySet()) {
       // call to EMP to delete streams
-      List<com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest> deleteChannelsRequest =  currentEmp.getValue().stream()
+      List<com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest> deleteChannelsRequest = currentEmp.getValue().stream()
         .map(d -> new com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest().streamId(d.getStreamId()).symphonyId(d.getFederatedSymphonyId()))
         .collect(toList());
-      Optional<DeleteChannelsResponse> result =  empClient.deleteChannels(deleteChannelsRequest, currentEmp.getKey());
+      Optional<DeleteChannelsResponse> result = empClient.deleteChannels(deleteChannelsRequest, currentEmp.getKey());
       // delete for all streams failed
       if (result.isEmpty()) {
         currentEmp.getValue().forEach(channel -> response.put(channel, BulkRemovalStatus.FAILURE));
@@ -301,10 +310,11 @@ public class ChannelService implements DatafeedListener {
       }
     }
 
-   // send msgs
+    // send msgs
     for (DeleteChannelRequest channel : channelsToNotify) {
       Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findBySymphonyId(channel.getFederatedSymphonyId());
       if (federatedAccount.isPresent()) {
+        // We are in an IM, the connect bot is not a member
         symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", null);
       }
     }

@@ -18,7 +18,6 @@ import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.chat.service.RoomService;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
-import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
@@ -94,6 +93,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected UsersInfoService usersInfoService;
   protected PodVersionChecker podVersionChecker;
   protected TenantDetailRepository tenantDetailRepository;
+  protected SymphonySession botSession;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
@@ -145,7 +145,6 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager, objectMapper);
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
 
-    SymphonyAuthFactory symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
 
     channelRepository = new ChannelRepository(db, dynamoConfiguration.getDynamoSchema());
@@ -157,7 +156,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, authenticationService, botConfiguration));
     empSchemaService = new EmpSchemaService(adminClient);
-    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository);
+    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration);
     channelService.registerAsDatafeedListener();
     usersInfoService = mock(UsersInfoService.class);
     roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient);
@@ -172,6 +171,9 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     podVersionChecker = mock(PodVersionChecker.class);
     when(podVersionChecker.retrievePodVersion(anyString())).thenReturn(new PodVersion("2.0.1"));
+
+    // bot session
+    botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
   }
 

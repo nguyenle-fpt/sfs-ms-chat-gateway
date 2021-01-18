@@ -29,6 +29,8 @@ paths:
     $ref: './paths/channels.yaml#/delete-channels'
   /api/v1/internal/messages:
     $ref: './paths/messaging.yaml#/messages'
+  /api/v1/internal/system-messages:
+    $ref: './paths/messaging.yaml#/system-messages'
   /api/v1/internal/emps/reload:
     $ref: './paths/emps.yaml#/internal-reload-emps'
   /api/v1/internal/rooms:
