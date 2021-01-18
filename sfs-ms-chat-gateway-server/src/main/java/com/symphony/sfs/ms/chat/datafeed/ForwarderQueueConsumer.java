@@ -120,7 +120,6 @@ public class ForwarderQueueConsumer {
     forwarderQueueMetrics.incomingMessages.increment();
     //LOG.debug("Message received | payloadType={} notification={}", payloadType, notification);
 
-    System.out.println(payloadType);
     switch (payloadType) {
       case SocialMessage.TYPE_ID:
         notifySocialMessage(envelope, receiveCount);

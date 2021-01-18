@@ -12,7 +12,6 @@ import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
-import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
 import com.symphony.sfs.ms.chat.generated.model.MessageSenderNotFoundProblem;
@@ -21,7 +20,6 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
-import com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -69,6 +67,7 @@ import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFro
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_CONTACT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_FEDERATED_ACCOUNT;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.TOO_MANY_MEMBERS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.UNSUPPORTED_MESSAGE_CONTENTS;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ADVISOR_NO_LONGER_AVAILABLE;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.FEDERATED_ACCOUNT_NOT_FOUND;
@@ -192,6 +191,14 @@ public class SymphonyMessageService implements DatafeedListener {
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
           userSessions.add(datafeedSessionPool.getSession(toFederatedAccount.getSymphonyUserId()));
         }
+
+        // CES-3203 Prevent messages to be sent in MIMs
+        if (!gatewaySocialMessage.isRoom() && gatewaySocialMessage.getToUserIds().size() > 1) {
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + empSchemaService.getEmpDisplayName(emp) + " contact in a MIM."));
+          messageMetrics.onMessageBlockFromSymphony(TOO_MANY_MEMBERS, streamId);
+          return;
+        }
+
         // not optimal, we call the canChat everytime here.
         Optional<CanChatResponse> canChat = adminClient.canChat(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), emp);
 
