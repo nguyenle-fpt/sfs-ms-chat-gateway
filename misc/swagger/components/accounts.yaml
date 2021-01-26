@@ -15,7 +15,7 @@ create-account-request:
       format: phone
     emailAddress:
       type: string
-      format: email
+      format: sfs-email
     firstName:
       type: string
     lastName:
@@ -41,7 +41,7 @@ update-account-request:
       format: phone
     emailAddress:
       type: string
-      format: email
+      format: sfs-email
     firstName:
       type: string
     lastName:
