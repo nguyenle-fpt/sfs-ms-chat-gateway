@@ -31,7 +31,7 @@ phases:
     commands:
       - echo Build started on `date`
       - echo $CODEBUILD_WEBHOOK_TRIGGER
-      - mvn -s settings.xml -f pom.xml clean package | tee build.log
+      - mvn -s settings.xml -f pom.xml clean package
       - echo "$(find . -name jacoco.xml) --src-roots $SUBMODULES_SRC_PATH" | xargs diff-cover | tee diffcover.log
       - COVERAGE=$(cat diffcover.log | grep "Coverage:" | sed 's/[^0-9]*//g')
       - $(if [ $COVERAGE -lt $COVERAGE_THRESHOLD ]; then exit 1; fi)
