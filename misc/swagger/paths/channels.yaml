@@ -31,7 +31,9 @@ channels:
         content:
           application/json:
             schema:
-              $ref: '../errors/accounts.yaml#/create-channel-failed'
+              oneOf:
+                - $ref: '../errors/accounts.yaml#/create-channel-failed'
+                - $ref: '../errors/connection-requests.yaml#/connection-request-creation-failed'
 
 retrieve-channel:
   get:

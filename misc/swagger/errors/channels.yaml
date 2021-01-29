@@ -11,6 +11,7 @@ unknown-federated-account:
     status:
       type: integer
       format: 400
+
 channel-not-found:
   type: object
   description: 'Channel not found'

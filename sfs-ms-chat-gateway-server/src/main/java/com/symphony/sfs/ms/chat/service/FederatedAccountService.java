@@ -13,6 +13,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.generated.model.ConnectionRequestCreationFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
@@ -185,7 +186,7 @@ public class FederatedAccountService implements DatafeedListener {
     //
     // Otherwise, the createIMChannel will be called when the ConnectionRequestStatus.ACCEPTED event is received from the forwarder queue
     LOG.info("sending connection request | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
-    if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElse(null) == ConnectionRequestStatus.ACCEPTED) {
+    if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElseThrow(ConnectionRequestCreationFailedProblem::new) == ConnectionRequestStatus.ACCEPTED) {
       LOG.info("Connection request already accepted | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
       return channelService.createIMChannel(session, existingAccount, getCustomerInfo(advisorSymphonyId, botSession));
     }
