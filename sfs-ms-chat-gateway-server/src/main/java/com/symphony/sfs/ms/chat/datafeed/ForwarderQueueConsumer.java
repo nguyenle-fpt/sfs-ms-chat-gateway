@@ -110,6 +110,9 @@ public class ForwarderQueueConsumer {
 
   @SqsListener(value = {"${aws.sqs.ingestion}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
   public void consume(String notification, @Header("ApproximateReceiveCount") String receiveCount) throws IOException {
+    // CES-1791
+    // Before we handle the incoming message, we clear the MDC for the current thread
+    MDC.clear();
 
     ISNSSQSWireObject sqsObject = SNSSQSWireObjectEntity.FACTORY.newInstance(JacksonAdaptor.adaptObject((ObjectNode) objectMapper.readTree(notification)).immutify(), modelRegistry);
     // String payloadType = sqsObject.getJsonObject().getObject("MessageAttributes").getObject("payloadType").get("Value").toString();
