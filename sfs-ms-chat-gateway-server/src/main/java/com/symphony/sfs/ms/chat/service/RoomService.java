@@ -6,7 +6,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateRoomFailedProblem;
-import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
+import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
@@ -14,23 +14,27 @@ import com.symphony.sfs.ms.chat.generated.model.RoomRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomResponse;
 import com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem;
-import com.symphony.sfs.ms.chat.mapper.RoomDtoMapper;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityMemberRequest;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityMemberResponse;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityRequest;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityResponse;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
-import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoom;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomAttributes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
+import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
@@ -38,11 +42,10 @@ import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import javax.validation.constraints.NotNull;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -103,6 +106,64 @@ public class RoomService implements DatafeedListener {
 
     return roomResponse;
 
+  }
+
+  public UpdateRoomActivityResponse updateRoomActivity(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest){
+
+    if(updateRoomActivityRequest.isSetActive()){
+      //Not permitted yet
+      throw new ReactivateRoomNotImplementedProblem();
+    }
+
+    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+    Map<String, List<DeleteChannelRequest>> channelsToDelete = updateRoomActivityRequest.getMembers().stream()
+      .filter(UpdateRoomActivityMemberRequest::isFederatedUser)
+      .collect(
+        Collectors.groupingBy(UpdateRoomActivityMemberRequest::getEmp, Collectors.mapping(r -> new DeleteChannelRequest().streamId(streamId).symphonyId(r.getSymphonyId()), Collectors.toList())));
+
+    List<UpdateRoomActivityMemberResponse> memberResponses = new ArrayList<>();
+    //Deactivate the room from Emp side
+    for(Map.Entry<String, List<DeleteChannelRequest>> deleteChannelsRequests : channelsToDelete.entrySet()) {
+      //TODO CES-3557
+      // Send System message to emp's users in the chat before deleting the channels
+      try {
+        Optional<DeleteChannelsResponse> deleteChannelResponse = empClient.deleteChannels(deleteChannelsRequests.getValue(), deleteChannelsRequests.getKey());
+        deleteChannelResponse.ifPresent(deleteChannelsResponse -> memberResponses.addAll(
+          deleteChannelsResponse.getReport().stream().map(d ->
+            new UpdateRoomActivityMemberResponse()
+              .emp(deleteChannelsRequests.getKey())
+              .symphonyId(d.getSymphonyId())
+              .federatedUser(true)
+              .status(d.getStatus())
+          ).collect(Collectors.toList()))
+        );
+      } catch (Exception ex) {
+        LOG.error("Fail deactivate Room in Emp| streamId={} emp={}", streamId, deleteChannelsRequests.getKey(), ex);
+        memberResponses.addAll(deleteChannelsRequests.getValue().stream().map(DeleteChannelRequest::getSymphonyId).map(symphonyId ->
+          new UpdateRoomActivityMemberResponse()
+            .emp(deleteChannelsRequests.getKey())
+            .symphonyId(symphonyId)
+            .federatedUser(true)
+            .status(BulkRemovalStatus.FAILURE)).collect(Collectors.toList())
+        );
+      }
+    }
+
+    //TODO CES-3557
+    // Send System messages to Room Advisors when reactivation will be planned
+    // This message is not needed for the moment cause the room content is not accessible anymore when the room is deactivated
+
+    //Deactivate the room from Symphony side
+    streamService.setRoomActive(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, false);
+
+    memberResponses.addAll(updateRoomActivityRequest.getMembers().stream().filter(r -> !r.isFederatedUser()).map(UpdateRoomActivityMemberRequest::getSymphonyId).map(symphonyId ->
+      new UpdateRoomActivityMemberResponse()
+        .symphonyId(symphonyId)
+        .federatedUser(false)
+        .status(BulkRemovalStatus.SUCCESS)).collect(Collectors.toList())
+    );
+
+    return new UpdateRoomActivityResponse().members(memberResponses);
   }
 
   public RoomMemberResponse addRoomMember(String streamId, RoomMemberRequest roomMemberRequest) {

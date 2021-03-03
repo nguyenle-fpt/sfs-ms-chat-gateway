@@ -26,5 +26,18 @@ add-room-member-failed:
       type: integer
       format: 500
 
+reactivate-room-not-implemented:
+  type: object
+  description: 'Reactivate Room Not Implemented'
+  properties:
+    type:
+      type: string
+      format: 'reactivate.room.not.implemented'
+    title:
+      type: string
+      format: 'Reactivate Room Not Implemented'
+    status:
+      type: integer
+      format: 501
 
 

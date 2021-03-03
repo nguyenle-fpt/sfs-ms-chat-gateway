@@ -1,16 +1,23 @@
 package com.symphony.sfs.ms.chat.api;
 
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
+import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomResponse;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityMemberRequest;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityMemberResponse;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityRequest;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityResponse;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
+import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
@@ -18,6 +25,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.SymphonyResponse;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoom;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomSystemInfo;
+import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import com.symphony.sfs.ms.starter.util.UserIdUtils;
 import model.UserInfo;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -34,6 +43,7 @@ import static com.symphony.sfs.ms.chat.generated.api.RoomApi.ADDROOMMEMBER_ENDPO
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.CREATEROOM_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.DELETEROOM_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.REMOVEMEMBER_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.RoomApi.UPDATEROOMACTIVITY_ENDPOINT;
 import static com.symphony.sfs.ms.chat.util.HttpRequestUtils.postRequestFail;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
@@ -135,6 +145,103 @@ class RoomApiTest extends AbstractIntegrationTest {
     assertEquals(ROOM_NAME, roomResponse.getRoomName());
 
   }
+
+  //////////////////////////
+  // update room Activity //
+  //////////////////////////
+
+  @Test
+  public void updateRoomActivity() {
+    createRoom_OK();
+
+    List<UpdateRoomActivityMemberRequest> members = Arrays.asList(
+      new UpdateRoomActivityMemberRequest().emp("EMP1").federatedUser(true).symphonyId(symphonyId("31", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp("EMP1").federatedUser(true).symphonyId(symphonyId("32", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp("EMP2").federatedUser(true).symphonyId(symphonyId("33", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp(null).federatedUser(false).symphonyId(symphonyId("11", CLIENT_POD_ID))
+    );
+    UpdateRoomActivityRequest updateRoomActivityRequest = new UpdateRoomActivityRequest().setActive(false).members(members);
+
+
+    when(empClient.deleteChannels(Arrays.asList(
+      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)),
+      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID))
+    ), "EMP1")).thenReturn(Optional.of(new DeleteChannelsResponse().report(Arrays.asList(
+        new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS),
+        new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID)).status(BulkRemovalStatus.NOT_FOUND)
+    ))));
+
+    when(empClient.deleteChannels(Collections.singletonList(
+      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID))
+    ), "EMP2")).thenReturn(Optional.of(new DeleteChannelsResponse().report(Collections.singletonList(
+      new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS)
+    ))));
+
+    UpdateRoomActivityResponse response = updateRoomActivity(ROOM_STREAM_ID, updateRoomActivityRequest);
+
+    UpdateRoomActivityResponse expectedResponse = new UpdateRoomActivityResponse().members(Arrays.asList(
+      new UpdateRoomActivityMemberResponse().emp("EMP1").federatedUser(true).symphonyId(symphonyId("31", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS),
+      new UpdateRoomActivityMemberResponse().emp("EMP1").federatedUser(true).symphonyId(symphonyId("32", CLIENT_POD_ID)).status(BulkRemovalStatus.NOT_FOUND),
+      new UpdateRoomActivityMemberResponse().emp("EMP2").federatedUser(true).symphonyId(symphonyId("33", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS),
+      new UpdateRoomActivityMemberResponse().emp(null).federatedUser(false).symphonyId(symphonyId("11", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS)
+      ));
+
+    assertEquals(expectedResponse, response);
+  }
+
+
+  @Test
+  public void updateRoomActivity_reactivateRoom() {
+    createRoom_OK();
+
+    List<UpdateRoomActivityMemberRequest> members = Arrays.asList(
+      new UpdateRoomActivityMemberRequest().emp("EMP1").federatedUser(true).symphonyId(symphonyId("31", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp("EMP1").federatedUser(true).symphonyId(symphonyId("32", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp("EMP2").federatedUser(true).symphonyId(symphonyId("33", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp(null).federatedUser(false).symphonyId(symphonyId("11", CLIENT_POD_ID))
+    );
+    UpdateRoomActivityRequest updateRoomActivityRequest = new UpdateRoomActivityRequest().setActive(true).members(members);
+
+    updateRoomActivityFail(ROOM_STREAM_ID, updateRoomActivityRequest, ReactivateRoomNotImplementedProblem.class.getName(), HttpStatus.NOT_IMPLEMENTED);
+
+  }
+
+  @Test
+  public void updateRoomActivity_empError() {
+    createRoom_OK();
+
+    List<UpdateRoomActivityMemberRequest> members = Arrays.asList(
+      new UpdateRoomActivityMemberRequest().emp("EMP1").federatedUser(true).symphonyId(symphonyId("31", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp("EMP1").federatedUser(true).symphonyId(symphonyId("32", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp("EMP2").federatedUser(true).symphonyId(symphonyId("33", CLIENT_POD_ID)),
+      new UpdateRoomActivityMemberRequest().emp(null).federatedUser(false).symphonyId(symphonyId("11", CLIENT_POD_ID))
+    );
+    UpdateRoomActivityRequest updateRoomActivityRequest = new UpdateRoomActivityRequest().setActive(false).members(members);
+
+
+    when(empClient.deleteChannels(Arrays.asList(
+      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)),
+      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID))
+    ), "EMP1")).thenThrow(RuntimeException.class);
+
+    when(empClient.deleteChannels(Collections.singletonList(
+      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID))
+    ), "EMP2")).thenReturn(Optional.of(new DeleteChannelsResponse().report(Collections.singletonList(
+      new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS)
+    ))));
+
+    UpdateRoomActivityResponse response = updateRoomActivity(ROOM_STREAM_ID, updateRoomActivityRequest);
+
+    UpdateRoomActivityResponse expectedResponse = new UpdateRoomActivityResponse().members(Arrays.asList(
+      new UpdateRoomActivityMemberResponse().emp("EMP1").federatedUser(true).symphonyId(symphonyId("31", CLIENT_POD_ID)).status(BulkRemovalStatus.FAILURE),
+      new UpdateRoomActivityMemberResponse().emp("EMP1").federatedUser(true).symphonyId(symphonyId("32", CLIENT_POD_ID)).status(BulkRemovalStatus.FAILURE),
+      new UpdateRoomActivityMemberResponse().emp("EMP2").federatedUser(true).symphonyId(symphonyId("33", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS),
+      new UpdateRoomActivityMemberResponse().emp(null).federatedUser(false).symphonyId(symphonyId("11", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS)
+    ));
+
+    assertEquals(expectedResponse, response);
+  }
+
 
   /////////////////////
   // add room member //
@@ -407,8 +514,24 @@ class RoomApiTest extends AbstractIntegrationTest {
       .as(RoomResponse.class);
   }
 
+  private UpdateRoomActivityResponse updateRoomActivity(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest) {
+    return configuredGiven(objectMapper, new ExceptionHandling(null), roomApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(updateRoomActivityRequest)
+      .when()
+      .post(UPDATEROOMACTIVITY_ENDPOINT, streamId)
+      .then()
+      .statusCode(HttpStatus.OK.value())
+      .extract().response().body()
+      .as(UpdateRoomActivityResponse.class);
+  }
+
   private void createRoomFail(RoomRequest roomRequest, String problemClassName, HttpStatus httpStatus) {
     postRequestFail(roomRequest, roomApi, CREATEROOM_ENDPOINT, objectMapper, tracer, problemClassName, httpStatus);
+  }
+
+  private void updateRoomActivityFail(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest, String problemClassName, HttpStatus httpStatus) {
+    postRequestFail(updateRoomActivityRequest, roomApi, UPDATEROOMACTIVITY_ENDPOINT, Collections.singletonList(streamId), objectMapper, tracer, problemClassName, httpStatus);
   }
 
   private RoomMemberResponse addRoomMember(String streamId, RoomMemberRequest roomMemberRequest) {

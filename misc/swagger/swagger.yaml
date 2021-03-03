@@ -35,6 +35,8 @@ paths:
     $ref: './paths/emps.yaml#/internal-reload-emps'
   /api/v1/internal/rooms:
     $ref: './paths/room.yaml#/rooms'
+  /api/v1/internal/rooms/{streamId}/setActive:
+    $ref: './paths/room.yaml#/room-set-activity'
   /api/v1/internal/rooms/{streamId}/members:
     $ref: './paths/room.yaml#/room-members'
   /api/v1/internal/rooms/{streamId}:

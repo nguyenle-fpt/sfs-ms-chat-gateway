@@ -6,6 +6,8 @@ import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomResponse;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityRequest;
+import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityResponse;
 import com.symphony.sfs.ms.chat.service.RoomService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,12 @@ public class RoomApi implements com.symphony.sfs.ms.chat.generated.api.RoomApi {
   public ResponseEntity<RoomResponse> createRoom(RoomRequest roomRequest) {
     LOG.info("Create Room | roomName={}", roomRequest.getRoomName());
     return ResponseEntity.ok(roomService.createRoom(roomRequest));
+  }
+
+  @Override
+  public ResponseEntity<UpdateRoomActivityResponse> updateRoomActivity(@NotBlank @NotNull String streamId, UpdateRoomActivityRequest updateRoomActivityRequest) {
+    LOG.info("Update Room Activity | streamId={} setActive={}", streamId, updateRoomActivityRequest.isSetActive());
+    return ResponseEntity.ok(roomService.updateRoomActivity(streamId, updateRoomActivityRequest));
   }
 
   @Override

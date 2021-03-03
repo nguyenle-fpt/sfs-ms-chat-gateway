@@ -31,6 +31,45 @@ rooms:
               oneOf:
                 - $ref: '../errors/room.yaml#/create-room-failed'
 
+room-set-activity:
+  post:
+    tags:
+      - Room
+    summary: (De)Activate a Room
+    operationId: updateRoomActivity
+    description: '=> (De)Activate a Room.'
+    security:
+      - sfsAuthentication: [ ]
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - in: path
+        name: streamId
+        schema:
+          type: string
+        required: true
+        description: StreamId
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/room.yaml#/update-room-activity-request'
+    responses:
+      '200':
+        description: Room Activity successfully updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/room.yaml#/update-room-activity-response'
+      '501':
+        description: Reactivation Not Implemented
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/room.yaml#/reactivate-room-not-implemented'
+
 room-members:
   post:
     tags:

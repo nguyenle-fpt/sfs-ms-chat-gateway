@@ -8,6 +8,32 @@ room-request:
       type: string
       maxLength: 50
 
+update-room-activity-member-request:
+  type: object
+  required:
+    - symphonyId
+    - isFederatedUser
+  properties:
+    symphonyId:
+      type: string
+      pattern: '^\d+$'
+    federatedUser:
+      type: boolean
+    emp:
+      type: string
+
+update-room-activity-request:
+  type: object
+  required:
+    - setActive
+  properties:
+    setActive:
+      type: boolean
+    members:
+      type: array
+      items:
+        $ref: '#/update-room-activity-member-request'
+
 room-member-remove-request:
   type: object
   required:
@@ -60,6 +86,30 @@ room-response:
       type: string
     streamId:
       type: string
+
+update-room-activity-member-response:
+  type: object
+  required:
+    - symphonyId
+    - isFederatedUser
+  properties:
+    symphonyId:
+      type: string
+      pattern: '^\d+$'
+    status:
+      $ref: './entities.yaml#/bulk-removal-status'
+    federatedUser:
+      type: boolean
+    emp:
+      type: string
+
+update-room-activity-response:
+  type: object
+  properties:
+    members:
+      type: array
+      items:
+        $ref: '#/update-room-activity-member-response'
 
 rooms-response:
   type: object
