@@ -56,12 +56,11 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
 
   @Override
   @ContinueSpan
-  public ResponseEntity<UpdateAccountResponse> updateFederatedAccount(String federatedUserId, String emp, UpdateAccountRequest body) {
+  public ResponseEntity<UpdateAccountResponse> updateFederatedAccount(String federatedUserId, UpdateAccountRequest body) {
     MDC.put("federatedUserId", federatedUserId);
-    MDC.put("emp", emp);
     LOG.info("update account ");
     LOG.debug("update account | firstName={}, lastName={}, companyName={}", body.getFirstName(), body.getLastName(), body.getCompanyName());
-    FederatedAccount federatedAccount = federatedAccountService.updateAccount(emp, federatedUserId, body.getFirstName(), body.getLastName(), body.getCompanyName());
+    FederatedAccount federatedAccount = federatedAccountService.updateAccount(federatedUserId, body.getFirstName(), body.getLastName(), body.getCompanyName());
     return ResponseEntity.ok(UpdateAccountResponseDtoMapper.MAPPER.federatedAccountToUpdateAccountResponse(federatedAccount));
   }
 }

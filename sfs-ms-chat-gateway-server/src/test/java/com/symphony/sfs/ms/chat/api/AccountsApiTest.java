@@ -534,7 +534,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(updateAccountRequest)
       .when()
-      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp())
+      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId())
       .then()
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
@@ -563,6 +563,154 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
+    assertEquals(expectedAccount, actualAccount);
+  }
+
+  @Test
+  public void createMuliEmpAccount_ThenUpdate() throws IOException {
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
+    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
+    DatafeedSession accountSession2 = new DatafeedSession(getSession("username2"), "2");
+
+    EmpEntity empEntity = new EmpEntity()
+      .name("WHATSAPP")
+      .serviceAccountSuffix("WHATSAPP");
+    EmpEntity empEntity2 = new EmpEntity()
+      .name("SMS")
+      .serviceAccountSuffix("SMS");
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
+    when(empSchemaService.getEmpDefinition("SMS")).thenReturn(Optional.of(empEntity2));
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession2.getUsername()), anyString())).thenReturn(accountSession2);
+
+    SymphonyUser symphonyUser = new SymphonyUser();
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
+    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
+    SymphonyUser symphonyUser2 = new SymphonyUser();
+    symphonyUser2.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession2.getUserIdAsLong()).build());
+    symphonyUser2.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession2.getUsername()).build());
+
+    mockServer.expect()
+      .post()
+      .withPath(ADMINCREATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    mockServer.expect()
+      .post()
+      .withPath(ADMINCREATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser2)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    mockServer.expect()
+      .get()
+      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
+      .andReturn(HttpStatus.NOT_FOUND.value(), null)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
+    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
+    mockServer.expect()
+      .post()
+      .withPath(SENDCONNECTIONREQUEST)
+      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    mockServer.expect()
+      .post()
+      .withPath(GETIM)
+      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+    mockServer.expect()
+      .post()
+      .withPath(GETIM)
+      .andReturn(HttpStatus.OK.value(), new StringId("streamId2"))
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
+    CreateAccountRequest createAccountRequest2 = createDefaultAccountRequest().emp(empEntity2.getName());
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createAccountRequest)
+      .when()
+      .post(CREATEACCOUNT_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value());
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createAccountRequest2)
+      .when()
+      .post(CREATEACCOUNT_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value());
+    mockServer.expect()
+      .post()
+      .withPath(ADMINUPDATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+    mockServer.expect()
+      .post()
+      .withPath(ADMINUPDATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser2)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    UpdateAccountRequest updateAccountRequest = new UpdateAccountRequest()
+      .emailAddress(createAccountRequest.getEmailAddress())
+      .phoneNumber(createAccountRequest.getPhoneNumber())
+      .firstName("firstName2")
+      .lastName("lastName2")
+      .companyName("companyName2");
+
+    UpdateAccountResponse updateAccountResponse = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(updateAccountRequest)
+      .when()
+      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId())
+      .then()
+      .statusCode(HttpStatus.OK.value())
+      .extract().response().body()
+      .as(UpdateAccountResponse.class);
+
+
+    UpdateAccountResponse expectedUpdateAccountResponse = new UpdateAccountResponse()
+      .firstName(updateAccountRequest.getFirstName())
+      .lastName(updateAccountRequest.getLastName())
+      .companyName(updateAccountRequest.getCompanyName())
+      .emailAddress(createAccountRequest.getEmailAddress())
+      .phoneNumber(createAccountRequest.getPhoneNumber());
+    assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
+
+    verify(empClient).updateAccountOrFail(empEntity.getName(), accountSession.getUserId(), createAccountRequest.getEmailAddress(), createAccountRequest.getPhoneNumber(), updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
+    verify(empClient).updateAccountOrFail(empEntity2.getName(), accountSession.getUserId(), createAccountRequest.getEmailAddress(), createAccountRequest.getPhoneNumber(), updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
+
+    FederatedAccount expectedAccount = FederatedAccount.builder()
+      .emailAddress(createAccountRequest.getEmailAddress())
+      .phoneNumber(createAccountRequest.getPhoneNumber())
+      .firstName(updateAccountRequest.getFirstName())
+      .lastName(updateAccountRequest.getLastName())
+      .companyName(updateAccountRequest.getCompanyName())
+      .federatedUserId(createAccountRequest.getFederatedUserId())
+      .emp(createAccountRequest.getEmp())
+      .symphonyUserId(accountSession.getUserId())
+      .symphonyUsername(accountSession.getUsername())
+      .kmToken(accountSession.getKmToken())
+      .sessionToken(accountSession.getSessionToken())
+      .build();
+
+    FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
+    assertEquals(expectedAccount, actualAccount);
+
+    actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest2.getFederatedUserId(), createAccountRequest2.getEmp()).get();
+    expectedAccount.setEmp(createAccountRequest2.getEmp());
     assertEquals(expectedAccount, actualAccount);
   }
 

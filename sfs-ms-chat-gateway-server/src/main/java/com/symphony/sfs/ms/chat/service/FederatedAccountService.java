@@ -148,29 +148,41 @@ public class FederatedAccountService implements DatafeedListener {
   }
 
   @NewSpan
-  public FederatedAccount updateAccount(String emp, String federatedUserId, String firstName, String lastName, String companyName) {
-    FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
-      .orElseThrow(FederatedAccountNotFoundProblem::new);
+  public FederatedAccount updateAccount(String federatedUserId, String firstName, String lastName, String companyName) {
+    List<FederatedAccount> existingAccounts = federatedAccountRepository.findByFederatedUserId(federatedUserId);
+    if (existingAccounts.size() == 0) {
+      throw new FederatedAccountNotFoundProblem();
+    }
+
+    for(FederatedAccount federatedAccount : existingAccounts) {
+      updateAccount(federatedAccount, firstName, lastName, companyName);
+    }
+
+    return existingAccounts.get(0);
+  }
+
+  private void updateAccount(FederatedAccount federatedAccount, String firstName, String lastName, String companyName) {
 
     if (StringUtils.isNotBlank(firstName)) {
-      existingAccount.setFirstName(firstName);
+      federatedAccount.setFirstName(firstName);
     }
     if (StringUtils.isNotBlank(lastName)) {
-      existingAccount.setLastName(lastName);
+      federatedAccount.setLastName(lastName);
     }
     if (StringUtils.isNotBlank(companyName)) {
-      existingAccount.setCompanyName(companyName);
+      federatedAccount.setCompanyName(companyName);
     }
 
     // Check EMP against admin
-    String userDisplayName = displayName(existingAccount.getFirstName(), existingAccount.getLastName(), emp);
+    String userDisplayName = displayName(federatedAccount.getFirstName(), federatedAccount.getLastName(), federatedAccount.getEmp());
     SymphonyUserAttributes attributes = SymphonyUserAttributes.builder().displayName(userDisplayName).build();
 
     // All checks OK, update
-    empClient.updateAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), existingAccount.getPhoneNumber(), firstName, lastName, companyName);
-    adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), attributes);
+    empClient.updateAccountOrFail(federatedAccount.getEmp(), federatedAccount.getSymphonyUserId(), federatedAccount.getEmailAddress(), federatedAccount.getPhoneNumber(), firstName, lastName, companyName);
+    adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), federatedAccount.getSymphonyUserId(), attributes);
 
-    return federatedAccountRepository.save(existingAccount);
+
+    federatedAccountRepository.save(federatedAccount);
   }
 
   @NewSpan

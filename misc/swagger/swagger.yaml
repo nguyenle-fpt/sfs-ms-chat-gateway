@@ -19,7 +19,7 @@ paths:
     $ref: './paths/accounts.yaml#/accounts'
   /api/v1/internal/accounts/{federatedUserId}/emp/{emp}/deleteEMPAccount/{deleteEMPAccount}:
     $ref: './paths/accounts.yaml#/delete-account'
-  /api/v1/internal/accounts/{federatedUserId}/emp/{emp}:
+  /api/v1/internal/accounts/{federatedUserId}:
     $ref: './paths/accounts.yaml#/modify-account'
   /api/v1/internal/channels:
     $ref: './paths/channels.yaml#/channels'

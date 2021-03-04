@@ -59,12 +59,6 @@ modify-account:
           type: string
         required: true
         description: The federated user id
-      - in: path
-        name: emp
-        schema:
-          type: string
-        required: true
-        description: The EMP to send the update to
     requestBody:
       content:
         application/json:
