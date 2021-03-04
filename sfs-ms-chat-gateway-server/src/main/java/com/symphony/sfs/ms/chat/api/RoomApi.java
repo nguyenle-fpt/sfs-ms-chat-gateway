@@ -11,13 +11,8 @@ import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityResponse;
 import com.symphony.sfs.ms.chat.service.RoomService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.log4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-
-import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
 
 @Slf4j
 @RestController
@@ -33,7 +28,7 @@ public class RoomApi implements com.symphony.sfs.ms.chat.generated.api.RoomApi {
   }
 
   @Override
-  public ResponseEntity<UpdateRoomActivityResponse> updateRoomActivity(@NotBlank @NotNull String streamId, UpdateRoomActivityRequest updateRoomActivityRequest) {
+  public ResponseEntity<UpdateRoomActivityResponse> updateRoomActivity(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest) {
     LOG.info("Update Room Activity | streamId={} setActive={}", streamId, updateRoomActivityRequest.isSetActive());
     return ResponseEntity.ok(roomService.updateRoomActivity(streamId, updateRoomActivityRequest));
   }
@@ -45,13 +40,13 @@ public class RoomApi implements com.symphony.sfs.ms.chat.generated.api.RoomApi {
   }
 
   @Override
-  public ResponseEntity<Void> removeMember(@NotBlank @NotNull String streamId, @Valid RoomMemberRemoveRequest body) {
+  public ResponseEntity<Void> removeMember(String streamId, RoomMemberRemoveRequest body) {
     roomService.removeMember(streamId, body.getSymphonyId(), body.getEmp(), body.isFederatedUser(), body.isRemoveChannel());
     return ResponseEntity.ok().build();
   }
 
   @Override
-  public ResponseEntity<Void> deleteRoom(@NotBlank @NotNull String streamId, @Valid RoomRemoveRequest body) {
+  public ResponseEntity<Void> deleteRoom(String streamId, RoomRemoveRequest body) {
     roomService.deleteRoom(streamId, body);
     return ResponseEntity.ok().build();
   }
