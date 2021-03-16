@@ -66,6 +66,7 @@ room-member-request:
     - clientPodId
     - symphonyId
     - isFederatedUser
+    - roomName
   properties:
     clientPodId:
       type: string
@@ -76,6 +77,8 @@ room-member-request:
     federatedUser:
       type: boolean
     advisorSymphonyId:
+      type: string
+    roomName:
       type: string
 
 #Responses

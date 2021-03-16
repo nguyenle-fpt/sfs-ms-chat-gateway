@@ -253,7 +253,7 @@ class RoomApiTest extends AbstractIntegrationTest {
     String podUrl = podConfiguration.getUrl();
     doReturn(Optional.empty()).when(streamService).addRoomMember(eq(podUrl), any(SessionSupplier.class), anyString(), anyString());
 
-    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("21", CLIENT_POD_ID)).federatedUser(false);
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("21", CLIENT_POD_ID)).federatedUser(false).roomName(ROOM_NAME);
     addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR);
 
   }
@@ -267,7 +267,7 @@ class RoomApiTest extends AbstractIntegrationTest {
     SymphonyResponse symphonyResponse = SymphonyResponse.builder().format("TEXT").message("Member added").build();
     doReturn(Optional.of(symphonyResponse)).when(streamService).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
 
-    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true);
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME);
     addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem.class.getName(), HttpStatus.BAD_REQUEST);
 
   }
@@ -297,7 +297,7 @@ class RoomApiTest extends AbstractIntegrationTest {
       .emailAddress(emailAddress("11"))
       .phoneNumber((phoneNumber("11")))
       .build());
-    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true);
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME);
     RoomMemberResponse roomMemberResponse = addRoomMember(ROOM_STREAM_ID, roomMemberRequest);
 
 
@@ -340,7 +340,7 @@ class RoomApiTest extends AbstractIntegrationTest {
 
     MockEmpClient mockEmpClient = (MockEmpClient) empClient;
     mockEmpClient.getFederatedUserFailing().add(federatedAccount.getFederatedUserId());
-    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true);
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME);
     addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR);
 
 
