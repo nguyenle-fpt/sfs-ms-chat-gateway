@@ -73,10 +73,6 @@ def setEnvironment() {
           sendUnitTestStatus(cicdUtils)
         }
 
-        stage('Coverage Analysis') {
-          coverageAnalysis()
-        }
-
         // allow skip this stage if commit text contains 'skip-diff-coverage'
         commit = sh(returnStdout: true, script: 'git log -1 --oneline').trim()
         if (!commit.contains('skip-diff-coverage')) {
@@ -137,31 +133,6 @@ def sendUnitTestStatus(SymphonyCICDUtils cicdUtils) {
     } else {
         cicdUtils.addStatusToPullRequest(CICDConstants.UNIT_TESTS_STATUS_NAME, CICDConstants.GH_STATUS_FAILURE, testResultMessage, reportUrl)
     }
-}
-
-def coverageAnalysis() {
-    echo "[coverage-analysis]"
-    sh "pip install --force-reinstall pycobertura==0.10.5"
-    def coberturaFiles = "find . -name cobertura.xml | xargs -I '{}' bash -c 'echo -n {} | grep -oE \"sfs-ms-[a-z-]*\" '"
-    def coveragePercentages = "find . -name cobertura.xml | xargs -I '{}' bash -c 'pycobertura show {} | grep TOTAL | grep -oE '[0-9]*.[0-9]*%' '"
-
-    def coverOutput
-    try {
-        GitHubUtils ghUtils = new GitHubUtils()
-        coberturaFilesOutput = sh( script: coberturaFiles, returnStdout: true)
-        coveragePercentagesOutput = sh( script: coveragePercentages, returnStdout: true)
-        coberturaFilesOutputAsLines = coberturaFilesOutput.tokenize("\n")
-        coveragePercentagesOutputAsLines = coveragePercentagesOutput.tokenize("\n")
-        coverOutput = "Code Coverage: pycobertura report \n"
-
-        for (int i = coberturaFilesOutputAsLines.size()-1; i >= 0; i--) {
-            coverOutput = coverOutput + coberturaFilesOutputAsLines[i] + ' : ' + coveragePercentagesOutputAsLines[i] + "\n"
-        }
-        ghUtils.sendCommentOnPR("${coverOutput}", env.CHANGE_ID)
-
-        } catch(error) {
-            coverOutput = CICDConstants.FAILURE
-        }
 }
 
 def checkoutDependencyRepo(org, repo, branch) {
