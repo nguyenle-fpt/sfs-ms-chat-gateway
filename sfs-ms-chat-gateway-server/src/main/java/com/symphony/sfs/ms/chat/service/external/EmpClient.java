@@ -100,5 +100,5 @@ public interface EmpClient {
    * @param empRoomMemberRequest
    * @return
    */
-  Optional<RoomMemberResponse> addRoomMember(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest);
+  Optional<RoomMemberResponse> addRoomMemberOrFail(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest);
 }

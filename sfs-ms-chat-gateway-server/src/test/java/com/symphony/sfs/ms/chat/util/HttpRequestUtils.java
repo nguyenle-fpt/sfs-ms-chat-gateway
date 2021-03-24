@@ -30,6 +30,11 @@ public final class HttpRequestUtils {
 
   public static <R, A> void postRequestFail(R request, A api, String endPoint, List<Object> pathParams, ObjectMapper objectMapper, Tracer tracer, String problemClassName, HttpStatus httpStatus) {
 
+    postRequestFail(request, api, endPoint, pathParams, objectMapper, tracer, problemClassName, httpStatus, null);
+  }
+
+  public static <R, A> void postRequestFail(R request, A api, String endPoint, List<Object> pathParams, ObjectMapper objectMapper, Tracer tracer, String problemClassName, HttpStatus httpStatus, String problemDetail) {
+
     Problem actualProblem = configuredGiven(objectMapper, new ExceptionHandling(tracer), api)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(request)
@@ -41,7 +46,7 @@ public final class HttpRequestUtils {
       .as(DefaultProblem.class);
 
     try {
-      Problem expectedProblem = (Problem) Class.forName(problemClassName).getDeclaredConstructor().newInstance();
+      Problem expectedProblem = (Problem) Class.forName(problemClassName).getDeclaredConstructor(String.class).newInstance(problemDetail);
       TestUtils.testProblemEquality(expectedProblem, actualProblem);
 
     } catch (Exception e) {

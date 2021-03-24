@@ -101,7 +101,7 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<RoomMemberResponse> addRoomMember(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest) {
+  public Optional<RoomMemberResponse> addRoomMemberOrFail(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest) {
     if(federatedUserFailing.contains(empRoomMemberRequest.getFederatedUserId())) {
       return Optional.empty();
     }

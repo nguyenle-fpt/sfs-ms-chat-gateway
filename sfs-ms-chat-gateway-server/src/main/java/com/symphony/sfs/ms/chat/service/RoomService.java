@@ -5,6 +5,7 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.ConnectionRequestCreationFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateRoomFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
@@ -35,19 +36,26 @@ import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoom;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomAttributes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
+import com.symphony.sfs.ms.starter.webclient.WebCallException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
+import org.zalando.problem.Problem;
 
 import javax.annotation.PostConstruct;
+import java.lang.reflect.InvocationTargetException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static com.symphony.sfs.ms.starter.util.ProblemUtils.getProblemDetail;
 
 @Service
 @RequiredArgsConstructor
@@ -193,11 +201,19 @@ public class RoomService implements DatafeedListener {
       UserInfo advisorInfo = getUserInfo(roomMemberRequest.getAdvisorSymphonyId(), botSession);
       com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
       // TODO If EMP error maybe indicate that the user has been added on Symphony side but not EMP side?
-      Optional<com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse> response = empClient.addRoomMember(streamId, federatedAccount.getEmp(), empRoomMemberRequest);
-      if (response.isEmpty()) { // rollback if there is an error
-        LOG.error("error creating channel in add room member | federatedSymphonyId={} streamId={}", federatedAccount.getSymphonyUserId(), streamId);
+      try {
+        empClient.addRoomMemberOrFail(streamId, federatedAccount.getEmp(), empRoomMemberRequest);
+      } catch (WebCallException wce) {
+        String problemDetail = getProblemDetail(wce);
+
+        // rollback if there is an error
+        LOG.error("error creating channel in add room member | federatedSymphonyId={} streamId={} problem={}", federatedAccount.getSymphonyUserId(), streamId, problemDetail);
         streamService.removeRoomMember(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId, roomMemberRequest.getSymphonyId());
-        throw new AddRoomMemberFailedProblem();
+        // CES-3756 - set detail of new AddRoomMemberFailedProblem with the detail provided in the in the raised exception
+        // Example:
+        // If there is BusinessApi available, then sfs-ms-whatapp throws NoBusinessApiAvailableProblem with no detail
+        // problemDetail which is set in AddRoomMembverFailedProblem is the NoBusinessApiAvailableProblem.problemType = https://symphony.com/problems/no.business.api.available
+        throw new AddRoomMemberFailedProblem(problemDetail);
       }
     }
 

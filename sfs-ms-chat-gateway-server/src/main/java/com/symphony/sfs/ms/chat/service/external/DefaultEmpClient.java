@@ -117,12 +117,12 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<RoomMemberResponse> addRoomMember(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest) {
+  public Optional<RoomMemberResponse> addRoomMemberOrFail(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     client.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
 
-    return client.getRoomApi().addRoomMember(streamId, empRoomMemberRequest);
+    return client.getRoomApi().addRoomMemberOrFail(streamId, empRoomMemberRequest);
   }
 
   private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {

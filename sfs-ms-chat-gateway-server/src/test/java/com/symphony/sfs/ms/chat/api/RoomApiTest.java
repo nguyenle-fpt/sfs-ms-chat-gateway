@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.api;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
@@ -27,12 +28,21 @@ import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyRoomSystemInfo;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import com.symphony.sfs.ms.starter.util.UserIdUtils;
+import com.symphony.sfs.ms.starter.webclient.WebCallException;
 import model.UserInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.lang.Nullable;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.zalando.problem.Problem;
+import org.zalando.problem.ProblemBuilder;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -47,6 +57,7 @@ import static com.symphony.sfs.ms.chat.generated.api.RoomApi.UPDATEROOMACTIVITY_
 import static com.symphony.sfs.ms.chat.util.HttpRequestUtils.postRequestFail;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
+import static com.symphony.sfs.ms.starter.testing.MockitoUtils.twice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -309,12 +320,12 @@ class RoomApiTest extends AbstractIntegrationTest {
     assertEquals(emailAddress("11"), roomMemberResponse.getEmailAddress());
 
     com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
-    verify(empClient, once()).addRoomMember(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
+    verify(empClient, once()).addRoomMemberOrFail(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
     verify(streamService, never()).removeRoomMember(any(), any(), any(), any());
   }
 
   @Test
-  public void addRoomMember_ErrorCreatingChannel() {
+  public void addRoomMember_ErrorCreatingChannel() throws JsonProcessingException, URISyntaxException {
 
     createRoom_OK();
 
@@ -340,16 +351,33 @@ class RoomApiTest extends AbstractIntegrationTest {
 
     MockEmpClient mockEmpClient = (MockEmpClient) empClient;
     mockEmpClient.getFederatedUserFailing().add(federatedAccount.getFederatedUserId());
+
+
     RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME);
-    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR);
 
-
+    WebClientResponseException wcreWithDetail = WebClientResponseException.create(HttpStatus.INTERNAL_SERVER_ERROR.value(), "statusText", null,
+      objectMapper.writeValueAsString(Problem.builder().withType(new URI("http://my.problem.type")).withDetail("detail").build()).getBytes(Charset.defaultCharset()), Charset.defaultCharset());
+    WebClientResponseException wcreWithoutDetail = WebClientResponseException.create(HttpStatus.INTERNAL_SERVER_ERROR.value(), "statusText", null,
+      objectMapper.writeValueAsString(Problem.builder().withType(new URI("http://my.problem.type")).build()).getBytes(Charset.defaultCharset()), Charset.defaultCharset());
 
     com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
-    verify(empClient, once()).addRoomMember(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
+    when(empClient.addRoomMemberOrFail(ROOM_STREAM_ID, emp("11"), empRoomMemberRequest))
+      .thenThrow(new WebCallException(objectMapper, wcreWithDetail))
+      .thenThrow(new WebCallException(objectMapper, wcreWithoutDetail));
+
+    // Check that Problem is built with detail from underlying problem if available
+    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR, "detail");
+    verify(empClient, once()).addRoomMemberOrFail(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
     verify(streamService, once()).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
     verify(streamService, once()).removeRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
 
+
+    // Check that Problem is built with problem type of underlying exception if available
+    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR, "http://my.problem.type");
+
+    verify(empClient, twice()).addRoomMemberOrFail(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
+    verify(streamService, twice()).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
+    verify(streamService, twice()).removeRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
   }
 
   @Test
@@ -548,7 +576,11 @@ class RoomApiTest extends AbstractIntegrationTest {
   }
 
   private void addRoomMemberFail(String streamId, RoomMemberRequest roomRequest, String problemClassName, HttpStatus httpStatus) {
-    postRequestFail(roomRequest, roomApi, ADDROOMMEMBER_ENDPOINT, Collections.singletonList(streamId), objectMapper, tracer, problemClassName, httpStatus);
+    addRoomMemberFail(streamId, roomRequest, problemClassName, httpStatus, null);
+  }
+
+  private void addRoomMemberFail(String streamId, RoomMemberRequest roomRequest, String problemClassName, HttpStatus httpStatus, String problemDetail) {
+    postRequestFail(roomRequest, roomApi, ADDROOMMEMBER_ENDPOINT, Collections.singletonList(streamId), objectMapper, tracer, problemClassName, httpStatus, problemDetail);
   }
 
   private static String phoneNumber(String suffix) {
