@@ -163,13 +163,23 @@ class SymphonyMessageServiceTest {
         // arguments(<templateName>, <detemplatizedMessage>, <Method to send message as a TriConsumer>)
         arguments(SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE, "simpleDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendSimpleMessage(session, streamId, text)),
         arguments(SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE, "infoDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendInfoMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE, "alertDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendAlertMessage(session, streamId, text)),
         arguments(SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE, "notificationDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendNotificationMessage(session, streamId, text))
       );
     }
 
   }
 
+  @Test
+  void sendAlertMessage() {
+    when(templateProcessor.process("templatizedText", "title", SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE)).thenReturn("alertDetemplatizedText");
+
+    symphonyMessageSender.sendAlertMessage(userSession, "streamId", "templatizedText", "title");
+
+    InOrder orderVerifier = inOrder(symphonyMessageSender, templateProcessor);
+    orderVerifier.verify(templateProcessor, once()).process("templatizedText", "title", SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE);
+    orderVerifier.verify(symphonyMessageSender, once()).sendRawMessage(userSession, "streamId", "alertDetemplatizedText");
+
+  }
 
   @Test
   void sendRawMessage_FromSymphonyUserNotFound() {

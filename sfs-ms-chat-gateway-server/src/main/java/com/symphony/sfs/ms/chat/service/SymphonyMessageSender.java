@@ -104,8 +104,12 @@ public class SymphonyMessageSender {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
+  public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent, String title) {
+    return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, title, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
+  }
+
   public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent) {
-    return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
+    return sendAlertMessage(userSession, streamId, messageContent, null);
   }
 
   public Optional<String> sendAlertMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {

@@ -27,6 +27,10 @@ public class SymphonySystemMessageTemplateProcessor {
     return process(SymphonySystemMessage.builder().content(messageContent).build(), templateName);
   }
 
+  public String process(String messageContent, String title, String templateName) {
+    return process(SymphonySystemMessage.builder().content(messageContent).title(title).build(), templateName);
+  }
+
   /**
    * @param symphonySystemMessage
    * @param templateName          basename of a file located in resources/templates folder

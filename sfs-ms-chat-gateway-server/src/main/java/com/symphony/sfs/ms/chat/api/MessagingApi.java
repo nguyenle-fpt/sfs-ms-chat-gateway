@@ -31,7 +31,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @Override
   public ResponseEntity<SendMessageResponse> sendSystemMessage(SendSystemMessageRequest request) {
     LOG.info("Send system message | streamId={}", request.getStreamId());
-    String symphonyMessageId = symphonyMessageService.sendSystemMessage(request.getStreamId(), request.getFormatting(), request.getText(), request.getFromSymphonyUserId());
+    String symphonyMessageId = symphonyMessageService.sendSystemMessage(request.getStreamId(), request.getFormatting(), request.getText(), request.getTitle(), request.getFromSymphonyUserId());
     return ResponseEntity.ok(new SendMessageResponse().id(symphonyMessageId));
   }
 

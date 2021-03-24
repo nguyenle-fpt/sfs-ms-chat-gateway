@@ -33,6 +33,8 @@ send-system-message-request:
       type: string
     text:
       type: string
+    title:
+      type: string
     formatting:
       $ref: '#/formatting-enum'
 

@@ -382,7 +382,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-  public String sendSystemMessage(String streamId, FormattingEnum formatting, String text, String fromSymphonyUserId) {
+  public String sendSystemMessage(String streamId, FormattingEnum formatting, String text, String title, String fromSymphonyUserId) {
     boolean isRoom = getStreamInfo(streamId).getStreamType().getType() == StreamTypes.ROOM;
 
     try {
@@ -409,7 +409,7 @@ public class SymphonyMessageService implements DatafeedListener {
           symphonyMessageId = symphonyMessageSender.sendInfoMessage(session, streamId, text);
           break;
         case ALERT:
-          symphonyMessageId = symphonyMessageSender.sendAlertMessage(session, streamId, text);
+          symphonyMessageId = symphonyMessageSender.sendAlertMessage(session, streamId, text, title);
           break;
         default:
           throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));
