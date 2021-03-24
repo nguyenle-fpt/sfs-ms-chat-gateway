@@ -77,6 +77,7 @@ def setEnvironment() {
         commit = sh(returnStdout: true, script: 'git log -1 --oneline').trim()
         if (!commit.contains('skip-diff-coverage')) {
           stage('Diff Coverage Analysis') {
+            gitCheckout() // make sure we use sfs-ms-chat-gateway repo for diffCover
             diffCover(env.CHANGE_TARGET)
           }
         }
