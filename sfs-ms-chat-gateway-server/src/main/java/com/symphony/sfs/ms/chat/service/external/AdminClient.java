@@ -4,6 +4,7 @@ import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
+import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
 import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
 
 import java.util.List;
@@ -18,6 +19,8 @@ public interface AdminClient {
   Optional<CanChatResponse> canChat(String advisorSymphonyId, String federatedUserId, String entitlementType);
 
   Optional<RoomResponse> createIMRoom(ImCreatedNotification imRequest);
+
+  Optional<RoomMembersIdentifiersResponse> getRoomMembersIdentifiers(String streamId);
 
   void notifyLeaveRoom(String streamId, String requester, List<String> leavers);
 }

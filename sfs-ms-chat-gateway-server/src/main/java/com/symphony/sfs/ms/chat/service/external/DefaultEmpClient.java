@@ -8,9 +8,9 @@ import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
 import com.symphony.sfs.ms.emp.EmpMicroserviceClient;
 import com.symphony.sfs.ms.emp.generated.model.AsyncResult;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.CreateChannelRequest;
-import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsRequest;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
@@ -19,6 +19,7 @@ import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageResponse;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageToChannelsRequest;
 import com.symphony.sfs.ms.emp.generated.model.UpdateUserRequest;
 import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;
 import lombok.RequiredArgsConstructor;
@@ -90,6 +91,19 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
+  public void sendSystemMessageToChannels(String emp, List<ChannelIdentifier> channels, String message, boolean shouldBeResent) {
+    EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
+
+    SendSystemMessageToChannelsRequest request = new SendSystemMessageToChannelsRequest()
+      .channels(channels)
+      .text(message)
+      .shouldBeResent(shouldBeResent);
+
+    client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    client.getMessagingApi().sendSystemMessageToChannels(request);
+  }
+
+  @Override
   public void deleteAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
@@ -110,7 +124,7 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> deleteChannelRequests, String emp) {
+  public Optional<DeleteChannelsResponse> deleteChannels(List<ChannelIdentifier> deleteChannelRequests, String emp) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return client.getChannelApi().deleteChannelsOrFail(new DeleteChannelsRequest().channels(deleteChannelRequests));

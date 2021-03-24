@@ -163,3 +163,29 @@ room:
         application/json:
           schema:
             $ref: '../components/room.yaml#/room-remove-request'
+
+send-room-members-list:
+  post:
+    tags:
+      - Room
+    summary: Send Room Members List to EMP user
+    operationId: sendRoomMembersListToEmpUser
+    description: '=> Send Room Members List to EMP user.'
+    security:
+      - sfsAuthentication: [ ]
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - in: path
+        name: streamId
+        schema:
+          type: string
+        required: true
+        description: StreamId
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/room.yaml#/send-room-members-request'

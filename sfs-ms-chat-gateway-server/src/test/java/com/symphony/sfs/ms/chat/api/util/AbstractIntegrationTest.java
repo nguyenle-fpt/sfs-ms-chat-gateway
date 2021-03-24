@@ -130,7 +130,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     // emp client
     empClient = spy(new MockEmpClient());
-    adminClient = new MockAdminClient();
+    adminClient = spy(new MockAdminClient());
 
     // authentication
     authenticationService = mock(AuthenticationService.class);

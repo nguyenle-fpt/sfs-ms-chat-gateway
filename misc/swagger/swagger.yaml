@@ -41,6 +41,8 @@ paths:
     $ref: './paths/room.yaml#/room-members'
   /api/v1/internal/rooms/{streamId}:
     $ref: './paths/room.yaml#/room'
+  /api/v1/internal/rooms/{streamId}/members/send:
+    $ref: './paths/room.yaml#/send-room-members-list'
   /api/v1/internal/connection-requests/{symphonyId}:
     $ref: './paths/connection-requests.yaml#/connection-requests'
 

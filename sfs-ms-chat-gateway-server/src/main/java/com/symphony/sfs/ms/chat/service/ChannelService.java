@@ -18,6 +18,7 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
+import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -288,8 +289,8 @@ public class ChannelService implements DatafeedListener {
 
     for (Map.Entry<String, List<DeleteChannelRequest>> currentEmp : channelsMap.entrySet()) {
       // call to EMP to delete streams
-      List<com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest> deleteChannelsRequest = currentEmp.getValue().stream()
-        .map(d -> new com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest().streamId(d.getStreamId()).symphonyId(d.getFederatedSymphonyId()))
+      List<ChannelIdentifier> deleteChannelsRequest = currentEmp.getValue().stream()
+        .map(d -> new ChannelIdentifier().streamId(d.getStreamId()).symphonyId(d.getFederatedSymphonyId()))
         .collect(toList());
       Optional<DeleteChannelsResponse> result = empClient.deleteChannels(deleteChannelsRequest, currentEmp.getKey());
       // delete for all streams failed

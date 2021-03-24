@@ -7,6 +7,7 @@ import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
 import com.symphony.sfs.ms.admin.generated.model.RoomLeftNotification;
+import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
 import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
@@ -51,6 +52,12 @@ public class DefaultAdminClient implements AdminClient {
   public Optional<RoomResponse> createIMRoom(ImCreatedNotification imRequest) {
     adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return adminClient.getWebhookApi().imCreated(imRequest);
+  }
+
+  @Override
+  public Optional<RoomMembersIdentifiersResponse> getRoomMembersIdentifiers(String streamId){
+    adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    return adminClient.getRoomApi().getRoomMembersIdentifiers(streamId);
   }
 
   @Override

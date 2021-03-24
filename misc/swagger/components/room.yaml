@@ -51,6 +51,17 @@ room-member-remove-request:
     emp:
       type: string
 
+send-room-members-request:
+  type: object
+  required:
+    - symphonyId
+    - userJoining
+  properties:
+    symphonyId:
+      type: string
+      pattern: '^\d+$'
+    userJoining:
+      type: boolean
 
 room-remove-request:
   type: object

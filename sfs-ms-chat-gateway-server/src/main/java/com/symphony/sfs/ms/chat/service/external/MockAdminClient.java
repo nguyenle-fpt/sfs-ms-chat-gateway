@@ -4,6 +4,7 @@ import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
+import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
 import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,6 +38,11 @@ public class MockAdminClient implements AdminClient {
   @Override
   public Optional<RoomResponse> createIMRoom(ImCreatedNotification imRequest) {
     imRequests.add(imRequest);
+    return Optional.empty();
+  }
+
+  @Override
+  public Optional<RoomMembersIdentifiersResponse> getRoomMembersIdentifiers(String streamId){
     return Optional.empty();
   }
 

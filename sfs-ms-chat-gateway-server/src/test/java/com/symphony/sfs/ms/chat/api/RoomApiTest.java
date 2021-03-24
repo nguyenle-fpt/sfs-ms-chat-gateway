@@ -1,5 +1,7 @@
 package com.symphony.sfs.ms.chat.api;
 
+import com.symphony.sfs.ms.admin.generated.model.RoomMemberIdentifier;
+import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
@@ -9,6 +11,7 @@ import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomResponse;
+import com.symphony.sfs.ms.chat.generated.model.SendRoomMembersRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityMemberRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityMemberResponse;
 import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityRequest;
@@ -16,9 +19,10 @@ import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityResponse;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
-import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
+import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
+import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
@@ -35,6 +39,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+
+import java.util.ArrayList;
 import org.springframework.lang.Nullable;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.zalando.problem.Problem;
@@ -48,11 +54,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.ADDROOMMEMBER_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.CREATEROOM_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.DELETEROOM_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.REMOVEMEMBER_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.RoomApi.SENDROOMMEMBERSLISTTOEMPUSER_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.UPDATEROOMACTIVITY_ENDPOINT;
 import static com.symphony.sfs.ms.chat.util.HttpRequestUtils.postRequestFail;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
@@ -157,6 +165,91 @@ class RoomApiTest extends AbstractIntegrationTest {
 
   }
 
+  ////////////////////////////
+  // send Room Members List //
+  ////////////////////////////
+
+  @Test
+  public void sendRoomMembersListToEmpUser_OK_Joining() {
+    FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
+      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("11"))
+      .firstName("firstName11")
+      .lastName("lastName11")
+      .emp("emp1")
+      .emailAddress(emailAddress("11"))
+      .phoneNumber((phoneNumber("11")))
+      .build());
+
+    when(adminClient.getRoomMembersIdentifiers(ROOM_STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"))));
+    doReturn(Optional.of(SymphonyRoom.builder().roomAttributes(SymphonyRoomAttributes.builder().name(ROOM_NAME).build()).build())).when(streamService).roomInfo(anyString(), any(SessionSupplier.class), anyString());
+
+    sendRoomMembersListToEmpUser(ROOM_STREAM_ID, new SendRoomMembersRequest().symphonyId(federatedAccount.getSymphonyUserId()).userJoining(true));
+
+    String expectedMessage = generateMessageToSendJoining(ROOM_NAME, Arrays.asList("11", "12", "31", "32", "33", "41"), true);
+
+    verify(empClient, once()).sendSystemMessage(eq("emp1"), eq(ROOM_STREAM_ID), eq(federatedAccount.getSymphonyUserId()), any(Long.class), eq(expectedMessage), eq(SendSystemMessageRequest.TypeEnum.INFO));
+    verify(empClient, once()).sendSystemMessage(anyString(), anyString(), anyString(), any(Long.class), anyString(), any(SendSystemMessageRequest.TypeEnum.class));
+
+  }
+
+  @Test
+  public void sendRoomMembersListToEmpUser_OK_Joining_SymphonyRoomNotFound() {
+    FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
+      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("11"))
+      .firstName("firstName11")
+      .lastName("lastName11")
+      .emp("emp1")
+      .emailAddress(emailAddress("11"))
+      .phoneNumber((phoneNumber("11")))
+      .build());
+
+    when(adminClient.getRoomMembersIdentifiers(ROOM_STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"))));
+
+    sendRoomMembersListToEmpUser(ROOM_STREAM_ID, new SendRoomMembersRequest().symphonyId(federatedAccount.getSymphonyUserId()).userJoining(true));
+
+    String expectedMessage = generateMessageToSendJoining("the conversation", Arrays.asList("11", "12", "31", "32", "33", "41"), false);
+
+    verify(empClient, once()).sendSystemMessage(eq("emp1"), eq(ROOM_STREAM_ID), eq(federatedAccount.getSymphonyUserId()), any(Long.class), eq(expectedMessage), eq(SendSystemMessageRequest.TypeEnum.INFO));
+    verify(empClient, once()).sendSystemMessage(anyString(), anyString(), anyString(), any(Long.class), anyString(), any(SendSystemMessageRequest.TypeEnum.class));
+
+  }
+
+  @Test
+  public void sendRoomMembersListToEmpUser_OK_notJoining() {
+    FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
+      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("11"))
+      .firstName("firstName11")
+      .lastName("lastName11")
+      .emp("emp1")
+      .emailAddress(emailAddress("11"))
+      .phoneNumber((phoneNumber("11")))
+      .build());
+
+    when(adminClient.getRoomMembersIdentifiers(ROOM_STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"))));
+
+    sendRoomMembersListToEmpUser(ROOM_STREAM_ID, new SendRoomMembersRequest().symphonyId(federatedAccount.getSymphonyUserId()).userJoining(false));
+
+    String expectedMessage = generateMessageToSendNotJoining(Arrays.asList("11", "12", "31", "32", "33", "41"));
+
+    verify(empClient, once()).sendSystemMessage(eq("emp1"), eq(ROOM_STREAM_ID), eq(federatedAccount.getSymphonyUserId()), any(Long.class), eq(expectedMessage), eq(SendSystemMessageRequest.TypeEnum.INFO));
+    verify(empClient, once()).sendSystemMessage(anyString(), anyString(), anyString(), any(Long.class), anyString(), any(SendSystemMessageRequest.TypeEnum.class));
+
+  }
+
+  @Test
+  public void sendRoomMembersListToEmpUser_UnknownFederatedAccount() {
+
+    sendRoomMembersListToEmpUser(ROOM_STREAM_ID, new SendRoomMembersRequest().symphonyId(symphonyId("11", FEDERATION_POD_ID)).userJoining(false));
+
+    verify(adminClient, never()).getRoomMembersIdentifiers(anyString());
+    verify(empClient, never()).sendSystemMessage(anyString(), anyString(), anyString(), any(Long.class), anyString(), any(SendSystemMessageRequest.TypeEnum.class));
+
+  }
+
+
   //////////////////////////
   // update room Activity //
   //////////////////////////
@@ -175,15 +268,15 @@ class RoomApiTest extends AbstractIntegrationTest {
 
 
     when(empClient.deleteChannels(Arrays.asList(
-      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)),
-      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID))
+      new ChannelIdentifier().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)),
+      new ChannelIdentifier().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID))
     ), "EMP1")).thenReturn(Optional.of(new DeleteChannelsResponse().report(Arrays.asList(
         new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS),
         new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID)).status(BulkRemovalStatus.NOT_FOUND)
     ))));
 
     when(empClient.deleteChannels(Collections.singletonList(
-      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID))
+      new ChannelIdentifier().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID))
     ), "EMP2")).thenReturn(Optional.of(new DeleteChannelsResponse().report(Collections.singletonList(
       new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS)
     ))));
@@ -231,12 +324,12 @@ class RoomApiTest extends AbstractIntegrationTest {
 
 
     when(empClient.deleteChannels(Arrays.asList(
-      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)),
-      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID))
+      new ChannelIdentifier().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("31", CLIENT_POD_ID)),
+      new ChannelIdentifier().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("32", CLIENT_POD_ID))
     ), "EMP1")).thenThrow(RuntimeException.class);
 
     when(empClient.deleteChannels(Collections.singletonList(
-      new DeleteChannelRequest().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID))
+      new ChannelIdentifier().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID))
     ), "EMP2")).thenReturn(Optional.of(new DeleteChannelsResponse().report(Collections.singletonList(
       new DeleteChannelResponse().streamId(ROOM_STREAM_ID).symphonyId(symphonyId("33", CLIENT_POD_ID)).status(BulkRemovalStatus.SUCCESS)
     ))));
@@ -410,8 +503,8 @@ class RoomApiTest extends AbstractIntegrationTest {
     String podUrl = podConfiguration.getUrl();
     verify(streamService).removeRoomMember(eq(podUrl), any(SessionSupplier.class), eq(streamId), eq(symphonyId));
 
-    List<DeleteChannelRequest> deleteChannelRequests = Collections.singletonList(
-      new DeleteChannelRequest().streamId(streamId).symphonyId(symphonyId)
+    List<ChannelIdentifier> deleteChannelRequests = Collections.singletonList(
+      new ChannelIdentifier().streamId(streamId).symphonyId(symphonyId)
     );
 
     verify(empClient, times(1)).deleteChannels(deleteChannelRequests, emp);
@@ -451,9 +544,9 @@ class RoomApiTest extends AbstractIntegrationTest {
     deleteRoom(roomMemberRemoveRequest, streamId);
     verify(streamService).setRoomActive(eq(podUrl), any(SessionSupplier.class), eq(streamId), eq(false));
 
-    List<DeleteChannelRequest> deleteChannelRequests = List.of(
-      new DeleteChannelRequest().streamId(streamId).symphonyId("12346"),
-      new DeleteChannelRequest().streamId(streamId).symphonyId("12347")
+    List<ChannelIdentifier> deleteChannelRequests = List.of(
+      new ChannelIdentifier().streamId(streamId).symphonyId("12346"),
+      new ChannelIdentifier().streamId(streamId).symphonyId("12347")
     );
 
     verify(empClient, times(1)).deleteChannels(deleteChannelRequests, "emp");
@@ -475,11 +568,11 @@ class RoomApiTest extends AbstractIntegrationTest {
     deleteRoom(roomMemberRemoveRequest, streamId);
     verify(streamService).setRoomActive(eq(podUrl), any(SessionSupplier.class), eq(streamId), eq(false));
 
-    List<DeleteChannelRequest> deleteChannelRequests = List.of(
-      new DeleteChannelRequest().streamId(streamId).symphonyId("12346")
+    List<ChannelIdentifier> deleteChannelRequests = List.of(
+      new ChannelIdentifier().streamId(streamId).symphonyId("12346")
     );
-    List<DeleteChannelRequest> deleteChannelRequestsSecondEmp = List.of(
-      new DeleteChannelRequest().streamId(streamId).symphonyId("12347")
+    List<ChannelIdentifier> deleteChannelRequestsSecondEmp = List.of(
+      new ChannelIdentifier().streamId(streamId).symphonyId("12347")
     );
 
     verify(empClient, times(1)).deleteChannels(deleteChannelRequests, "emp");
@@ -575,6 +668,16 @@ class RoomApiTest extends AbstractIntegrationTest {
       .as(RoomMemberResponse.class);
   }
 
+  private void sendRoomMembersListToEmpUser(String streamId, SendRoomMembersRequest sendRoomMembersRequest) {
+    configuredGiven(objectMapper, new ExceptionHandling(null), roomApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(sendRoomMembersRequest)
+      .when()
+      .post(SENDROOMMEMBERSLISTTOEMPUSER_ENDPOINT, streamId)
+      .then()
+      .statusCode(HttpStatus.OK.value());
+  }
+
   private void addRoomMemberFail(String streamId, RoomMemberRequest roomRequest, String problemClassName, HttpStatus httpStatus) {
     addRoomMemberFail(streamId, roomRequest, problemClassName, httpStatus, null);
   }
@@ -601,6 +704,43 @@ class RoomApiTest extends AbstractIntegrationTest {
 
   private static String emp(String suffix) {
     return "emp" + suffix;
+  }
+
+  private static String generateMessageToSendJoining(String roomName, List<String> roomMembersSuffix, boolean roomNameFound){
+    return generateMessageToSend(roomName, roomMembersSuffix, true, roomNameFound);
+  }
+
+  private static String generateMessageToSendNotJoining(List<String> roomMembersSuffix){
+    return generateMessageToSend(null, roomMembersSuffix, false, false);
+  }
+
+  private static String generateMessageToSend(String roomName, List<String> roomMembersSuffix, boolean isUserJoining, boolean roomNameFound){
+    StringBuilder text = new StringBuilder();
+    if(isUserJoining) {
+      if(roomNameFound) {
+        text.append("You have joined ").append(roomName).append(".\n");
+      } else {
+        text.append("You have joined the conversation.\n");
+      }
+    }
+    text.append("Here are the members of this group: ");
+    text.append(roomMembersSuffix.stream().map(s -> "firstName" + s + " lastName" + s ).collect(Collectors.joining(", ")));
+    text.append(".");
+    return text.toString();
+  }
+
+  private RoomMembersIdentifiersResponse generateRoomMembersIdentifiers(List<String> advisorsSuffix, List<String> emp1UsersSuffix, List<String> emp2UsersSuffix){
+    List<RoomMemberIdentifier> roomMemberIdentifiers = new ArrayList<>();
+    for(String suffix : advisorsSuffix){
+      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(false).symphonyId(symphonyId(suffix, CLIENT_POD_ID)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp(null));
+    }
+    for(String suffix : emp1UsersSuffix){
+      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(true).symphonyId(symphonyId(suffix, FEDERATION_POD_ID)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp("emp1"));
+    }
+    for(String suffix : emp2UsersSuffix){
+      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(true).symphonyId(symphonyId(suffix, FEDERATION_POD_ID)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp("emp2"));
+    }
+    return new RoomMembersIdentifiersResponse().members(roomMemberIdentifiers);
   }
 
 }

@@ -2,7 +2,7 @@ package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
-import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
+import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
@@ -71,6 +71,16 @@ public interface EmpClient {
    */
   Optional<String> sendSystemMessage(String emp, String streamId, String symphonyId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type);
 
+
+  /**
+   *
+   * @param emp
+   * @param channels
+   * @param message
+   * @return
+   */
+  void sendSystemMessageToChannels(String emp, List<ChannelIdentifier> channels, String message, boolean shouldBeResent);
+
   /**
    * Internal usage for QA
    *
@@ -91,7 +101,7 @@ public interface EmpClient {
    */
   Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber, String firstName, String lastName, String companyName);
 
-  Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> deleteChannelRequests, String emp);
+  Optional<DeleteChannelsResponse> deleteChannels(List<ChannelIdentifier> deleteChannelRequests, String emp);
 
   /**
    *

@@ -3,7 +3,7 @@ package com.symphony.sfs.ms.chat.service.external;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
-import com.symphony.sfs.ms.emp.generated.model.DeleteChannelRequest;
+import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
@@ -75,6 +75,11 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
+  public void sendSystemMessageToChannels(String emp, List<ChannelIdentifier> channels, String message, boolean shouldBeResent) {
+
+  }
+
+  @Override
   public void deleteAccountOrFail(String emp, String symphonyId, String email, String phoneNumber) {
     deletedFederatedAccounts.add(symphonyId);
   }
@@ -85,7 +90,7 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<DeleteChannelsResponse> deleteChannels(List<DeleteChannelRequest> channels, String emp) {
+  public Optional<DeleteChannelsResponse> deleteChannels(List<ChannelIdentifier> channels, String emp) {
     DeleteChannelsResponse response = new DeleteChannelsResponse();
     channels.forEach(channel -> {
       //simulate failure

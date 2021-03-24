@@ -6,6 +6,7 @@ import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomResponse;
+import com.symphony.sfs.ms.chat.generated.model.SendRoomMembersRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateRoomActivityResponse;
 import com.symphony.sfs.ms.chat.service.RoomService;
@@ -31,6 +32,13 @@ public class RoomApi implements com.symphony.sfs.ms.chat.generated.api.RoomApi {
   public ResponseEntity<UpdateRoomActivityResponse> updateRoomActivity(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest) {
     LOG.info("Update Room Activity | streamId={} setActive={}", streamId, updateRoomActivityRequest.isSetActive());
     return ResponseEntity.ok(roomService.updateRoomActivity(streamId, updateRoomActivityRequest));
+  }
+
+  @Override
+  public ResponseEntity<Void> sendRoomMembersListToEmpUser(String streamId, SendRoomMembersRequest sendRoomMembersRequest) {
+    LOG.info("Send room members list | streamId={} symphonyId={} isUserJoining={}", streamId, sendRoomMembersRequest.getSymphonyId(), sendRoomMembersRequest.isUserJoining());
+    roomService.sendRoomMembersListToEmpUser(streamId, sendRoomMembersRequest.getSymphonyId(), sendRoomMembersRequest.isUserJoining());
+    return ResponseEntity.ok().build();
   }
 
   @Override
