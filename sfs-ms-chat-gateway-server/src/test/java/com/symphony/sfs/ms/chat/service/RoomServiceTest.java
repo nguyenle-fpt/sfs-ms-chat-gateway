@@ -20,10 +20,12 @@ import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
+import com.symphony.sfs.ms.starter.testing.I18nTest;
 import com.symphony.sfs.ms.starter.util.UserIdUtils;
 import model.UserInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.MessageSource;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -35,15 +37,15 @@ import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class RoomServiceTest {
+class RoomServiceTest implements I18nTest {
 
   private FederatedAccountRepository federatedAccountRepository;
 
@@ -72,7 +74,7 @@ class RoomServiceTest {
   public static final String FEDERATION_POD = "2";
 
   @BeforeEach
-  public void setUp() {
+  public void setUp(MessageSource messageSource) {
     empClient = mock(EmpClient.class);
     authenticationService = mock(AuthenticationService.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
@@ -98,7 +100,7 @@ class RoomServiceTest {
     adminClient = mock(AdminClient.class);
     when(adminClient.getEmpList()).thenReturn(new EmpList());
 
-    roomService = spy(new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, mock(ForwarderQueueConsumer.class), streamService, authenticationService, usersInfoService, empClient, adminClient));
+    roomService = spy(new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, mock(ForwarderQueueConsumer.class), streamService, authenticationService, usersInfoService, empClient, adminClient, messageSource));
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
@@ -190,7 +192,7 @@ class RoomServiceTest {
   private static String generateMessage(String action, List<String> joinersOrLeaversSuffix, List<String> roomMembersSuffix){
     StringBuilder text = new StringBuilder();
     for (String suffix : joinersOrLeaversSuffix) {
-      text.append("firstName").append(suffix).append(" ").append("lastName").append(suffix).append(" has ").append(action).append(" the conversation.\n");
+      text.append("firstName").append(suffix).append(" ").append("lastName").append(suffix).append(" has ").append(action).append(" the group.\n");
     }
     text.append("Here are the members of this group: ");
     text.append(roomMembersSuffix.stream().map(s -> "firstName" + s + " lastName" + s ).collect(Collectors.joining(", ")));

@@ -44,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
 import org.apache.log4j.MDC;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
+import org.springframework.context.MessageSource;
 import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -59,6 +60,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -81,7 +83,6 @@ public class SymphonyMessageService implements DatafeedListener {
   // The max size of attachments in a single message we accept is 25 MB ~ 34 MB when the file is encoded in base64
   private final long MAX_UPLOAD_SIZE = 34 * 1024 * 1024;
   private static final int MAX_TEXT_LENGTH = 30000;
-  private static final String TEXT_TOO_LONG_WARNING = "The message was too long and was truncated. Only the first %,d characters were delivered";
   private final EmpClient empClient;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -97,6 +98,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private final StreamService streamService;
   private final MessageIOMonitor messageMetrics;
   private final ChannelService channelService;
+  private final MessageSource messageSource;
 
 
   @PostConstruct
@@ -170,16 +172,16 @@ public class SymphonyMessageService implements DatafeedListener {
 
       // Check if message contents can be sent
       if (gatewaySocialMessage.isChime()) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Chimes are not supported currently, your contact was not notified."));
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("chimes.not.supported", null, Locale.getDefault())));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       } else if (gatewaySocialMessage.isTable()) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Your message was not sent. Sending tables is not supported currently."));
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault())));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       } else if (gatewaySocialMessage.getParentRelationshipType() == ParentRelationshipType.REPLY ||
         gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Your message was not sent to your contact. Inline replies are not supported currently."));
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("inline.replies.not.supported", null, Locale.getDefault())));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       }
@@ -196,7 +198,8 @@ public class SymphonyMessageService implements DatafeedListener {
 
         // CES-3203 Prevent messages to be sent in MIMs
         if (!gatewaySocialMessage.isRoom() && gatewaySocialMessage.getToUserIds().size() > 1) {
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to send a message to a " + empSchemaService.getEmpDisplayName(emp) + " contact in a MIM."));
+          String alertMessage = messageSource.getMessage("chat.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(emp)}, Locale.getDefault());
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
           messageMetrics.onMessageBlockFromSymphony(TOO_MANY_MEMBERS, streamId);
           return;
         }
@@ -221,12 +224,14 @@ public class SymphonyMessageService implements DatafeedListener {
 
                 totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
                 if (totalsize > MAX_UPLOAD_SIZE) {
-                  allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
+                  String alertMessage = messageSource.getMessage("message.partially.sent", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault());
+                  allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
                   return;
                 }
               }
             } catch (DataBufferLimitException dbe) {
-              allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, errorMessageAttachmentsNotSent(gatewaySocialMessage.getTextContent().isEmpty(), gatewaySocialMessage.getMessageId())));
+              String alertMessage = messageSource.getMessage("message.partially.sent", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault());
+              allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
               return;
             }
           }
@@ -258,7 +263,7 @@ public class SymphonyMessageService implements DatafeedListener {
             gatewaySocialMessage.getDisclaimerForEmp(),
             attachmentsContent);
           if (empMessageIdsOptional.isEmpty()) {
-            allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ")."));
+            allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault())));
           } else {
             this.dealWithMessageSentPartially(gatewaySocialMessage, empMessageIdsOptional.get(), allUserSessions);
           }
@@ -281,7 +286,7 @@ public class SymphonyMessageService implements DatafeedListener {
     }
     String errorMessage;
     if (!gatewaySocialMessage.isRoom()) {
-      errorMessage = "This message was not delivered (messageId : " + gatewaySocialMessage.getMessageId() + ").";
+      errorMessage = messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault());
     } else {
       String users = notDeliveredFor.stream()
         .map(op -> this.federatedAccountRepository.findBySymphonyId(op.getSymphonyId()))
@@ -289,7 +294,7 @@ public class SymphonyMessageService implements DatafeedListener {
         .map(Optional::get)
         .map(user -> user.getFirstName() + " " + user.getLastName())
         .collect(Collectors.joining(", "));
-      errorMessage = "This message (messageId : " + gatewaySocialMessage.getMessageId() + ") was not delivered for the following users: " + users;
+      errorMessage = messageSource.getMessage("message.not.received", new Object[]{gatewaySocialMessage.getMessageId(), users}, Locale.getDefault());
     }
     allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, gatewaySocialMessage.getStreamId(), errorMessage));
   }
@@ -301,11 +306,11 @@ public class SymphonyMessageService implements DatafeedListener {
     }
 
     if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
-      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(emp) + " users."));
+      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.chat.not.entitled", new Object[]{empSchemaService.getEmpDisplayName(emp)}, Locale.getDefault())));
       messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
       return false;
     } else if (canChat.get() == CanChatResponse.NO_CONTACT) {
-      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "This message will not be delivered. You no longer have the entitlement for this."));
+      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.chat.no.contact", null, Locale.getDefault())));
       messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
       return false;
     }
@@ -356,11 +361,13 @@ public class SymphonyMessageService implements DatafeedListener {
         // TODO fix this bad management of optional
         messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
         boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
-        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
         if (textTooLong) {
-          String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
-          feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, alertMessage, TypeEnum.ALERT);
+          String symphonyAlertMessage = messageSource.getMessage("sending.too.long.message", new Object[]{MAX_TEXT_LENGTH}, Locale.getDefault());
+          String empAlertMessage = messageSource.getMessage("incoming.too.long.message", new Object[]{MAX_TEXT_LENGTH}, Locale.getDefault());
+
+          // Send the warning message before the truncated message
+          feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, empAlertMessage, TypeEnum.ALERT);
 
           boolean isRoom = streamInfo.getStreamType().getType() == StreamTypes.ROOM;
 
@@ -370,8 +377,13 @@ public class SymphonyMessageService implements DatafeedListener {
           } else {
             session = datafeedSessionPool.refreshSession(fromSymphonyUserId);
           }
-          symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage);
+
+          String truncatedMessage = text.substring(0, MAX_TEXT_LENGTH - 3) + "...";
+          symphonyMessageSender.sendAlertMessage(session, streamId, truncatedMessage, symphonyAlertMessage);
         }
+
+        // Send the truncated message after the warning message
+        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
       }
     } catch (UnknownDatafeedUserException e) {
       // should never happen, as we have a FederatedAccount
@@ -499,12 +511,9 @@ public class SymphonyMessageService implements DatafeedListener {
    * @return If present, message indicating that advisor is NOT entitled.
    */
   private Optional<String> notEntitledMessage(Optional<String> advisorSymphonyUserId, String federatedUserId, String emp, FormattingEnum formatting) {
-    final String CONTACT_NOT_AVAILABLE = "Sorry, your contact is no longer available";
-    final String CONTACT_WITH_DETAILS_NOT_AVAILABLE = "Sorry, your contact %s is no longer available";
-
     // No advisor at all
     if (advisorSymphonyUserId.isEmpty()) {
-      return Optional.of(CONTACT_NOT_AVAILABLE);
+      return Optional.of(messageSource.getMessage("contact.not.available", null, Locale.getDefault()));
     }
 
     // Advisor entitled
@@ -517,42 +526,7 @@ public class SymphonyMessageService implements DatafeedListener {
       return Optional.empty();
     }
 
-    // From here advisor is not entitled
-    // Get advisor details
-    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-    final List<UserInfo> usersFromIds = usersInfoService.getUsersFromIds(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), Collections.singletonList(advisorSymphonyUserId.get()));
-
-    String message;
-    if (usersFromIds.isEmpty()) {
-      LOG.warn("Advisor with symphonyUserId {} not found on Symphony side", advisorSymphonyUserId.get());
-      message = CONTACT_NOT_AVAILABLE;
-    } else {
-      // Message with advisor details
-      message = String.format(CONTACT_WITH_DETAILS_NOT_AVAILABLE, usersFromIds.get(0).getDisplayName());
-    }
-
-    return Optional.ofNullable(message);
-  }
-
-  /**
-   * Build the error message when there are more 25 MB attachments
-   *
-   * @param textIsEmpty True if there are only attachments, false if there is some text in the message
-   * @param messageId   Id of the symphony message
-   * @return The error message
-   */
-  private String errorMessageAttachmentsNotSent(boolean textIsEmpty, String messageId) {
-    // Prepare the error message for the advisor
-    StringBuilder errorMessage = new StringBuilder();
-    errorMessage.append("The full contents of your message could not be delivered. ");
-    if (!textIsEmpty) {
-      errorMessage.append("The text that you entered could not be delivered. ");
-    }
-    errorMessage
-      .append("Attachment was not delivered; it exceeds 25MB limit (messageId : ")
-      .append(messageId)
-      .append(")");
-
-    return errorMessage.toString();
+    String message = messageSource.getMessage("contact.not.available", null, Locale.getDefault());
+    return Optional.of(message);
   }
 }

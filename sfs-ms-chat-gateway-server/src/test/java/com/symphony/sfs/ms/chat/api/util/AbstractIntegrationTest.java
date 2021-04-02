@@ -39,6 +39,7 @@ import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
 import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionsService;
+import com.symphony.sfs.ms.starter.testing.I18nTest;
 import com.symphony.sfs.ms.starter.testing.LocalProfileTest;
 import com.symphony.sfs.ms.starter.testing.RestApiTest;
 import com.symphony.sfs.ms.starter.util.PodVersion;
@@ -48,6 +49,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.opentracing.Tracer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.context.MessageSource;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.security.KeyPair;
@@ -61,7 +63,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfileTest, RestApiTest {
+public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfileTest, RestApiTest, I18nTest {
   protected AuthenticationService authenticationService;
   protected ObjectMapper objectMapper;
   protected DynamoConfiguration dynamoConfiguration;
@@ -96,7 +98,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected SymphonySession botSession;
 
   @BeforeEach
-  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
+  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
     this.mockServer = mockServer;
     webClient = buildTestClient();
     SymphonyService symphonyService = mock(SymphonyService.class);
@@ -156,10 +158,10 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, authenticationService, botConfiguration));
     empSchemaService = new EmpSchemaService(adminClient);
-    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration);
+    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration, messageSource);
     channelService.registerAsDatafeedListener();
     usersInfoService = mock(UsersInfoService.class);
-    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient);
+    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient, messageSource);
     roomService.registerAsDatafeedListener();
 
     tenantDetailRepository = new TenantDetailRepository(db, new SharedTableSchema(dynamoConfiguration.getDynamoSchema().getTableName()));

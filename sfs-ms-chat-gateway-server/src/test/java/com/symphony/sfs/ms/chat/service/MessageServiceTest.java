@@ -22,6 +22,8 @@ import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.health.MeterManager;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
@@ -29,7 +31,10 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
+import com.symphony.sfs.ms.starter.testing.I18nTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import model.UserInfo;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +43,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
+import org.springframework.context.MessageSource;
 
 import java.time.OffsetDateTime;
 import java.util.Arrays;
@@ -58,7 +64,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class MessageServiceTest {
+class MessageServiceTest implements I18nTest {
 
 
   private SymphonyMessageService messageService;
@@ -75,6 +81,7 @@ class MessageServiceTest {
   private SymphonyService symphonyService;
   private ChannelService channelService;
   private StreamService streamService;
+  private UsersInfoService usersInfoService;
 
   private SymphonySession userSession;
 
@@ -83,9 +90,10 @@ class MessageServiceTest {
   private static final long NOW = OffsetDateTime.now().toEpochSecond();
   public static final String FROM_SYMPHONY_USER_ID = "123456789";
   public static final String TO_SYMPHONY_USER_ID = "234567891";
+  public static final String STREAM_ID_1 = "streamId_1";
 
   @BeforeEach
-  public void setUp() {
+  public void setUp(MessageSource messageSource) {
     MeterManager meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
     empClient = mock(EmpClient.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
@@ -118,7 +126,8 @@ class MessageServiceTest {
 
     channelService = mock(ChannelService.class);
 
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService);
+    usersInfoService = mock(UsersInfoService.class);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
@@ -204,9 +213,8 @@ class MessageServiceTest {
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
     verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You are not entitled to send messages to emp users.");
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You are not permitted to send messages to emp users.");
   }
-
 
   @Test
   void onIMMessage_No_PartiallySent() {
@@ -246,7 +254,8 @@ class MessageServiceTest {
 
     messageService.onIMMessage(message);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(new SymphonySession("username", "kmToken", "sessionToken"), "streamId", "This message (messageId : messageId) was not delivered for the following users: firstName 2 lastName 2");  }
+    verify(symphonyMessageSender, once()).sendAlertMessage(new SymphonySession("username", "kmToken", "sessionToken"), "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.");
+  }
 
   @Test
   void onIMMessage_No_Contact() {
@@ -270,7 +279,7 @@ class MessageServiceTest {
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
     verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "This message will not be delivered. You no longer have the entitlement for this.");
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Sorry, you're not permitted to chat with this user.");
   }
 
   private static IUser buildDefaultFromUser() {
@@ -291,16 +300,16 @@ class MessageServiceTest {
     return Stream.of(
       arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chime(true).build(),
-        "Chimes are not supported currently, your contact was not notified."),
+        "You cannot chime your contacts here."),
       arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").parentRelationshipType(ParentRelationshipType.REPLY).build(),
-        "Your message was not sent to your contact. Inline replies are not supported currently."),
+        "Sorry, you can't send an inline reply."),
       arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").customEntities(Collections.singletonList(new CustomEntity(CustomEntity.QUOTE_TYPE))).build(),
-        "Your message was not sent to your contact. Inline replies are not supported currently."),
+        "Sorry, you can't send an inline reply."),
       arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").table(true).build(),
-        "Your message was not sent. Sending tables is not supported currently.")
+        "Sorry, you can't send tables here.")
     );
   }
 
@@ -344,6 +353,45 @@ class MessageServiceTest {
   }
 
   @Test
+  void sendMessage_cantChatNoEntitlement() {
+    FederatedAccount fromFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId(FROM_SYMPHONY_USER_ID)
+      .federatedUserId("fed")
+      .build();
+    when(federatedAccountRepository.findBySymphonyId(FROM_SYMPHONY_USER_ID)).thenReturn(Optional.of(fromFederatedAccount));
+    when(adminClient.canChat(TO_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
+    StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
+    StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
+    when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
+
+    UserInfo userInfo = new UserInfo();
+    userInfo.setDisplayName("display name");
+    when(usersInfoService.getUsersFromIds(eq("podUrl"), any(SessionSupplier.class), eq(Collections.singletonList(TO_SYMPHONY_USER_ID)))).thenReturn(Collections.singletonList(userInfo));
+
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+    verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
+  }
+
+  @Test
+  void sendMessage_cantChatNoEntitlementUnknownAdvisor() {
+    FederatedAccount fromFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId(FROM_SYMPHONY_USER_ID)
+      .federatedUserId("fed")
+      .build();
+    when(federatedAccountRepository.findBySymphonyId(FROM_SYMPHONY_USER_ID)).thenReturn(Optional.of(fromFederatedAccount));
+    when(adminClient.canChat(TO_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
+    StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
+    StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
+    when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
+    when(usersInfoService.getUsersFromIds("podUrl", new StaticSessionSupplier<>(botSession), Collections.singletonList(TO_SYMPHONY_USER_ID))).thenReturn(Collections.emptyList());
+
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+    verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
+  }
+
+  @Test
   void sendMessage_TextTooLong() {
     String tooLongMsg = RandomStringUtils.random(30001);
     FederatedAccount fromFederatedAccount = FederatedAccount.builder()
@@ -362,10 +410,54 @@ class MessageServiceTest {
     RoomResponse roomResponse = new RoomResponse().roomType(RoomResponse.RoomTypeEnum.ROOM);
 
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null);
-    String expectedTruncatedMsg = "<messageML>" + tooLongMsg.substring(0, 30000) + "</messageML>";
-    verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, expectedTruncatedMsg, null);
-    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "The message was too long and was truncated. Only the first 30,000 characters were delivered");
-    verify(empClient, once()).sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), eq("The message was too long and was truncated. Only the first 30,000 characters were delivered"), eq(TypeEnum.ALERT));  }
+    String expectedTruncatedMsg = tooLongMsg.substring(0, 29997) + "...";
+    String expectedTruncatedMsgML = "<messageML>" + tooLongMsg.substring(0, 30000) + "</messageML>";
+    String warningMessage = "This message is over the length limit. You received only the first 30,000 characters:";
+    verify(symphonyMessageSender, once()).sendAlertMessage((SymphonySession) null, "streamId", expectedTruncatedMsg, "This message is over the length limit. Only the first 30,000 characters were sent:");
+    verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, expectedTruncatedMsgML, null);
+    verify(empClient, once()).sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), eq(warningMessage), eq(TypeEnum.ALERT));
+  }
+
+  @Test
+  void sendMessage_AdvisorDoesntExist() {
+    FederatedAccount fromFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId(FROM_SYMPHONY_USER_ID)
+      .federatedUserId("fed")
+      .build();
+    when(federatedAccountRepository.findBySymphonyId(FROM_SYMPHONY_USER_ID)).thenReturn(Optional.of(fromFederatedAccount));
+    when(adminClient.canChat(TO_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    StreamAttributes streamAttributes = StreamAttributes.builder().members(Collections.emptyList()).build();
+    StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
+    when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
+
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+
+    verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
+  }
+
+  @Test
+  void sendChime_NotSupported() {
+    FederatedAccount toFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId(TO_SYMPHONY_USER_ID)
+      .federatedUserId("federatedUserId")
+      .build();
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+
+
+    IUser fromSymphonyUser = newIUser(FROM_SYMPHONY_USER_ID);
+    GatewaySocialMessage gatewaySocialMessage = GatewaySocialMessage.builder()
+      .streamId(STREAM_ID_1)
+      .fromUser(fromSymphonyUser)
+      .members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID))
+      .chime(true)
+      .build();
+
+    messageService.onIMMessage(gatewaySocialMessage);
+
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, STREAM_ID_1, "You cannot chime your contacts here.");
+  }
 
   /*
   @Test

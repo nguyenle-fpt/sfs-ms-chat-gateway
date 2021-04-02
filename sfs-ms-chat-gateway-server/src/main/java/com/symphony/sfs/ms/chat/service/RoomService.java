@@ -44,6 +44,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -51,6 +52,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -75,6 +77,7 @@ public class RoomService implements DatafeedListener {
   private final EmpClient empClient;
   private final AdminClient adminClient;
 
+  private final MessageSource messageSource;
 
   @PostConstruct
   @VisibleForTesting
@@ -290,11 +293,13 @@ public class RoomService implements DatafeedListener {
         //Create Welcome Message
         SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
         Optional<SymphonyRoom> optionalSymphonyRoom = streamService.roomInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId);
+        String roomName;
         if(optionalSymphonyRoom.isPresent()) {
-          text.append("You have joined ").append(optionalSymphonyRoom.get().getRoomAttributes().getName()).append(".\n");
+          roomName = optionalSymphonyRoom.get().getRoomAttributes().getName();
         } else {
-          text.append("You have joined the conversation.\n");
+          roomName = "the conversation";
         }
+        text.append(messageSource.getMessage("user.joined.room", new Object[]{roomName}, Locale.getDefault()));
       }
       text.append(generateJoinOrLeaveTextMessage(new ArrayList<>(), roomMemberIdentifiers, isUserJoining));
       Optional<String> sendSystemMessage = empClient.sendSystemMessage(federatedAccount.getEmp(), streamId, symphonyId, OffsetDateTime.now().toEpochSecond(), text.toString(), SendSystemMessageRequest.TypeEnum.INFO);
@@ -361,12 +366,16 @@ public class RoomService implements DatafeedListener {
   private String generateJoinOrLeaveTextMessage(List<RoomMemberIdentifier> affectedUsers, List<RoomMemberIdentifier> roomMemberIdentifiers, boolean isJoining){
     StringBuilder text = new StringBuilder();
     for (RoomMemberIdentifier user : affectedUsers) {
-      text.append(user.getFirstName()).append(" ").append(user.getLastName()).append(" has ").append(isJoining ? "joined" : "left").append(" the conversation.\n");
+      if (isJoining) {
+        text.append(messageSource.getMessage("other.user.joined.room", new Object[]{user.getFirstName(), user.getLastName()}, Locale.getDefault()));
+      } else {
+        text.append(messageSource.getMessage("other.user.left.room", new Object[]{user.getFirstName(), user.getLastName()}, Locale.getDefault()));
+      }
     }
     String membersListAsString = roomMemberIdentifiers.stream()
-      .map(roomMemberIdentifier -> roomMemberIdentifier.getFirstName() + " " + roomMemberIdentifier.getLastName()).collect(Collectors.joining(", ", "", "."));
+      .map(roomMemberIdentifier -> roomMemberIdentifier.getFirstName() + " " + roomMemberIdentifier.getLastName()).collect(Collectors.joining(", "));
 
-    text.append("Here are the members of this group: ").append(membersListAsString);
+    text.append(messageSource.getMessage("room.member.list", new Object[]{membersListAsString}, Locale.getDefault()));
     return text.toString();
   }
 

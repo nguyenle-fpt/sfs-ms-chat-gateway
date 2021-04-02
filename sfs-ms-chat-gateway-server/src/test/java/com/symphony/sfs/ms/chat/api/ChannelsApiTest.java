@@ -29,6 +29,7 @@ import io.opentracing.Tracer;
 import model.InboundConnectionRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.MessageSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -47,7 +48,6 @@ import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.CREATECHANNEL_E
 import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.RETRIEVECHANNEL_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -67,8 +67,8 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
   private Tracer tracer = null;
 
   @BeforeEach
-  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
-    super.setUp(db, mockServer);
+  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
+    super.setUp(db, mockServer, messageSource);
     empSchemaService = mock(EmpSchemaService.class);
 
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());

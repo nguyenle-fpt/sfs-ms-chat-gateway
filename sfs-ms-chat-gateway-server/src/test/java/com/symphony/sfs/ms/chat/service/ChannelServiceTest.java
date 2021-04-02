@@ -17,17 +17,21 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.testing.I18nTest;
 import com.symphony.sfs.ms.starter.webclient.WebCallException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.MessageSource;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,7 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-class ChannelServiceTest {
+class ChannelServiceTest implements I18nTest {
 
   private ChannelService channelService;
 
@@ -54,16 +58,19 @@ class ChannelServiceTest {
 
   private SymphonySession userSession;
   private AdminClient mockAdminClient;
-
+  private StreamService streamService;
   private EmpSchemaService empSchemaService;
 
   private SymphonySession botSession;
 
+  private static final String STREAM_ID_1 = "streamId";
+  private static final String EMP_1 = "emp_1";
+
   @BeforeEach
-  public void setUp() {
+  public void setUp(MessageSource messageSource) {
     mockAdminClient = mock(AdminClient.class);
     SymphonyService symphonyService = mock(SymphonyService.class);
-    StreamService streamService = mock(StreamService.class);
+    streamService = mock(StreamService.class);
     symphonyMessageSender = mock(SymphonyMessageSender.class);
     empClient = mock(EmpClient.class);
     datafeedSessionPool = mock(DatafeedSessionPool.class);
@@ -89,7 +96,7 @@ class ChannelServiceTest {
     empSchemaService =  mock(EmpSchemaService.class);
 
     channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, mock(ForwarderQueueConsumer.class), datafeedSessionPool, federatedAccountRepository,
-      mockAdminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration);
+      mockAdminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration, messageSource);
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
@@ -149,7 +156,7 @@ class ChannelServiceTest {
 
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
-    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
     verify(mockAdminClient, never()).createIMRoom(any());
   }
@@ -176,7 +183,7 @@ class ChannelServiceTest {
 
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
-    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
     verify(mockAdminClient, never()).createIMRoom(any());
   }
@@ -223,7 +230,44 @@ class ChannelServiceTest {
     members.add("1");
     members.add("101");
     channelService.onIMCreated("streamId", members, fromSymphonyUser, false);
-    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "You are not entitled to send messages to External Messaging Platform users");
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "You are not permitted to send messages to External Messaging Platform users.");
+  }
+
+  @Test
+  void onCreateIM_throwsErrorNotConflict() throws UnknownDatafeedUserException {
+    FederatedAccount toFederatedAccount = newFederatedAccount(EMP_1, "101");
+    IUser fromSymphonyUser = newIUser("1");
+
+    WebCallException internalError = new WebCallException(null, new WebClientResponseException(400, "bad request", null, null, Charset.defaultCharset()));
+    when(empClient.createChannel(EMP_1, STREAM_ID_1, Collections.singletonList(toFederatedAccount), "101", Collections.singletonList(fromSymphonyUser))).thenThrow(internalError);
+
+    DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
+    when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
+
+    when(streamService.getIM(eq("podUrl"), any(SessionSupplier.class), eq("1"))).thenReturn(Optional.of(STREAM_ID_1));
+    String streamId = channelService.createIMChannel(toFederatedAccount, fromSymphonyUser);
+
+    assertEquals(STREAM_ID_1, streamId);
+
+    verify(symphonyMessageSender).sendAlertMessage(userSession101, STREAM_ID_1, "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
+  }
+
+  @Test
+  void onCreateIM_emptyResponseFromEmp() throws UnknownDatafeedUserException {
+    FederatedAccount toFederatedAccount = newFederatedAccount(EMP_1, "101");
+    IUser fromSymphonyUser = newIUser("1");
+
+    when(empClient.createChannel(EMP_1, STREAM_ID_1, Collections.singletonList(toFederatedAccount), "1", Collections.singletonList(fromSymphonyUser))).thenReturn(Optional.empty());
+
+    DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
+    when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
+
+    when(streamService.getIM(eq("podUrl"), any(SessionSupplier.class), eq("1"))).thenReturn(Optional.of(STREAM_ID_1));
+    String streamId = channelService.createIMChannel(toFederatedAccount, fromSymphonyUser);
+
+    assertEquals(STREAM_ID_1, streamId);
+
+    verify(symphonyMessageSender).sendAlertMessage(userSession101, STREAM_ID_1, "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
   }
 
 //  @Test

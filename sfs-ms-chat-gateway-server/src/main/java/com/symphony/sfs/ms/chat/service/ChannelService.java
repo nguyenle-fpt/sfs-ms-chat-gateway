@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
+import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -42,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -69,6 +71,7 @@ public class ChannelService implements DatafeedListener {
   private final ChannelRepository channelRepository;
   private final AuthenticationService authenticationService;
   private final BotConfiguration botConfiguration;
+  private final MessageSource messageSource;
 
   @PostConstruct
   @VisibleForTesting
@@ -114,14 +117,14 @@ public class ChannelService implements DatafeedListener {
     } catch (WebCallException wbe) {
       if (wbe.getStatusCode() != HttpStatus.CONFLICT) {
         // We are in an iM, the connect bot is not a member
-        symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+        symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault()));
       }
       return streamId;
     }
 
     if (channelId.isEmpty()) {
       // We are in an iM, the connect bot is not a member
-      symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator.");
+      symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault()));
     } else {
       ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
       imCreatedNotification.setAdvisorSymphonyId(toSymphonyUser.getId().toString());
@@ -165,14 +168,14 @@ public class ChannelService implements DatafeedListener {
           } catch (WebCallException wbe) {
             if (wbe.getStatusCode() != HttpStatus.CONFLICT) {
               // We are in an IM, the connect bot is not a member
-              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
+              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault())));
             }
             return streamId;
           }
 
           if (channelId.isEmpty()) {
             // We are in an IM, the connect bot is not a member
-            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "Sorry, we are not able to open the discussion with your contact. Please contact your administrator."));
+            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault())));
           } else {
             ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
             imCreatedNotification.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
@@ -183,7 +186,8 @@ public class ChannelService implements DatafeedListener {
           }
         } else {
           // We are in an IM, the connect bot is not a member
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
+          String alertMessage = messageSource.getMessage("create.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
         }
       }
     } catch (UnknownDatafeedUserException e) {
@@ -216,12 +220,15 @@ public class ChannelService implements DatafeedListener {
 
         // Remove all federated users
         if (isRoom) {
+          // TODO isRoom is always false, can we remove this ?
           // Send message to alert it is impossible to add EMP user into a room
-          symphonyMessageSender.sendAlertMessage(botSession, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a chat room.");
+          String alertMessage = messageSource.getMessage("create.room.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
+          symphonyMessageSender.sendAlertMessage(botSession, streamId, alertMessage);
           userSessions.forEach(session -> symphonyService.removeMemberFromRoom(streamId, session));
         } else {
           // Send message to alert it is impossible to add EMP user into a MIM
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, "You are not allowed to invite a " + empSchemaService.getEmpDisplayName(entry.getKey()) + " contact in a MIM."));
+          String alertMessage = messageSource.getMessage("create.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
         }
       }
     } catch (UnknownDatafeedUserException e) {
@@ -245,10 +252,10 @@ public class ChannelService implements DatafeedListener {
           // send error message
           try {
             String createChannelErrorMessage;
-            if (canChatResponse.isPresent() && (canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT || canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM)) { // TODO ask for a better message
-              createChannelErrorMessage = "You are not entitled to send messages to " + empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp()) + " users";
+            if (canChatResponse.isPresent() && (canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT || canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM)) {
+              createChannelErrorMessage = messageSource.getMessage("cannot.chat.not.entitled", new Object[]{empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp())}, Locale.getDefault());
             } else {
-              createChannelErrorMessage = "This message will not be delivered. You no longer have the entitlement for this.";
+              createChannelErrorMessage = messageSource.getMessage("cannot.chat.no.contact", null, Locale.getDefault());
             }
             // We are in a IM, the connect bot is not a member
             symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, createChannelErrorMessage);
@@ -316,7 +323,8 @@ public class ChannelService implements DatafeedListener {
       Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findBySymphonyId(channel.getFederatedSymphonyId());
       if (federatedAccount.isPresent()) {
         // We are in an IM, the connect bot is not a member
-        symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), "Your contact has been removed", null);
+        String infoMessage = messageSource.getMessage("channel.deleted", null, Locale.getDefault());
+        symphonyMessageSender.sendInfoMessage(channel.getStreamId(), federatedAccount.get().getSymphonyUserId(), infoMessage, null);
       }
     }
     return this.generateDeleteChannelsResponse(response);

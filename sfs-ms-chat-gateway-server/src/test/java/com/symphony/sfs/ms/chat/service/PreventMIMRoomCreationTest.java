@@ -27,6 +27,7 @@ import model.UserInfo;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.MessageSource;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -58,7 +59,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   private MessageDecryptor messageDecryptor;
 
   @BeforeEach
-  public void setUp() throws Exception {
+  public void setUp(MessageSource messageSource) throws Exception {
     symphonyService = mock(SymphonyService.class);
     StreamService streamService = mock(StreamService.class);
     symphonyMessageSender = mock(SymphonyMessageSender.class);
@@ -102,10 +103,10 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     EmpSchemaService empSchemaService = new EmpSchemaService(adminClient);
 
-    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService);
+    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
     messageService.registerAsDatafeedListener();
 
-    ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration);
+    ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration, messageSource);
     channelService.registerAsDatafeedListener();
   }
 
@@ -228,7 +229,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     forwarderQueueConsumer.consume(notification, "1");
 
-    verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not entitled to send messages to WHATSAPP users."));
+    verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not permitted to send messages to WHATSAPP users."));
   }
 
   @Test

@@ -12,17 +12,13 @@ import com.symphony.sfs.ms.chat.generated.model.UpdateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
-import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
-import com.symphony.sfs.ms.starter.health.PodVersionChecker;
 import com.symphony.sfs.ms.starter.security.SessionManager;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StringId;
-import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUser;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes;
@@ -37,6 +33,7 @@ import model.UserInfo;
 import model.UserInfoList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.MessageSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -69,7 +66,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -83,8 +79,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   private Tracer tracer = mock(Tracer.class);
 
   @BeforeEach
-  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
-    super.setUp(db, mockServer);
+  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
+    super.setUp(db, mockServer, messageSource);
 
     empSchemaService = mock(EmpSchemaService.class);
 

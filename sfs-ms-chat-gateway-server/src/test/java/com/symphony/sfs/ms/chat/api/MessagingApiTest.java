@@ -23,6 +23,7 @@ import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.zalando.problem.DefaultProblem;
 
@@ -41,8 +42,8 @@ class MessagingApiTest extends AbstractIntegrationTest {
   private SymphonyMessageSender symphonyMessageSender;
 
   @BeforeEach
-  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer) throws Exception {
-    super.setUp(db, mockServer);
+  public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
+    super.setUp(db, mockServer, messageSource);
 
     symphonyMessageSender = mock(SymphonyMessageSender.class);
     StreamService streamService = mock(StreamService.class);
@@ -63,7 +64,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     EmpClient empClient = mock(EmpClient.class);
     UsersInfoService usersInfoService = mock(UsersInfoService.class);
 
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, null, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, null, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
 
     FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUserId("fromSymphonyUserId").build();
