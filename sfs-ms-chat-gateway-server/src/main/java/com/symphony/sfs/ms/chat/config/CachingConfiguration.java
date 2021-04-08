@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.config;
 
+import com.symphony.sfs.ms.starter.i18n.MessageSourceChain;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.cache.CacheManagerCustomizer;
 import org.springframework.cache.annotation.CacheEvict;
@@ -21,7 +22,7 @@ public class CachingConfiguration implements CacheManagerCustomizer<ConcurrentMa
 
   @Override
   public void customize(ConcurrentMapCacheManager cacheManager) {
-    cacheManager.setCacheNames(Arrays.asList(CONTENT_KEY_CACHE));
+    cacheManager.setCacheNames(Arrays.asList(CONTENT_KEY_CACHE, MessageSourceChain.CACHE_NAME));
   }
 
   @CacheEvict(allEntries = true, value = {CONTENT_KEY_CACHE})

@@ -58,3 +58,10 @@ zipkin:
   datadog:
     reporter:
       enabled: false
+
+# SfsEventChecker configuration
+eventchecker:
+  scheduling:
+    fixedDelay: 10m
+    initialDelayMin: 1s
+    initialDelayMax: 5s

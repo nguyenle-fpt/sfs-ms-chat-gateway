@@ -33,6 +33,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.testing.I18nTest;
+import com.symphony.sfs.ms.starter.testing.MultipleResultsCaptor;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import model.UserInfo;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -217,7 +218,9 @@ class MessageServiceTest implements I18nTest {
   }
 
   @Test
-  void onIMMessage_No_PartiallySent() {
+  void onIMMessage_No_PartiallySent(MessageSource messageSource) {
+    MultipleResultsCaptor<String> messageSourceGetMessageResultCaptor = captureMessageSourceGetMessageResult(messageSource);
+
     EntitlementResponse response = new EntitlementResponse();
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
     String id1 = TO_SYMPHONY_USER_ID + "1";

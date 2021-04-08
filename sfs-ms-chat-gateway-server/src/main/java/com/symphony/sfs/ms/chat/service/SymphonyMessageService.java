@@ -41,7 +41,6 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import model.UserInfo;
 import org.apache.log4j.MDC;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.context.MessageSource;
