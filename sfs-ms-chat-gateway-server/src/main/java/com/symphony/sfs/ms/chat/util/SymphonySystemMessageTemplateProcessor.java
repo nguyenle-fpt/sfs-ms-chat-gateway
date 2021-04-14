@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,11 +25,12 @@ public class SymphonySystemMessageTemplateProcessor {
    * @return Processed template or unprocessed stringified input if template not found
    */
   public String process(String messageContent, String templateName) {
-    return process(SymphonySystemMessage.builder().content(messageContent).build(), templateName);
+//    return process(SymphonySystemMessage.builder().content(messageContent).build(), templateName);
+    return process(messageContent, null, Collections.emptyList(), templateName);
   }
 
-  public String process(String messageContent, String title, String templateName) {
-    return process(SymphonySystemMessage.builder().content(messageContent).title(title).build(), templateName);
+  public String process(String messageContent, String title,  List<String> errors, String templateName) {
+    return process(SymphonySystemMessage.builder().content(messageContent).title(title).errors(errors).build(), templateName);
   }
 
   /**

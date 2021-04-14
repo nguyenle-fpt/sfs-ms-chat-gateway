@@ -28,7 +28,6 @@
 
     <canon.runtime.version>0.3.6</canon.runtime.version>
     <symphony.client.version>1.0.32</symphony.client.version>
-    <handlebars.version>4.1.2</handlebars.version>
 
     <!-- Test Coverage -->
     <symphonyCoverageDest>target/site/coverage</symphonyCoverageDest>

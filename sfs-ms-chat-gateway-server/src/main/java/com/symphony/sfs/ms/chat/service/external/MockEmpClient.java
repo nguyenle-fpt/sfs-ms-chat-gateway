@@ -9,6 +9,7 @@ import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
+import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
@@ -53,14 +54,14 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<List<OperationIdBySymId>> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
+  public Optional<SendMessageResponse> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
     // For now use the same mock implementation as channels
     String operationId = messages.get(emp + ":" + streamId + ":" + messageId + ":" + fromSymphonyUser.getId().toString());
     if (operationId == null) {
       operationId = UUID.randomUUID().toString();
       messages.putIfAbsent(emp + ":" + streamId + ":" + messageId + ":" + fromSymphonyUser.getId().toString(), operationId);
     }
-    return Optional.of(List.of(new OperationIdBySymId().operationId(operationId)));
+    return Optional.of(new SendMessageResponse().operationIds(List.of(new OperationIdBySymId().operationId(operationId))));
   }
 
   @Override

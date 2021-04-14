@@ -32,6 +32,7 @@ import org.springframework.context.MessageSource;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -39,6 +40,7 @@ import java.util.stream.Collectors;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -229,7 +231,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     forwarderQueueConsumer.consume(notification, "1");
 
-    verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not permitted to send messages to WHATSAPP users."));
+    verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not permitted to send messages to WHATSAPP users."), eq(Collections.emptyList()));
   }
 
   @Test
@@ -269,7 +271,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
     forwarderQueueConsumer.consume(notification, "1");
 
-    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString());
+    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString(), anyList());
   }
 
   @Test
@@ -312,7 +314,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     long messageNumber = empClient.getMessages().size();
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(messageNumber + 1, empClient.getMessages().size());
-    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString());
+    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString(), anyList());
   }
 
   @Test
@@ -355,7 +357,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     long messageNumber = empClient.getMessages().size();
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(messageNumber, empClient.getMessages().size());
-    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString());
+    verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString(), anyList());
   }
 
 

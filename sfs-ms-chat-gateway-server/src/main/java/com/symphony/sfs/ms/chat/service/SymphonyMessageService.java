@@ -27,7 +27,9 @@ import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.EmpError;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
+import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
@@ -58,6 +60,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -171,16 +174,16 @@ public class SymphonyMessageService implements DatafeedListener {
 
       // Check if message contents can be sent
       if (gatewaySocialMessage.isChime()) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("chimes.not.supported", null, Locale.getDefault())));
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("chimes.not.supported", null, Locale.getDefault()), Collections.emptyList()));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       } else if (gatewaySocialMessage.isTable()) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault())));
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault()), Collections.emptyList()));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       } else if (gatewaySocialMessage.getParentRelationshipType() == ParentRelationshipType.REPLY ||
         gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("inline.replies.not.supported", null, Locale.getDefault())));
+        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("inline.replies.not.supported", null, Locale.getDefault()), Collections.emptyList()));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
       }
@@ -198,7 +201,7 @@ public class SymphonyMessageService implements DatafeedListener {
         // CES-3203 Prevent messages to be sent in MIMs
         if (!gatewaySocialMessage.isRoom() && gatewaySocialMessage.getToUserIds().size() > 1) {
           String alertMessage = messageSource.getMessage("chat.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(emp)}, Locale.getDefault());
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
+          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
           messageMetrics.onMessageBlockFromSymphony(TOO_MANY_MEMBERS, streamId);
           return;
         }
@@ -224,13 +227,13 @@ public class SymphonyMessageService implements DatafeedListener {
                 totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
                 if (totalsize > MAX_UPLOAD_SIZE) {
                   String alertMessage = messageSource.getMessage("message.partially.sent", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault());
-                  allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
+                  allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
                   return;
                 }
               }
             } catch (DataBufferLimitException dbe) {
               String alertMessage = messageSource.getMessage("message.partially.sent", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault());
-              allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage));
+              allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
               return;
             }
           }
@@ -252,7 +255,7 @@ public class SymphonyMessageService implements DatafeedListener {
           }
           messageMetrics.onSendMessageFromSymphony(gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp, streamId);
 
-          Optional<List<OperationIdBySymId>> empMessageIdsOptional = empClient.sendMessage(emp,
+          Optional<SendMessageResponse> sendMessageResponse = empClient.sendMessage(emp,
             streamId,
             gatewaySocialMessage.getMessageId(),
             gatewaySocialMessage.getFromUser(),
@@ -261,10 +264,10 @@ public class SymphonyMessageService implements DatafeedListener {
             gatewaySocialMessage.getMessageForEmp(),
             gatewaySocialMessage.getDisclaimerForEmp(),
             attachmentsContent);
-          if (empMessageIdsOptional.isEmpty()) {
-            allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault())));
+          if (sendMessageResponse.isEmpty()) {
+            allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault()), Collections.emptyList()));
           } else {
-            this.dealWithMessageSentPartially(gatewaySocialMessage, empMessageIdsOptional.get(), allUserSessions);
+            this.dealWithMessageSentPartially(gatewaySocialMessage, sendMessageResponse.get(), allUserSessions);
           }
         }
       }
@@ -274,7 +277,8 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
-  private void dealWithMessageSentPartially(GatewaySocialMessage gatewaySocialMessage, List<OperationIdBySymId> empMessageIds, List<SymphonySession> allUserSessions) {
+  private void dealWithMessageSentPartially(GatewaySocialMessage gatewaySocialMessage, SendMessageResponse sendMessageResponse, List<SymphonySession> allUserSessions) {
+    List<OperationIdBySymId> empMessageIds = sendMessageResponse.getOperationIds();
     List<OperationIdBySymId> notDeliveredFor = empMessageIds
       .stream()
       .filter(op -> op.getOperationId() == null)
@@ -291,13 +295,26 @@ public class SymphonyMessageService implements DatafeedListener {
         .map(op -> this.federatedAccountRepository.findBySymphonyId(op.getSymphonyId()))
         .filter(Optional::isPresent)
         .map(Optional::get)
-        .map(user -> user.getFirstName() + " " + user.getLastName())
+        .map(this::federatedAccountDisplayName)
         .collect(Collectors.joining(", "));
       errorMessage = messageSource.getMessage("message.not.received", new Object[]{gatewaySocialMessage.getMessageId(), users}, Locale.getDefault());
     }
-    allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, gatewaySocialMessage.getStreamId(), errorMessage));
+
+    // CES-3955
+    // Build a list of stringified errors
+    List<String> formattedErrors = new ArrayList<>();
+    List<EmpError> errors = sendMessageResponse.getErrors();
+    if (org.apache.commons.collections.CollectionUtils.isNotEmpty(errors)) {
+
+      formattedErrors.addAll(errors.stream().map(EmpError::getDetail).collect(Collectors.toList()));
+    }
+
+    allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, gatewaySocialMessage.getStreamId(), errorMessage, formattedErrors.isEmpty() ? null : formattedErrors));
   }
 
+  private String federatedAccountDisplayName(FederatedAccount federatedAccount) {
+    return federatedAccount.getFirstName() + " " + federatedAccount.getLastName();
+  }
 
   private boolean manageCanChat(GatewaySocialMessage gatewaySocialMessage, String emp, String streamId, List<SymphonySession> userSessions, Optional<CanChatResponse> canChat) {
     if (gatewaySocialMessage.isRoom()) {
@@ -305,11 +322,11 @@ public class SymphonyMessageService implements DatafeedListener {
     }
 
     if (canChat.isEmpty() || canChat.get() == CanChatResponse.NO_ENTITLEMENT) {
-      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.chat.not.entitled", new Object[]{empSchemaService.getEmpDisplayName(emp)}, Locale.getDefault())));
+      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.chat.not.entitled", new Object[]{empSchemaService.getEmpDisplayName(emp)}, Locale.getDefault()), Collections.emptyList()));
       messageMetrics.onMessageBlockFromSymphony(NO_ENTITLEMENT_ACCESS, streamId);
       return false;
     } else if (canChat.get() == CanChatResponse.NO_CONTACT) {
-      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.chat.no.contact", null, Locale.getDefault())));
+      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.chat.no.contact", null, Locale.getDefault()), Collections.emptyList()));
       messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
       return false;
     }
@@ -378,7 +395,8 @@ public class SymphonyMessageService implements DatafeedListener {
           }
 
           String truncatedMessage = text.substring(0, MAX_TEXT_LENGTH - 3) + "...";
-          symphonyMessageSender.sendAlertMessage(session, streamId, truncatedMessage, symphonyAlertMessage);
+          List<String> errors = Collections.emptyList();
+          symphonyMessageSender.sendAlertMessage(session, streamId, truncatedMessage, symphonyAlertMessage, errors);
         }
 
         // Send the truncated message after the warning message
@@ -420,7 +438,8 @@ public class SymphonyMessageService implements DatafeedListener {
           symphonyMessageId = symphonyMessageSender.sendInfoMessage(session, streamId, text);
           break;
         case ALERT:
-          symphonyMessageId = symphonyMessageSender.sendAlertMessage(session, streamId, text, title);
+          List<String> errors = Collections.emptyList();
+          symphonyMessageId = symphonyMessageSender.sendAlertMessage(session, streamId, text, title, errors);
           break;
         default:
           throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));

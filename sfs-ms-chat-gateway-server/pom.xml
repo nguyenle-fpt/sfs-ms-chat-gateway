@@ -114,7 +114,6 @@
     <dependency>
       <groupId>com.github.jknack</groupId>
       <artifactId>handlebars</artifactId>
-      <version>${handlebars.version}</version>
     </dependency>
   </dependencies>
 

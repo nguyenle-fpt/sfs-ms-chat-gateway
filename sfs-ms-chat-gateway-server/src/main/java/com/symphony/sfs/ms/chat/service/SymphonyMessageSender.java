@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -104,12 +105,12 @@ public class SymphonyMessageSender {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
-  public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent, String title) {
-    return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, title, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
+  public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent, String title, List<String> errors) {
+    return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, title, errors, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
   }
 
-  public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent) {
-    return sendAlertMessage(userSession, streamId, messageContent, null);
+  public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent, List<String> errors) {
+    return sendAlertMessage(userSession, streamId, messageContent, null, errors);
   }
 
   public Optional<String> sendAlertMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {

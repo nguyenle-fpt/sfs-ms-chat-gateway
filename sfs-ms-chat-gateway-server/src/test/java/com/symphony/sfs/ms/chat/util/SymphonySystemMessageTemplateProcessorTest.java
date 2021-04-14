@@ -32,7 +32,7 @@ class SymphonySystemMessageTemplateProcessorTest {
   @Test
   void testProcessMessageContent_NoExistingTemplate() {
     String message = templateProcessor.process("Message Content", "symphony_message_test_no_existing_template");
-    assertEquals("SymphonySystemMessage(content=Message Content, title=null, description=null)", message);
+    assertEquals("SymphonySystemMessage(content=Message Content, title=null, description=null, errors=[])", message);
 
   }
 
@@ -49,7 +49,7 @@ class SymphonySystemMessageTemplateProcessorTest {
     String message = templateProcessor.process(
       SymphonySystemMessage.builder().content("content").title("title").description("description").build(),
       "symphony_message_test_no_existing_template");
-    assertEquals("SymphonySystemMessage(content=content, title=title, description=description)", message);
+    assertEquals("SymphonySystemMessage(content=content, title=title, description=description, errors=null)", message);
   }
 
   @Test

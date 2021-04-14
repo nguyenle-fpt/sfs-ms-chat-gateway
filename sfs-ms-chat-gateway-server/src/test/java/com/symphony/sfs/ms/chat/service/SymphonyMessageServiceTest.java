@@ -171,14 +171,17 @@ class SymphonyMessageServiceTest {
 
   @Test
   void sendAlertMessage() {
-    when(templateProcessor.process("templatizedText", "title", SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE)).thenReturn("alertDetemplatizedText");
+    when(templateProcessor.process("templatizedText", "title", Collections.emptyList(), SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE)).thenReturn("alertDetemplatizedText");
 
-    symphonyMessageSender.sendAlertMessage(userSession, "streamId", "templatizedText", "title");
+    symphonyMessageSender.sendAlertMessage(userSession, "streamId", "templatizedText", "title", Collections.emptyList());
 
     InOrder orderVerifier = inOrder(symphonyMessageSender, templateProcessor);
-    orderVerifier.verify(templateProcessor, once()).process("templatizedText", "title", SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE);
+    orderVerifier.verify(templateProcessor, once()).process("templatizedText", "title", Collections.emptyList(), SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE);
     orderVerifier.verify(symphonyMessageSender, once()).sendRawMessage(userSession, "streamId", "alertDetemplatizedText");
 
+
+    symphonyMessageSender.sendAlertMessage(userSession, "streamId", "templatizedText", Collections.emptyList());
+    orderVerifier.verify(templateProcessor, once()).process("templatizedText", null, Collections.emptyList(), SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE);
   }
 
   @Test

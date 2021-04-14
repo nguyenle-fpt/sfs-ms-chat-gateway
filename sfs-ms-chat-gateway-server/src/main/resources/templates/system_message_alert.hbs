@@ -10,6 +10,12 @@
         {{/if}}
          {{#if message.content}}
             {{message.content}}
+            {{#if message.errors}}
+                <br /><span class="tempo-text-color--secondary">Errors:</span>
+              {{#each message.errors}}
+                <br /><span class="hashTag" style="margin-right:24px">{{this.text}}</span>
+              {{/each}}
+            {{/if}}
          {{/if}}
         </body>
 

@@ -38,6 +38,7 @@ import java.util.Optional;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -156,7 +157,7 @@ class ChannelServiceTest implements I18nTest {
 
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
-    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.", Collections.emptyList());
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
     verify(mockAdminClient, never()).createIMRoom(any());
   }
@@ -183,7 +184,7 @@ class ChannelServiceTest implements I18nTest {
 
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
-    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.", Collections.emptyList());
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
     verify(mockAdminClient, never()).createIMRoom(any());
   }
@@ -210,7 +211,7 @@ class ChannelServiceTest implements I18nTest {
 
     verify(datafeedSessionPool, once()).refreshSession("101");
     verify(empClient, once()).createChannel("emp1", "streamId", Arrays.asList(toFederatedAccount), "1", Arrays.asList(fromSymphonyUser));
-    verify(symphonyMessageSender, never()).sendAlertMessage(eq(userSession101), eq("streamId"), anyString());
+    verify(symphonyMessageSender, never()).sendAlertMessage(eq(userSession101), eq("streamId"), anyString(), anyList());
     verifyNoMoreInteractions(datafeedSessionPool, empClient, symphonyMessageSender);
     verify(mockAdminClient, never()).createIMRoom(any());
   }
@@ -230,7 +231,7 @@ class ChannelServiceTest implements I18nTest {
     members.add("1");
     members.add("101");
     channelService.onIMCreated("streamId", members, fromSymphonyUser, false);
-    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "You are not permitted to send messages to External Messaging Platform users.");
+    verify(symphonyMessageSender, once()).sendAlertMessage(userSession101, "streamId", "You are not permitted to send messages to External Messaging Platform users.", Collections.emptyList());
   }
 
   @Test
@@ -249,7 +250,7 @@ class ChannelServiceTest implements I18nTest {
 
     assertEquals(STREAM_ID_1, streamId);
 
-    verify(symphonyMessageSender).sendAlertMessage(userSession101, STREAM_ID_1, "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
+    verify(symphonyMessageSender).sendAlertMessage(userSession101, STREAM_ID_1, "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.", Collections.emptyList());
   }
 
   @Test
@@ -267,7 +268,7 @@ class ChannelServiceTest implements I18nTest {
 
     assertEquals(STREAM_ID_1, streamId);
 
-    verify(symphonyMessageSender).sendAlertMessage(userSession101, STREAM_ID_1, "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.");
+    verify(symphonyMessageSender).sendAlertMessage(userSession101, STREAM_ID_1, "Sorry, we're not able to start this conversation. Please ask your administrator for assistance.", Collections.emptyList());
   }
 
 //  @Test
