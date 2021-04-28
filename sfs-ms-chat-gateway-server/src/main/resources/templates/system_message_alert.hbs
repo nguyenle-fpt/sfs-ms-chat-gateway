@@ -9,7 +9,7 @@
             <b>{{message.title}}</b> {{#if message.content}}<br />{{/if}}
         {{/if}}
          {{#if message.content}}
-            {{message.content}}
+           {{{message.content}}}
             {{#if message.errors}}
                 <br /><span class="tempo-text-color--secondary">Errors:</span>
               {{#each message.errors}}
