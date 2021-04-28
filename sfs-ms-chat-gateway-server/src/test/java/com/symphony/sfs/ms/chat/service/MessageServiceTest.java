@@ -467,7 +467,6 @@ class MessageServiceTest implements I18nTest {
     when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of("msgId"));
     when(empClient.sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), anyString(), eq(TypeEnum.INFO))).thenReturn(Optional.of("leaseId"));
     when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
-    RoomResponse roomResponse = new RoomResponse().roomType(RoomResponse.RoomTypeEnum.ROOM);
 
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null);
     String expectedTruncatedMsg = tooLongMsg.substring(0, 29997) + "...";
