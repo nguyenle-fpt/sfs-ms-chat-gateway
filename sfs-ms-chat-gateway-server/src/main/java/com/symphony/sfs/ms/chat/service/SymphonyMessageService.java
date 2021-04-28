@@ -85,6 +85,8 @@ public class SymphonyMessageService implements DatafeedListener {
   // The max size of attachments in a single message we accept is 25 MB ~ 34 MB when the file is encoded in base64
   private final long MAX_UPLOAD_SIZE = 34 * 1024 * 1024;
   private static final int MAX_TEXT_LENGTH = 30000;
+  private static final String TEXT_TOO_LONG_WARNING = "The message was too long and was truncated. Only the first %,d characters were delivered";
+
   private final EmpClient empClient;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -377,13 +379,11 @@ public class SymphonyMessageService implements DatafeedListener {
         // TODO fix this bad management of optional
         messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
         boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
+        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
         if (textTooLong) {
-          String symphonyAlertMessage = messageSource.getMessage("sending.too.long.message", new Object[]{MAX_TEXT_LENGTH}, Locale.getDefault());
-          String empAlertMessage = messageSource.getMessage("incoming.too.long.message", new Object[]{MAX_TEXT_LENGTH}, Locale.getDefault());
-
-          // Send the warning message before the truncated message
-          feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, empAlertMessage, TypeEnum.ALERT);
+          String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
+          feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, alertMessage, TypeEnum.ALERT);
 
           boolean isRoom = streamInfo.getStreamType().getType() == StreamTypes.ROOM;
 
@@ -393,14 +393,8 @@ public class SymphonyMessageService implements DatafeedListener {
           } else {
             session = datafeedSessionPool.refreshSession(fromSymphonyUserId);
           }
-
-          String truncatedMessage = text.substring(0, MAX_TEXT_LENGTH - 3) + "...";
-          List<String> errors = Collections.emptyList();
-          symphonyMessageSender.sendAlertMessage(session, streamId, truncatedMessage, symphonyAlertMessage, errors);
+          symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList());
         }
-
-        // Send the truncated message after the warning message
-        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
       }
     } catch (UnknownDatafeedUserException e) {
       // should never happen, as we have a FederatedAccount
