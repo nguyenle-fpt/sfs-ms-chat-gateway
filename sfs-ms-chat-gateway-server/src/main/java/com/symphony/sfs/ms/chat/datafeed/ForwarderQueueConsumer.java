@@ -34,7 +34,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import model.events.UserLeftRoom;
 import org.apache.commons.codec.binary.Base64;
 import org.slf4j.MDC;
 import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
@@ -355,10 +354,20 @@ public class ForwarderQueueConsumer {
 
     IUser initiator = message.getRequestingUser();
 
-    // at least one of the members must be a federated user
-    boolean atLeastOneHasSession = members.stream().anyMatch(datafeedSessionPool::sessionExists);
-    if (!atLeastOneHasSession) {
-      LOG.warn("Room with no gateway-managed accounts | members={} initiator={}", members, initiator.getUsername());
+    // Check if this is a room that we manage
+    // Note: we cannot check if there are federated users in the room as in this event we only receive the concerned users
+    // and not all members of the room
+    if (!botConfiguration.getSymphonyId().equals(Long.toString(maestroObject.getRequiredLong("creator")))) {
+      LOG.warn("Join room not managed by bot | creator={} initiator={}", maestroObject.getRequiredLong("creator"), initiator.getUsername());
+      return;
+    }
+
+    // JOIN_ROOM events are sent with a duplicate for advisors
+    // On the first on the payload.pending field is set to true on the second one it's false
+    // For the federated users these field is set to false
+    // In order to keep one and only one JOIN_ROOM event coming from advisors and federated users, we keep the ones with payload.pending: false
+    if (message.getJsonObject().getRequiredObject("payload").getRequiredBoolean("pending")) {
+      LOG.warn("Ignoring advisor's duplicate JOIN_ROOM event | members={} initiator={}", members, initiator.getUsername());
       return;
     }
 
