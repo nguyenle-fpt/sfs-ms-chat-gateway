@@ -289,6 +289,9 @@ public class RoomService implements DatafeedListener {
       FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(symphonyId).orElseThrow(FederatedAccountNotFoundProblem::new);
       StringBuilder text = new StringBuilder();
       List<RoomMemberIdentifier> roomMemberIdentifiers = getRoomMembersIdentifiers(streamId);
+      if(roomMemberIdentifiers.stream().map(RoomMemberIdentifier::getSymphonyId).noneMatch(s -> s.equals(symphonyId))){
+        roomMemberIdentifiers.add(new RoomMemberIdentifier().firstName(federatedAccount.getFirstName()).lastName(federatedAccount.getLastName()));
+      }
       if (isUserJoining) {
         //Create Welcome Message
         SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());

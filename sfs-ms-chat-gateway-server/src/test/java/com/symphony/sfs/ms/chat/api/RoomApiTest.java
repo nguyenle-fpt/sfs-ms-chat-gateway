@@ -172,13 +172,13 @@ class RoomApiTest extends AbstractIntegrationTest {
   @Test
   public void sendRoomMembersListToEmpUser_OK_Joining() {
     FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
-      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
-      .federatedUserId(federatedUserId("11"))
-      .firstName("firstName11")
-      .lastName("lastName11")
+      .symphonyUserId(symphonyId("31", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("31"))
+      .firstName("firstName31")
+      .lastName("lastName31")
       .emp("emp1")
-      .emailAddress(emailAddress("11"))
-      .phoneNumber((phoneNumber("11")))
+      .emailAddress(emailAddress("31"))
+      .phoneNumber((phoneNumber("31")))
       .build());
 
     when(adminClient.getRoomMembersIdentifiers(ROOM_STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"))));
@@ -194,15 +194,39 @@ class RoomApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  public void sendRoomMembersListToEmpUser_OK_Joining_AsynchronousTrouble() {
+    FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
+      .symphonyUserId(symphonyId("31", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("31"))
+      .firstName("firstName31")
+      .lastName("lastName31")
+      .emp("emp1")
+      .emailAddress(emailAddress("31"))
+      .phoneNumber((phoneNumber("31")))
+      .build());
+
+    when(adminClient.getRoomMembersIdentifiers(ROOM_STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("32", "33"), Collections.singletonList("41"))));
+    doReturn(Optional.of(SymphonyRoom.builder().roomAttributes(SymphonyRoomAttributes.builder().name(ROOM_NAME).build()).build())).when(streamService).roomInfo(anyString(), any(SessionSupplier.class), anyString());
+
+    sendRoomMembersListToEmpUser(ROOM_STREAM_ID, new SendRoomMembersRequest().symphonyId(federatedAccount.getSymphonyUserId()).userJoining(true));
+
+    String expectedMessage = generateMessageToSendJoining(ROOM_NAME, Arrays.asList("11", "12", "32", "33", "41", "31"), true);
+
+    verify(empClient, once()).sendSystemMessage(eq("emp1"), eq(ROOM_STREAM_ID), eq(federatedAccount.getSymphonyUserId()), any(Long.class), eq(expectedMessage), eq(SendSystemMessageRequest.TypeEnum.INFO));
+    verify(empClient, once()).sendSystemMessage(anyString(), anyString(), anyString(), any(Long.class), anyString(), any(SendSystemMessageRequest.TypeEnum.class));
+
+  }
+
+  @Test
   public void sendRoomMembersListToEmpUser_OK_Joining_SymphonyRoomNotFound() {
     FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
-      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
-      .federatedUserId(federatedUserId("11"))
-      .firstName("firstName11")
-      .lastName("lastName11")
+      .symphonyUserId(symphonyId("31", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("31"))
+      .firstName("firstName31")
+      .lastName("lastName31")
       .emp("emp1")
-      .emailAddress(emailAddress("11"))
-      .phoneNumber((phoneNumber("11")))
+      .emailAddress(emailAddress("31"))
+      .phoneNumber((phoneNumber("31")))
       .build());
 
     when(adminClient.getRoomMembersIdentifiers(ROOM_STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"))));
@@ -219,13 +243,13 @@ class RoomApiTest extends AbstractIntegrationTest {
   @Test
   public void sendRoomMembersListToEmpUser_OK_notJoining() {
     FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
-      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
-      .federatedUserId(federatedUserId("11"))
-      .firstName("firstName11")
-      .lastName("lastName11")
+      .symphonyUserId(symphonyId("31", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("31"))
+      .firstName("firstName31")
+      .lastName("lastName31")
       .emp("emp1")
-      .emailAddress(emailAddress("11"))
-      .phoneNumber((phoneNumber("11")))
+      .emailAddress(emailAddress("31"))
+      .phoneNumber((phoneNumber("31")))
       .build());
 
     when(adminClient.getRoomMembersIdentifiers(ROOM_STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"))));
@@ -242,7 +266,7 @@ class RoomApiTest extends AbstractIntegrationTest {
   @Test
   public void sendRoomMembersListToEmpUser_UnknownFederatedAccount() {
 
-    sendRoomMembersListToEmpUser(ROOM_STREAM_ID, new SendRoomMembersRequest().symphonyId(symphonyId("11", FEDERATION_POD_ID)).userJoining(false));
+    sendRoomMembersListToEmpUser(ROOM_STREAM_ID, new SendRoomMembersRequest().symphonyId(symphonyId("31", FEDERATION_POD_ID)).userJoining(false));
 
     verify(adminClient, never()).getRoomMembersIdentifiers(anyString());
     verify(empClient, never()).sendSystemMessage(anyString(), anyString(), anyString(), any(Long.class), anyString(), any(SendSystemMessageRequest.TypeEnum.class));
