@@ -40,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -152,6 +153,21 @@ class RoomServiceTest implements I18nTest {
   }
 
   @Test
+  public void onUserLeftRoom_Creator() {
+    createFederationAccountRepositoryAndUsersInfoServiceMock(Arrays.asList("11","12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"));
+    when(adminClient.getRoomMembersIdentifiers(STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Collections.singletonList("11"), Arrays.asList("31", "32"), Collections.singletonList("41"))));
+    // Different ordering due to ordering of operations
+    // In this case the new RoomMembers have been removed in Admin ms before the Get Room Members request was sent
+    String text = generateMessage("left", Arrays.asList("11", "33"), Arrays.asList("11", "31", "32", "41"));
+    List<IUser> mockedIUsers = generateIUsersMock(Collections.singletonList("11"), Collections.singletonList("33"));
+    roomService.onUserLeftRoom(STREAM_ID, newIUser("1"), mockedIUsers);
+
+    verify(empClient, never()).sendSystemMessageToChannels(eq(EMP1), eq(generateChannelToSendList(Arrays.asList("31", "32"))), eq(text), eq(true));
+    verify(empClient, never()).sendSystemMessageToChannels(eq(EMP2), eq(generateChannelToSendList(Collections.singletonList("41"))), eq(text), eq(true));
+    verify(empClient, never()).sendSystemMessageToChannels(anyString(), any(List.class), anyString(), any(Boolean.class));
+  }
+
+  @Test
   public void onUserLeftRoom_OK_SynchronicityTest() {
     createFederationAccountRepositoryAndUsersInfoServiceMock(Arrays.asList("11","12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"));
     when(adminClient.getRoomMembersIdentifiers(STREAM_ID)).thenReturn(Optional.of(generateRoomMembersIdentifiers(Arrays.asList("11", "12"), Arrays.asList("31", "32", "33"), Collections.singletonList("41"))));
@@ -177,14 +193,17 @@ class RoomServiceTest implements I18nTest {
 
   private RoomMembersIdentifiersResponse generateRoomMembersIdentifiers(List<String> advisorsSuffix, List<String> emp1UsersSuffix, List<String> emp2UsersSuffix){
     List<RoomMemberIdentifier> roomMemberIdentifiers = new ArrayList<>();
+    boolean isCreator = true;
     for(String suffix : advisorsSuffix){
-      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(false).symphonyId(symphonyId(suffix, POD_ID)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp(null));
+      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(false).symphonyId(symphonyId(suffix, POD_ID)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp(null).creator(isCreator));
+      // Only the first advisor in the list is a creator
+      isCreator = false;
     }
     for(String suffix : emp1UsersSuffix){
-      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(true).symphonyId(symphonyId(suffix, FEDERATION_POD)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp(EMP1));
+      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(true).symphonyId(symphonyId(suffix, FEDERATION_POD)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp(EMP1).creator(false));
     }
     for(String suffix : emp2UsersSuffix){
-      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(true).symphonyId(symphonyId(suffix, FEDERATION_POD)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp(EMP2));
+      roomMemberIdentifiers.add(new RoomMemberIdentifier().federatedUser(true).symphonyId(symphonyId(suffix, FEDERATION_POD)).firstName("firstName" + suffix).lastName("lastName" + suffix).emp(EMP2).creator(false));
     }
     return new RoomMembersIdentifiersResponse().members(roomMemberIdentifiers);
   }

@@ -269,18 +269,44 @@ public class RoomService implements DatafeedListener {
   @Override
   public void onUserLeftRoom(String streamId, IUser requestor, List<IUser> leavingUsers) {
 
-    notifyWholeEmpRoomMembersJoinOrLeaveEvent(streamId, leavingUsers.stream().map(iUser -> iUser.getId().toString()).collect(Collectors.toList()),false);
+    List<String> leavers = leavingUsers.stream().map(user -> user.getId().toString()).collect(Collectors.toList());
 
-    if(botConfiguration.getSymphonyId().equals(String.valueOf(requestor.getId()))) {
+    if (isRoomValid(streamId, leavers)) {
+      // CES-4728 - Only send if room is still valid
+      notifyWholeEmpRoomMembersJoinOrLeaveEvent(streamId, leavers, false);
+    }
+
+    if (botConfiguration.getSymphonyId().equals(String.valueOf(requestor.getId()))) {
       LOG.info("On user left room ignoring bot action | streamId={}", streamId);
       return;
     }
+
     adminClient.notifyLeaveRoom(
       streamId,
       requestor.getId().toString(),
-      leavingUsers.stream().map(user -> user.getId().toString()).collect(Collectors.toList())
-    );
+      leavers);
+  }
 
+  /**
+   * Method copied from sfs-ms-admin:RoomUtils.isRoomValid
+   *
+   * @param streamId
+   * @param symphonyIdsToRemove
+   * @return
+   */
+  private boolean isRoomValid (String streamId, List<String> symphonyIdsToRemove) {
+    List<RoomMemberIdentifier> roomMembersIdentifiers = getRoomMembersIdentifiers(streamId);
+    Optional<String> creatorSymphonyId = roomMembersIdentifiers.stream().filter(RoomMemberIdentifier::isCreator).map(RoomMemberIdentifier::getSymphonyId).findFirst();
+
+    if (creatorSymphonyId.isPresent() && symphonyIdsToRemove.contains(creatorSymphonyId.get())) {
+      // When the creator of the room is removed, the room becomes invalid
+      return false;
+    }
+
+    boolean anyFederated = roomMembersIdentifiers.stream().anyMatch(roomMemberIdentifier -> roomMemberIdentifier.isFederatedUser() && !symphonyIdsToRemove.contains(roomMemberIdentifier.getSymphonyId()));
+    boolean anyAdvisor = roomMembersIdentifiers.stream().anyMatch(roomMemberIdentifier -> !roomMemberIdentifier.isFederatedUser() && !symphonyIdsToRemove.contains(roomMemberIdentifier.getSymphonyId()));
+
+    return anyAdvisor && anyFederated;
   }
 
   @NewSpan
