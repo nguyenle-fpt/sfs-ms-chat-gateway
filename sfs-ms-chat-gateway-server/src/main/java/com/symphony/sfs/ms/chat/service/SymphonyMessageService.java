@@ -25,6 +25,7 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
+import com.symphony.sfs.ms.chat.util.SpecialCharactersUtils;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.EmpError;
@@ -60,7 +61,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -344,7 +344,7 @@ public class SymphonyMessageService implements DatafeedListener {
       SymphonySession userSession = datafeedSessionPool.refreshSession(symphonyUserId);
       for (MessageId id : messageIds) {
         MessageInfo message = symphonyService.getMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
-        messageInfos.add(message);
+        messageInfos.add(message.message(SpecialCharactersUtils.unescapeSpecialCharacters(message.getMessage())));
       }
 
       return new RetrieveMessagesResponse().messages(messageInfos);

@@ -80,4 +80,33 @@ public final class HttpRequestUtils {
       fail();
     }
   }
+
+  public static <R, A> void getRequestFail(A api, R request, String endPoint, List<Object> pathParams, ObjectMapper objectMapper, Tracer tracer, String problemClassName, String problemErrorCode, HttpStatus httpStatus) {
+
+    Problem actualProblem = configuredGiven(objectMapper, new ExceptionHandling(tracer), api)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(request)
+      .when()
+      .get(endPoint, pathParams.toArray(new Object[pathParams.size()]))
+      .then()
+      .statusCode(httpStatus.value())
+      .extract().response().body()
+      .as(DefaultProblem.class);
+
+    try {
+      Problem expectedProblem;
+      if (problemErrorCode == null) {
+        expectedProblem = (Problem) Class.forName(problemClassName).getDeclaredConstructor().newInstance();
+      } else {
+        expectedProblem = (Problem) Class.forName(problemClassName).getDeclaredConstructor(String.class).newInstance(problemErrorCode);
+      }
+      TestUtils.testProblemEquality(expectedProblem, actualProblem);
+
+    } catch (
+      Exception e) {
+      e.printStackTrace();
+      fail();
+    }
+
+  }
 }

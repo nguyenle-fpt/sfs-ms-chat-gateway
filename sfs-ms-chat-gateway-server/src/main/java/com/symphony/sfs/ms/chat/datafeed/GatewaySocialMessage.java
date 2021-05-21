@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.datafeed;
 
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.chat.util.SpecialCharactersUtils;
 import lombok.Builder;
 import lombok.Builder.Default;
 import lombok.Getter;
@@ -12,9 +13,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static org.jsoup.nodes.Entities.escape;
 
@@ -62,7 +61,7 @@ public class GatewaySocialMessage {
   }
 
   public String getMessageForEmp() {
-    return escape(unescapeSpecialCharacters(this.textContent));
+    return escape(SpecialCharactersUtils.unescapeSpecialCharacters(this.textContent));
   }
 
   public String getDisclaimerForEmp() {
@@ -75,15 +74,6 @@ public class GatewaySocialMessage {
 
   public boolean containsCustomEntityType(String entityType) {
     return customEntities.stream().anyMatch(customEntity -> entityType.equals(customEntity.getType()));
-  }
-
-  private static String unescapeSpecialCharacters(String text) {
-    List<String> specialsCharacters = Arrays.asList("+", "-", "_", "*", "`");
-    for (String specialCharacter : specialsCharacters) {
-      text = text.replace("\\" + specialCharacter, specialCharacter);
-    }
-
-    return text;
   }
 
 }
