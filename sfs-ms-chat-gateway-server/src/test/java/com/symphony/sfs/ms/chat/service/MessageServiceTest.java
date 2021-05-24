@@ -1,11 +1,14 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.github.jknack.handlebars.Handlebars;
+import com.github.jknack.handlebars.io.ClassPathTemplateLoader;
+import com.github.jknack.handlebars.io.TemplateLoader;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
-import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
+import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -16,6 +19,7 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
+import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.emp.generated.model.EmpError;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
@@ -64,6 +68,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -72,6 +77,7 @@ class MessageServiceTest implements I18nTest {
 
   private SymphonyMessageService messageService;
 
+  private MeterManager meterManager;
   private EmpClient empClient;
   private AuthenticationService authenticationService;
   private PodConfiguration podConfiguration;
@@ -97,7 +103,7 @@ class MessageServiceTest implements I18nTest {
 
   @BeforeEach
   public void setUp(MessageSource messageSource) {
-    MeterManager meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
+    meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
     empClient = mock(EmpClient.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
     datafeedSessionPool = mock(DatafeedSessionPool.class);
@@ -133,6 +139,26 @@ class MessageServiceTest implements I18nTest {
     messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+  }
+
+  /**
+   * Partially overwrite setup to test handlebars template
+   *
+   * @param messageSource
+   */
+  private void spySymphonyMessageSender(MessageSource messageSource) {
+    ChatConfiguration chatConfiguration = new ChatConfiguration();
+
+    TemplateLoader loader = new ClassPathTemplateLoader();
+    loader.setPrefix("/templates");
+    loader.setSuffix(".hbs");
+
+    SymphonySystemMessageTemplateProcessor templateProcessor = new SymphonySystemMessageTemplateProcessor(new Handlebars(loader));
+
+    MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
+    // really instantiate SymphonyMessageSender to test Handlebars templates.
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService,  templateProcessor, messageMetrics));
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
   }
 
   @Test
@@ -267,6 +293,7 @@ class MessageServiceTest implements I18nTest {
 
   @Test
   void onIMMessage_No_PartiallySent_WithErrors(MessageSource messageSource) {
+    spySymphonyMessageSender(messageSource);
     MultipleResultsCaptor<String> messageSourceGetMessageResultCaptor = captureMessageSourceGetMessageResult(messageSource);
 
     EntitlementResponse response = new EntitlementResponse();
@@ -312,8 +339,32 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(new SymphonySession("username", "kmToken", "sessionToken"), "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.",
+    SymphonySession symphonySession = new SymphonySession("username", "kmToken", "sessionToken");
+    verify(symphonyMessageSender, once()).sendAlertMessage(symphonySession, "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.",
       Arrays.asList("error coming directly from EMP"));
+    String expectedMessage = "<messageML>\n" +
+      "  <div>\n" +
+      "    <card data-accent-color=\"tempo-bg-color--red\"\n" +
+      "          data-icon-src=\"data:image/png;base64,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\">\n" +
+      "\n" +
+      "\n" +
+      "        <body>\n" +
+      "        \n" +
+      "         \n" +
+      "           Some users did not received the message (messageId : messageId): firstName 2 lastName 2.\n" +
+      "            \n" +
+      "                <br /><span class=\"tempo-text-color--secondary\">Errors:</span>\n" +
+      "              \n" +
+      "                <br /><span class=\"hashTag\" style=\"margin-right:24px\">error coming directly from EMP</span>\n" +
+      "              \n" +
+      "            \n" +
+      "         \n" +
+      "        </body>\n" +
+      "\n" +
+      "    </card>\n" +
+      "  </div>\n" +
+      "</messageML>\n";
+    verify(streamService, once()).sendMessage(eq("podUrl"), any(StaticSessionSupplier.class), eq("streamId"), eq(expectedMessage));
   }
 
   @Test

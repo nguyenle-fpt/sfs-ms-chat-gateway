@@ -309,6 +309,7 @@ public class SymphonyMessageService implements DatafeedListener {
     if (org.apache.commons.collections.CollectionUtils.isNotEmpty(errors)) {
 
       formattedErrors.addAll(errors.stream().map(EmpError::getDetail).collect(Collectors.toList()));
+      LOG.info("SymphonyMessageService.dealWithMessageSentPartially | formattedErrors={}", formattedErrors);
     }
 
     allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, gatewaySocialMessage.getStreamId(), errorMessage, formattedErrors.isEmpty() ? null : formattedErrors));
