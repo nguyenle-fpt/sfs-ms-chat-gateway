@@ -135,8 +135,6 @@ public class RoomService implements DatafeedListener {
     List<UpdateRoomActivityMemberResponse> memberResponses = new ArrayList<>();
     //Deactivate the room from Emp side
     for(Map.Entry<String, List<ChannelIdentifier>> deleteChannelsRequests : channelsToDelete.entrySet()) {
-      //TODO CES-3557
-      // Send System message to emp's users in the chat before deleting the channels
       try {
         Optional<DeleteChannelsResponse> deleteChannelResponse = empClient.deleteChannels(deleteChannelsRequests.getValue(), deleteChannelsRequests.getKey());
         deleteChannelResponse.ifPresent(deleteChannelsResponse -> memberResponses.addAll(
