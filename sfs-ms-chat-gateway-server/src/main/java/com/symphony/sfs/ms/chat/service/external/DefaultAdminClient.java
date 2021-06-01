@@ -55,12 +55,6 @@ public class DefaultAdminClient implements AdminClient {
   }
 
   @Override
-  public Optional<RoomMembersIdentifiersResponse> getRoomMembersIdentifiers(String streamId){
-    adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return adminClient.getRoomApi().getRoomMembersIdentifiers(streamId);
-  }
-
-  @Override
   public void notifyLeaveRoom(String streamId, String requester, List<String> leavers) {
     adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
 

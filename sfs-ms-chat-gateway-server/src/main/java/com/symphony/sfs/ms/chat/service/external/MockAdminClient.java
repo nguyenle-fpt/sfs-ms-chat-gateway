@@ -41,10 +41,6 @@ public class MockAdminClient implements AdminClient {
     return Optional.empty();
   }
 
-  @Override
-  public Optional<RoomMembersIdentifiersResponse> getRoomMembersIdentifiers(String streamId){
-    return Optional.empty();
-  }
 
   @Override
   public void notifyLeaveRoom(String streamId, String requester, List<String> leavers) {

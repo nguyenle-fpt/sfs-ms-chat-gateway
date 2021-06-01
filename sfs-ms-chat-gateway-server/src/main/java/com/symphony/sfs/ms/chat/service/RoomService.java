@@ -2,13 +2,10 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.sfs.ms.admin.generated.model.RoomMemberIdentifier;
-import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateRoomFailedProblem;
-import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
@@ -28,7 +25,6 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
-import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
@@ -48,11 +44,9 @@ import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -259,20 +253,12 @@ public class RoomService implements DatafeedListener {
       .orElseThrow(() -> new IllegalStateException("Error retrieving customer info"));
   }
 
-  @Override
-  public void onUserJoinedRoom(String streamId, List<String> joiners, IUser fromSymphonyUser) {
-    notifyWholeEmpRoomMembersJoinOrLeaveEvent(streamId, joiners,true);
-  }
+
 
   @Override
   public void onUserLeftRoom(String streamId, IUser requestor, List<IUser> leavingUsers) {
 
     List<String> leavers = leavingUsers.stream().map(user -> user.getId().toString()).collect(Collectors.toList());
-
-    if (isRoomValid(streamId, leavers)) {
-      // CES-4728 - Only send if room is still valid
-      notifyWholeEmpRoomMembersJoinOrLeaveEvent(streamId, leavers, false);
-    }
 
     if (botConfiguration.getSymphonyId().equals(String.valueOf(requestor.getId()))) {
       LOG.info("On user left room ignoring bot action | streamId={}", streamId);
@@ -285,153 +271,12 @@ public class RoomService implements DatafeedListener {
       leavers);
   }
 
-  /**
-   * Method copied from sfs-ms-admin:RoomUtils.isRoomValid
-   *
-   * @param streamId
-   * @param symphonyIdsToRemove
-   * @return
-   */
-  private boolean isRoomValid (String streamId, List<String> symphonyIdsToRemove) {
-    List<RoomMemberIdentifier> roomMembersIdentifiers = getRoomMembersIdentifiers(streamId);
-    Optional<String> creatorSymphonyId = roomMembersIdentifiers.stream().filter(RoomMemberIdentifier::isCreator).map(RoomMemberIdentifier::getSymphonyId).findFirst();
 
-    if (creatorSymphonyId.isPresent() && symphonyIdsToRemove.contains(creatorSymphonyId.get())) {
-      // When the creator of the room is removed, the room becomes invalid
-      return false;
-    }
-
-    boolean anyFederated = roomMembersIdentifiers.stream().anyMatch(roomMemberIdentifier -> roomMemberIdentifier.isFederatedUser() && !symphonyIdsToRemove.contains(roomMemberIdentifier.getSymphonyId()));
-    boolean anyAdvisor = roomMembersIdentifiers.stream().anyMatch(roomMemberIdentifier -> !roomMemberIdentifier.isFederatedUser() && !symphonyIdsToRemove.contains(roomMemberIdentifier.getSymphonyId()));
-
-    return anyAdvisor && anyFederated;
-  }
 
   @NewSpan
   public void sendRoomMembersListToEmpUser(String streamId, String symphonyId, boolean isUserJoining) {
-    try {
-      FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(symphonyId).orElseThrow(FederatedAccountNotFoundProblem::new);
-      StringBuilder text = new StringBuilder();
-      List<RoomMemberIdentifier> roomMemberIdentifiers = getRoomMembersIdentifiers(streamId);
-      if(roomMemberIdentifiers.stream().map(RoomMemberIdentifier::getSymphonyId).noneMatch(s -> s.equals(symphonyId))){
-        roomMemberIdentifiers.add(new RoomMemberIdentifier().firstName(federatedAccount.getFirstName()).lastName(federatedAccount.getLastName()));
-      }
-      if (isUserJoining) {
-        //Create Welcome Message
-        SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-        Optional<SymphonyRoom> optionalSymphonyRoom = streamService.roomInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId);
-        String roomName;
-        if(optionalSymphonyRoom.isPresent()) {
-          roomName = optionalSymphonyRoom.get().getRoomAttributes().getName();
-        } else {
-          roomName = "the conversation";
-        }
-        text.append(messageSource.getMessage("user.joined.room", new Object[]{roomName}, Locale.getDefault()));
-      }
-      text.append(generateJoinOrLeaveTextMessage(new ArrayList<>(), roomMemberIdentifiers, isUserJoining));
-      Optional<String> sendSystemMessage = empClient.sendSystemMessage(federatedAccount.getEmp(), streamId, symphonyId, OffsetDateTime.now().toEpochSecond(), text.toString(), SendSystemMessageRequest.TypeEnum.INFO);
-      if (sendSystemMessage.isEmpty()) {
-        LOG.error("Fail to send room members list | streamId={} symphonyId={} emp={}", streamId, symphonyId, federatedAccount.getEmp());
-      }
-    } catch (FederatedAccountNotFoundProblem problem){
-      LOG.error("Federated Account not found | symphonyId={}", symphonyId, problem);
-    }
+      // does nothing. We keep this to avoid exceptions during deployment
   }
 
-  private void notifyWholeEmpRoomMembersJoinOrLeaveEvent(String streamId, List<String> symphonyIds, boolean isJoining){
-    //Room is always active if we are here (join and leave blocked on deactivated room)
-    List<RoomMemberIdentifier> roomMemberIdentifiers = getRoomMembersIdentifiers(streamId);
-    if(roomMemberIdentifiers.isEmpty()) {
-      return;
-    }
 
-    List<String> roomMembersSymphonyIds = roomMemberIdentifiers.stream().map(RoomMemberIdentifier::getSymphonyId).collect(Collectors.toList());
-    List<RoomMemberIdentifier> affectedUsers = roomMemberIdentifiers.stream().filter(roomMemberIdentifier -> symphonyIds.contains(roomMemberIdentifier.getSymphonyId())).collect(Collectors.toList());
-
-    //Adjust for asynchronous trouble
-    if (isJoining) {
-      for (String symphonyId : symphonyIds) {
-        if(!roomMembersSymphonyIds.contains(symphonyId)) {
-          RoomMemberIdentifier roomMemberIdentifierToAdd = getRoomMemberIdentifierFromSymphonyId(symphonyId);
-          roomMemberIdentifiers.add(roomMemberIdentifierToAdd);
-          affectedUsers.add(roomMemberIdentifierToAdd);
-        }
-      }
-    } else {
-      List<String> affectedUsersList = affectedUsers.stream().map(RoomMemberIdentifier::getSymphonyId).collect(Collectors.toList());
-      for (String symphonyId : symphonyIds) {
-        roomMemberIdentifiers.removeIf(roomMemberIdentifier -> roomMemberIdentifier.getSymphonyId().equals(symphonyId));
-        if(!affectedUsersList.contains(symphonyId)){
-          affectedUsers.add(getRoomMemberIdentifierFromSymphonyId(symphonyId));
-        }
-      }
-    }
-
-    String textMessage = generateJoinOrLeaveTextMessage(affectedUsers, roomMemberIdentifiers, isJoining);
-    Map<String, List<String>> empSymphonyIdMap = roomMemberIdentifiers.stream()
-      .filter(RoomMemberIdentifier::isFederatedUser)
-      // Send this notification only to the members already in the room
-      // The joiners and leavers will receive another personalized notification
-      .filter(roomMemberIdentifier -> !symphonyIds.contains(roomMemberIdentifier.getSymphonyId()))
-      .collect(Collectors.groupingBy(RoomMemberIdentifier::getEmp, Collectors.mapping(RoomMemberIdentifier::getSymphonyId, Collectors.toList())));
-    for(Map.Entry<String, List<String>> empSymphonyIds : empSymphonyIdMap.entrySet()){
-      List<ChannelIdentifier> channels = empSymphonyIds.getValue().stream().map(symphonyId -> new ChannelIdentifier().symphonyId(symphonyId).streamId(streamId)).collect(Collectors.toList());
-      LOG.info("Notify Emp Room Members new Joiners or Leavers | emp={} channels={}", empSymphonyIds.getKey(), channels);
-      empClient.sendSystemMessageToChannels(empSymphonyIds.getKey(), channels, textMessage, true);
-    }
-  }
-
-  private List<RoomMemberIdentifier> getRoomMembersIdentifiers(String streamId){
-    Optional<RoomMembersIdentifiersResponse> roomMembersIdentifiersResponseOptional = adminClient.getRoomMembersIdentifiers(streamId);
-    if(roomMembersIdentifiersResponseOptional.isEmpty()) {
-      LOG.error("Get Room Members Info Fail | streamId={}", streamId);
-      return new ArrayList<>();
-    }
-    return roomMembersIdentifiersResponseOptional.get().getMembers();
-  }
-
-  private String generateJoinOrLeaveTextMessage(List<RoomMemberIdentifier> affectedUsers, List<RoomMemberIdentifier> roomMemberIdentifiers, boolean isJoining){
-    StringBuilder text = new StringBuilder();
-    for (RoomMemberIdentifier user : affectedUsers) {
-      if (isJoining) {
-        text.append(messageSource.getMessage("other.user.joined.room", new Object[]{user.getFirstName(), user.getLastName()}, Locale.getDefault()));
-      } else {
-        text.append(messageSource.getMessage("other.user.left.room", new Object[]{user.getFirstName(), user.getLastName()}, Locale.getDefault()));
-      }
-    }
-    String membersListAsString = roomMemberIdentifiers.stream()
-      .map(roomMemberIdentifier -> roomMemberIdentifier.getFirstName() + " " + roomMemberIdentifier.getLastName()).collect(Collectors.joining(", "));
-
-    text.append(messageSource.getMessage("room.member.list", new Object[]{membersListAsString}, Locale.getDefault()));
-    return text.toString();
-  }
-
-  private RoomMemberIdentifier getRoomMemberIdentifierFromSymphonyId(String symphonyId){
-    Optional<FederatedAccount> optional = federatedAccountRepository.findBySymphonyId(symphonyId);
-    if(optional.isPresent()){
-      FederatedAccount federatedAccount = optional.get();
-      return new RoomMemberIdentifier()
-        .symphonyId(symphonyId)
-        .firstName(federatedAccount.getFirstName())
-        .lastName(federatedAccount.getLastName())
-        .federatedUser(true)
-        .emp(federatedAccount.getEmp());
-    } else {
-      UserInfo userInfo = new UserInfo();
-      try {
-        SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-        userInfo = getUserInfo(symphonyId, botSession);
-      } catch (IllegalStateException e) {
-        userInfo.setFirstName("Unknown");
-        userInfo.setLastName("User");
-      }
-      return new RoomMemberIdentifier()
-        .symphonyId(symphonyId)
-        .firstName(userInfo.getFirstName())
-        .lastName(userInfo.getLastName())
-        .federatedUser(false)
-        .emp(null);
-    }
-
-  }
 }

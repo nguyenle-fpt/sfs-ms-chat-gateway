@@ -20,7 +20,5 @@ public interface AdminClient {
 
   Optional<RoomResponse> createIMRoom(ImCreatedNotification imRequest);
 
-  Optional<RoomMembersIdentifiersResponse> getRoomMembersIdentifiers(String streamId);
-
-  void notifyLeaveRoom(String streamId, String requester, List<String> leavers);
+   void notifyLeaveRoom(String streamId, String requester, List<String> leavers);
 }
