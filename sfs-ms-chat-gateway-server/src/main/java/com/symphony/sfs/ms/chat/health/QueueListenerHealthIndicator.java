@@ -3,10 +3,11 @@ package com.symphony.sfs.ms.chat.health;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.sqs.AmazonSQSAsync;
 import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
+import com.symphony.sfs.ms.chat.config.SfsSimpleMessageListenerContainer;
+import io.awspring.cloud.messaging.listener.SimpleMessageListenerContainer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.cloud.aws.messaging.listener.SimpleMessageListenerContainer;
 
 import java.util.Set;
 
@@ -16,9 +17,9 @@ import static org.springframework.cloud.aws.messaging.listener.QueueListenerUtil
 public class QueueListenerHealthIndicator implements HealthIndicator {
 
   private final AmazonSQSAsync amazonSqs;
-  private final SimpleMessageListenerContainer listener;
+  private final SfsSimpleMessageListenerContainer listener;
 
-  public QueueListenerHealthIndicator(AmazonSQSAsync amazonSqs, SimpleMessageListenerContainer listener) {
+  public QueueListenerHealthIndicator(AmazonSQSAsync amazonSqs, SfsSimpleMessageListenerContainer listener) {
     this.amazonSqs = amazonSqs;
     this.listener = listener;
   }

@@ -5,9 +5,8 @@ import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.sqs.AmazonSQSAsync;
 import com.amazonaws.services.sqs.AmazonSQSAsyncClientBuilder;
 import com.symphony.sfs.ms.chat.config.properties.AwsSqsConfiguration;
-import org.springframework.cloud.aws.messaging.config.QueueMessageHandlerFactory;
-import org.springframework.cloud.aws.messaging.listener.QueueMessageHandler;
-import org.springframework.cloud.aws.messaging.listener.SimpleMessageListenerContainer;
+import io.awspring.cloud.messaging.config.QueueMessageHandlerFactory;
+import io.awspring.cloud.messaging.listener.QueueMessageHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -29,8 +28,8 @@ public class SqsConfiguration {
   }
 
   @Bean
-  public SimpleMessageListenerContainer simpleMessageListenerContainer(AmazonSQSAsync amazonSQSAsync, QueueMessageHandler queueMessageHandler) {
-    SimpleMessageListenerContainer simpleMessageListenerContainer = new SimpleMessageListenerContainer();
+  public SfsSimpleMessageListenerContainer simpleMessageListenerContainer(AmazonSQSAsync amazonSQSAsync, QueueMessageHandler queueMessageHandler) {
+    SfsSimpleMessageListenerContainer simpleMessageListenerContainer = new SfsSimpleMessageListenerContainer();
     simpleMessageListenerContainer.setAmazonSqs(amazonSQSAsync);
     simpleMessageListenerContainer.setMessageHandler(queueMessageHandler);
     simpleMessageListenerContainer.setMaxNumberOfMessages(10);
