@@ -3,12 +3,11 @@ package com.symphony.sfs.ms.chat.service.external;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.SfsAdminClient;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
+import com.symphony.sfs.ms.admin.generated.model.CustomerRoomResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
 import com.symphony.sfs.ms.admin.generated.model.RoomLeftNotification;
-import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
-import com.symphony.sfs.ms.admin.generated.model.RoomResponse;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +48,7 @@ public class DefaultAdminClient implements AdminClient {
   }
 
   @Override
-  public Optional<RoomResponse> createIMRoom(ImCreatedNotification imRequest) {
+  public Optional<CustomerRoomResponse> createIMRoom(ImCreatedNotification imRequest) {
     adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return adminClient.getWebhookApi().imCreated(imRequest);
   }
