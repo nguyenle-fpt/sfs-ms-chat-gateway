@@ -1,6 +1,8 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.symphony.oss.models.chat.canon.IAttachment;
+import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
@@ -9,6 +11,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
@@ -42,11 +45,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,6 +62,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   private MockEmpClient empClient;
   private DatafeedSessionPool datafeedSessionPool;
   private SymphonyService symphonyService;
+  private SymphonyMessageService symphonyMessageService;
   private AdminClient adminClient;
   private MessageDecryptor messageDecryptor;
 
@@ -105,8 +111,8 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     EmpSchemaService empSchemaService = new EmpSchemaService(adminClient);
 
-    SymphonyMessageService messageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
-    messageService.registerAsDatafeedListener();
+    symphonyMessageService = spy(new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, null, streamService, new MessageIOMonitor(meterManager), channelService, messageSource));
+    symphonyMessageService.registerAsDatafeedListener();
 
     ChannelService channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration, messageSource);
     channelService.registerAsDatafeedListener();
@@ -224,7 +230,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
 
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
+    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageSocialMessage(
       whatsAppUser,
       sender
     )));
@@ -256,7 +262,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
 
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageMaestroMessage(
+    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageSocialMessage(
       whatsAppUser,
       sender
     )));
@@ -268,10 +274,19 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     when(adminClient.canChat("1", "federatedUserId", "WHATSAPP")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
+    when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SymphonySession.class))).thenAnswer(ans -> ans.getArgument(2));
 
     forwarderQueueConsumer.consume(notification, "1");
 
     verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString(), anyList());
+
+    verify(symphonyMessageService, once()).onIMMessage(any(GatewaySocialMessage.class));
+    verify(symphonyMessageService, once()).onIMMessage(argThat(arg -> {
+      // As we cannot instantiate IUser and IAttachment we are not testing them so we check only the other fields and list size for attachments
+      GatewaySocialMessage gatewayMessage = generateGatewaySocialMessage(arg.getFromUser(), arg.getAttachments(), Arrays.asList("3", "1"), Collections.singletonList("3"), "INSTANT_CHAT");
+      assertEquals(2, arg.getAttachments().size());
+      return arg.equals(gatewayMessage);
+    }));
   }
 
   @Test
@@ -299,7 +314,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
 
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageMaestroMessage(
+    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageSocialMessage(
       whatsAppUser,
       sender,
       bot
@@ -311,10 +326,19 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       return answer;
     }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
+    when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SymphonySession.class))).thenAnswer(ans -> ans.getArgument(2));
     long messageNumber = empClient.getMessages().size();
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(messageNumber + 1, empClient.getMessages().size());
     verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString(), anyList());
+
+    verify(symphonyMessageService, once()).onIMMessage(any(GatewaySocialMessage.class));
+    verify(symphonyMessageService, once()).onIMMessage(argThat(arg -> {
+      // As we cannot instantiate IUser and IAttachment we are not testing them so we check only the other fields and list size for attachments
+      GatewaySocialMessage gatewayMessage = generateGatewaySocialMessage(arg.getFromUser(), arg.getAttachments(), Arrays.asList("3", "1", "1234567890"), Arrays.asList("3", "1234567890"), "CHATROOM");
+      assertEquals(2, arg.getAttachments().size());
+      return arg.equals(gatewayMessage);
+    }));
   }
 
   @Test
@@ -342,7 +366,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonySession session = datafeedSessionPool.listenDatafeed(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
 
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageMaestroMessage(
+    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageSocialMessage(
       whatsAppUser,
       bot,
       sender
@@ -354,10 +378,19 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       return answer;
     }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
+    when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SymphonySession.class))).thenAnswer(ans -> ans.getArgument(2));
     long messageNumber = empClient.getMessages().size();
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(messageNumber, empClient.getMessages().size());
     verify(symphonyMessageSender, never()).sendAlertMessage(any(), anyString(), anyString(), anyList());
+
+    verify(symphonyMessageService, once()).onIMMessage(any(GatewaySocialMessage.class));
+    verify(symphonyMessageService, once()).onIMMessage(argThat(arg -> {
+      // As we cannot instantiate IUser and IAttachment we are not testing them so we check only the other fields and list size for attachments
+      GatewaySocialMessage gatewayMessage = generateGatewaySocialMessage(arg.getFromUser(), arg.getAttachments(), Arrays.asList("3", "1234567890", "1"), Collections.emptyList(), "CHATROOM");
+      assertEquals(2, arg.getAttachments().size());
+      return arg.equals(gatewayMessage);
+    }));
   }
 
 
@@ -718,13 +751,16 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "  \"version\":\"MAESTRO\"" +
       "}";
   }
-  private String getRoomMessageMaestroMessage(FederatedAccount whatsAppUser, UserInfo... otherParticipants) {
-    return getMessageMaestroMessage(whatsAppUser, Arrays.asList(otherParticipants), "CHATROOM");
+
+  private String getRoomMessageSocialMessage(FederatedAccount whatsAppUser, UserInfo... otherParticipants) {
+    return getMessageSocialMessage(whatsAppUser, Arrays.asList(otherParticipants), "CHATROOM");
   }
-  private String getMIMMessageMaestroMessage(FederatedAccount whatsAppUser, UserInfo... otherParticipants) {
-    return getMessageMaestroMessage(whatsAppUser, Arrays.asList(otherParticipants), "INSTANT_CHAT");
+
+  private String getMIMMessageSocialMessage(FederatedAccount whatsAppUser, UserInfo... otherParticipants) {
+    return getMessageSocialMessage(whatsAppUser, Arrays.asList(otherParticipants), "INSTANT_CHAT");
   }
-  private String getMessageMaestroMessage(FederatedAccount whatsAppUser, List<UserInfo> participants, String chatType) {
+
+  private String getMessageSocialMessage(FederatedAccount whatsAppUser, List<UserInfo> participants, String chatType) {
     return "{" +
       "  \"_type\":\"com.symphony.s2.model.chat.SocialMessage\"," +
       "  \"attributes\":{" +
@@ -739,6 +775,20 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "  \"copyDisabled\":false," +
       "  \"encrypted\":true," +
       "  \"attachments\":[" +
+      "    { " +
+      "      \"blocked\":false," +
+      "      \"contentType\":\"image/png\"," +
+      "      \"encrypted\":true," +
+      "      \"fileId\":\"external_13606456399657%2Faa6RH%2FfBZigZVymvXYAu3A%3D%3D\"," +
+      "      \"height\":192," +
+      "      \"images\":{" +
+      "        \"600\":\"external_13606456399657%2FAafcE4EheP1Pi0%2Fq1UwhAQ%3D%3D\"" +
+      "      }," +
+      "    \"malwareScanRequired\":false," +
+      "    \"name\":\"Symphony.png\"," +
+      "    \"sizeInBytes\":5533," +
+      "    \"width\":192" +
+      "    }" +
       "  ]," +
       "  \"encryptedEntities\":\"AgAAAKcAAAAAAAAAAJ6O1SMRXgf68fdt6/pZaSHQvxIWpgq2hbHDhAiuAbnQow8SgdSrv4WAFYyUIHqT3EFBYK6AC4ZG/YfxEAVM9IJfKZ5pU5dXxoTjxU5VmpASlXY=\"," +
       "  \"encryptedMedia\":\"AgAAAKcAAAAAAAAAAP5fS7NnNyx1o+gq5kzQQ2XshB3EF3nTsDxvM2uD6yMebqWOnRdUSRCbz/dfMQ0UBVHpYBy7CxuXJm6g3bhJ2glBdl3VO9Kmn+gzn7EpJ1todA==\"," +
@@ -746,6 +796,32 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "  \"entities\":{" +
       "  }," +
       "  \"externalOrigination\":false," +
+      "  \"fileKeyEncryptedAttachments\":[" +
+      "    { " +
+      "      \"blocked\":false," +
+      "      \"contentType\":\"image/png\"," +
+      "      \"encrypted\":true," +
+      "      \"fileId\":\"external_13606456399657%2FQ5w0LrJ%2F%2FwGDDwJqMLO5bQ%3D%3D\"," +
+      "      \"height\":0," +
+      "      \"images\":{" +
+      "        \"600\":\"\"" +
+      "      }," +
+      "    \"malwareScanRequired\":false," +
+      "    \"malwareScanState\":{" +
+      "      \"details\":{" +
+      "        \"link\":{" +
+      "          \"text\":\"\"," +
+      "          \"url\":\"\"" +
+      "        }," +
+      "        \"message\":\"\"" +
+      "      }," +
+      "      \"status\":\"\"" +
+      "    }," +
+      "    \"name\":\"Symphony2.png\"," +
+      "    \"sizeInBytes\":5566," +
+      "    \"width\":0" +
+      "    }" +
+      "  ]," +
       "  \"format\":\"com.symphony.markdown\"," +
       "  \"from\":{" +
       "    \"emailAddress\":\"" + participants.get(0).getEmailAddress() + "\"," +
@@ -840,5 +916,21 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "  \"podId\":196," +
       "  \"purgeDate\":\"2027-03-16T12:39:59.117Z\"" +
       "}";
+  }
+
+  private static GatewaySocialMessage generateGatewaySocialMessage(IUser iUser, List<IAttachment> iAttachments, List<String> members, List<String> toUserIds, String chatType) {
+    return GatewaySocialMessage.builder()
+      .streamId("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA")
+      .messageId("GUrHhnXNMHd9OBIJzyciiX___pu5qv1FbQ")
+      .textContent("message decrypted")
+      .fromUser(iUser)
+      .members(members)
+      .timestamp(1530188333754L)
+      .chime(false)
+      .attachments(iAttachments)
+      .chatType(chatType)
+      .parentRelationshipType(ParentRelationshipType.NONE)
+      .toUserIds(toUserIds)
+      .build();
   }
 }

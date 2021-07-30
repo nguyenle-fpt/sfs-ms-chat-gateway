@@ -14,6 +14,7 @@ import org.jsoup.nodes.Document;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static org.jsoup.nodes.Entities.escape;
 
@@ -74,6 +75,33 @@ public class GatewaySocialMessage {
 
   public boolean containsCustomEntityType(String entityType) {
     return customEntities.stream().anyMatch(customEntity -> entityType.equals(customEntity.getType()));
+  }
+
+  @Override
+  public boolean equals(java.lang.Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    GatewaySocialMessage gatewaySocialMessage = (GatewaySocialMessage) o;
+    return Objects.equals(this.textContent, gatewaySocialMessage.textContent) &&
+      Objects.equals(this.presentationMLContent, gatewaySocialMessage.presentationMLContent) &&
+      Objects.equals(this.parsedPresentationML, gatewaySocialMessage.parsedPresentationML) &&
+      Objects.equals(this.fromUser, gatewaySocialMessage.fromUser) &&
+      Objects.equals(this.members, gatewaySocialMessage.members) &&
+      Objects.equals(this.toUserIds, gatewaySocialMessage.toUserIds) &&
+      Objects.equals(this.streamId, gatewaySocialMessage.streamId) &&
+      Objects.equals(this.messageId, gatewaySocialMessage.messageId) &&
+      Objects.equals(this.disclaimer, gatewaySocialMessage.disclaimer) &&
+      Objects.equals(this.attachments, gatewaySocialMessage.attachments) &&
+      Objects.equals(this.timestamp, gatewaySocialMessage.timestamp) &&
+      Objects.equals(this.chime, gatewaySocialMessage.chime) &&
+      Objects.equals(this.chatType, gatewaySocialMessage.chatType) &&
+      Objects.equals(this.parentRelationshipType, gatewaySocialMessage.parentRelationshipType) &&
+      Objects.equals(this.table, gatewaySocialMessage.table) &&
+      Objects.equals(this.customEntities, gatewaySocialMessage.customEntities);
   }
 
 }

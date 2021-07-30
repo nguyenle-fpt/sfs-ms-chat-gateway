@@ -9,6 +9,7 @@ import com.symphony.oss.commons.dom.json.ImmutableJsonList;
 import com.symphony.oss.commons.dom.json.jackson.JacksonAdaptor;
 import com.symphony.oss.commons.immutable.ImmutableByteArray;
 import com.symphony.oss.models.chat.canon.ChatModel;
+import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.IMaestroMessage;
 import com.symphony.oss.models.chat.canon.ISNSSQSWireObject;
 import com.symphony.oss.models.chat.canon.IUserEntity;
@@ -45,6 +46,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -180,6 +182,16 @@ public class ForwarderQueueConsumer {
     LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
     LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
 
+    List<IAttachment> attachments = new ArrayList<>();
+
+    if(socialMessage.getAttachments() != null) {
+      attachments.addAll(socialMessage.getAttachments());
+    }
+
+    if(socialMessage.getFileKeyEncryptedAttachments() != null) {
+      attachments.addAll(socialMessage.getFileKeyEncryptedAttachments());
+    }
+
     GatewaySocialMessage gatewaySocialMessage = GatewaySocialMessage.builder()
       .streamId(streamId)
       .messageId(messageId)
@@ -188,7 +200,7 @@ public class ForwarderQueueConsumer {
       .timestamp(timestamp)
       .chime(socialMessage.getIsChime())
       .disclaimer(socialMessage.getDisclaimer())
-      .attachments(socialMessage.getAttachments())
+      .attachments(attachments)
       .parentRelationshipType(parentRelationshipType)
       .chatType(chatType)
       .build();
