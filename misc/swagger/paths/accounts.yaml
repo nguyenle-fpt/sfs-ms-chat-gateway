@@ -59,6 +59,12 @@ modify-account:
           type: string
         required: true
         description: The federated user id
+      - in: path
+        name: tenantId
+        schema:
+          type: string
+        required: true
+        description: The tenant id of the advisor the contact has been onboarded by
     requestBody:
       content:
         application/json:
@@ -105,6 +111,12 @@ delete-account:
           type: string
         required: true
         description: The EMP to send the update to
+      - in: path
+        name: tenantId
+        schema:
+          type: string
+        required: true
+        description: The tenant id of the advisor the contact has been onboarded by
       - in: path
         name: deleteEMPAccount
         schema:

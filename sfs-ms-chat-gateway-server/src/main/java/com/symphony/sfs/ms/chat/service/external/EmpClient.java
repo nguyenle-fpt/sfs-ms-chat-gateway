@@ -86,21 +86,23 @@ public interface EmpClient {
    * Internal usage for QA
    *
    * @param symphonyId
-   * @param emailAddress
+   * @param phoneNumber
+   * @param tenantId
    */
-  void deleteAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber);
+  void deleteAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId);
 
   /**
    * EMP User
    * @param emp
    * @param symphonyId
-   * @param emailAddress
+   * @param phoneNumber
+   * @param tenantId
    * @param firstName
    * @param lastName
    * @param companyName
    * @return
    */
-  Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber, String firstName, String lastName, String companyName);
+  Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId, String firstName, String lastName, String companyName);
 
   Optional<DeleteChannelsResponse> deleteChannels(List<ChannelIdentifier> deleteChannelRequests, String emp);
 

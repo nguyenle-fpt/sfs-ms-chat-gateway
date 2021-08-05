@@ -78,6 +78,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   protected ChannelsApi channelApi;
   private Tracer tracer = mock(Tracer.class);
 
+  private static String CLIENT_POD_ID = "1";
+
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
     super.setUp(db, mockServer, messageSource);
@@ -447,7 +449,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .when()
-      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp(), true)
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp(), CLIENT_POD_ID, true)
       .then()
       .statusCode(HttpStatus.OK.value());
 
@@ -530,7 +532,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(updateAccountRequest)
       .when()
-      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId())
+      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), CLIENT_POD_ID)
       .then()
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
@@ -670,7 +672,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(updateAccountRequest)
       .when()
-      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId())
+      .put(UPDATEFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), CLIENT_POD_ID)
       .then()
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
@@ -685,8 +687,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber(createAccountRequest.getPhoneNumber());
     assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
 
-    verify(empClient).updateAccountOrFail(empEntity.getName(), accountSession.getUserId(), createAccountRequest.getEmailAddress(), createAccountRequest.getPhoneNumber(), updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
-    verify(empClient).updateAccountOrFail(empEntity2.getName(), accountSession.getUserId(), createAccountRequest.getEmailAddress(), createAccountRequest.getPhoneNumber(), updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
+    verify(empClient).updateAccountOrFail(empEntity.getName(), accountSession.getUserId(),  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
+    verify(empClient).updateAccountOrFail(empEntity2.getName(), accountSession.getUserId(),  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
       .emailAddress(createAccountRequest.getEmailAddress())
@@ -769,7 +771,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     configuredGiven(objectMapper, new ExceptionHandling(null), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .when()
-      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP", true)
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP", CLIENT_POD_ID, true)
       .then()
       .statusCode(HttpStatus.OK.value());
   }
@@ -782,7 +784,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     Problem actualProblem = configuredGiven(objectMapper, new ExceptionHandling(null), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .when()
-      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP", true)
+      .delete(DELETEFEDERATEDACCOUNT_ENDPOINT, "federatedUserId", "WHATSAPP", CLIENT_POD_ID, true)
       .then()
       .statusCode(HttpStatus.NOT_FOUND.value())
       .extract().response().body()

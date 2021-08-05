@@ -127,12 +127,12 @@ public class FederatedAccountService implements DatafeedListener {
 
 
   @NewSpan
-  public void deleteAccount(String emp, String federatedUserId, boolean deleteEMPAccount) {
+  public void deleteAccount(String emp, String federatedUserId, String tenantId, boolean deleteEMPAccount) {
     LOG.info("Deleting account | federatedUserId={} emp={} deleteEMPAccount={}", federatedUserId, emp, deleteEMPAccount);
     FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
       .orElseThrow(FederatedAccountNotFoundProblem::new);
     if (deleteEMPAccount) {
-      empClient.deleteAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getEmailAddress(), existingAccount.getPhoneNumber());
+      empClient.deleteAccountOrFail(emp, existingAccount.getSymphonyUserId(), existingAccount.getPhoneNumber(), tenantId);
     }
 
     SymphonyUserAttributes attributes = new SymphonyUserAttributes();
@@ -148,20 +148,20 @@ public class FederatedAccountService implements DatafeedListener {
   }
 
   @NewSpan
-  public FederatedAccount updateAccount(String federatedUserId, String firstName, String lastName, String companyName) {
+  public FederatedAccount updateAccount(String federatedUserId, String tenantId, String firstName, String lastName, String companyName) {
     List<FederatedAccount> existingAccounts = federatedAccountRepository.findByFederatedUserId(federatedUserId);
     if (existingAccounts.size() == 0) {
       throw new FederatedAccountNotFoundProblem();
     }
 
     for(FederatedAccount federatedAccount : existingAccounts) {
-      updateAccount(federatedAccount, firstName, lastName, companyName);
+      updateAccount(federatedAccount, tenantId, firstName, lastName, companyName);
     }
 
     return existingAccounts.get(0);
   }
 
-  private void updateAccount(FederatedAccount federatedAccount, String firstName, String lastName, String companyName) {
+  private void updateAccount(FederatedAccount federatedAccount, String tenantId, String firstName, String lastName, String companyName) {
 
     if (StringUtils.isNotBlank(firstName)) {
       federatedAccount.setFirstName(firstName);
@@ -178,7 +178,7 @@ public class FederatedAccountService implements DatafeedListener {
     SymphonyUserAttributes attributes = SymphonyUserAttributes.builder().displayName(userDisplayName).build();
 
     // All checks OK, update
-    empClient.updateAccountOrFail(federatedAccount.getEmp(), federatedAccount.getSymphonyUserId(), federatedAccount.getEmailAddress(), federatedAccount.getPhoneNumber(), firstName, lastName, companyName);
+    empClient.updateAccountOrFail(federatedAccount.getEmp(), federatedAccount.getSymphonyUserId(), federatedAccount.getPhoneNumber(), tenantId, firstName, lastName, companyName);
     adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), federatedAccount.getSymphonyUserId(), attributes);
 
 

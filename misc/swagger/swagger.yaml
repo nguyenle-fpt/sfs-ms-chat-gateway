@@ -17,9 +17,9 @@ tags:
 paths:
   /api/v1/internal/accounts:
     $ref: './paths/accounts.yaml#/accounts'
-  /api/v1/internal/accounts/{federatedUserId}/emp/{emp}/deleteEMPAccount/{deleteEMPAccount}:
+  /api/v1/internal/accounts/{federatedUserId}/emp/{emp}/tenantId/{tenantId}/deleteEMPAccount/{deleteEMPAccount}:
     $ref: './paths/accounts.yaml#/delete-account'
-  /api/v1/internal/accounts/{federatedUserId}:
+  /api/v1/internal/accounts/{federatedUserId}/tenantId/{tenantId}:
     $ref: './paths/accounts.yaml#/modify-account'
   /api/v1/internal/channels:
     $ref: './paths/channels.yaml#/channels'

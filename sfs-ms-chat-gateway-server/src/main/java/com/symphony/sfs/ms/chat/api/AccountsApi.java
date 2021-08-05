@@ -50,17 +50,18 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
 */
 
   @Override
-  public ResponseEntity<Void> deleteFederatedAccount(String federatedUserId, String emp, Boolean deleteEMPAccount) {
-    federatedAccountService.deleteAccount(emp, federatedUserId, deleteEMPAccount);
-    return ResponseEntity.ok().build();  }
+  public ResponseEntity<Void> deleteFederatedAccount(String federatedUserId, String emp, String tenantId, Boolean deleteEMPAccount) {
+    federatedAccountService.deleteAccount(emp, federatedUserId, tenantId, deleteEMPAccount);
+    return ResponseEntity.ok().build();
+  }
 
   @Override
   @ContinueSpan
-  public ResponseEntity<UpdateAccountResponse> updateFederatedAccount(String federatedUserId, UpdateAccountRequest body) {
+  public ResponseEntity<UpdateAccountResponse> updateFederatedAccount(String federatedUserId, String tenantId, UpdateAccountRequest body) {
     MDC.put("federatedUserId", federatedUserId);
-    LOG.info("update account ");
-    LOG.debug("update account | firstName={}, lastName={}, companyName={}", body.getFirstName(), body.getLastName(), body.getCompanyName());
-    FederatedAccount federatedAccount = federatedAccountService.updateAccount(federatedUserId, body.getFirstName(), body.getLastName(), body.getCompanyName());
+    LOG.info("update account | tenantId={}", tenantId);
+    LOG.debug("update account | federatedUserId={} tenantId={} firstName={}, lastName={}, companyName={}", federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName());
+    FederatedAccount federatedAccount = federatedAccountService.updateAccount(federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName());
     return ResponseEntity.ok(UpdateAccountResponseDtoMapper.MAPPER.federatedAccountToUpdateAccountResponse(federatedAccount));
   }
 }

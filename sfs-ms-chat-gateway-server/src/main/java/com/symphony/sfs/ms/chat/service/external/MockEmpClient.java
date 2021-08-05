@@ -81,12 +81,12 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteAccountOrFail(String emp, String symphonyId, String email, String phoneNumber) {
+  public void deleteAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId) {
     deletedFederatedAccounts.add(symphonyId);
   }
 
   @Override
-  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber, String firstName, String lastName, String companyName) {
+  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId, String firstName, String lastName, String companyName) {
     return Optional.of(new UpdateUserResponse().firstName(firstName).lastName(lastName).companyName(companyName));
   }
 

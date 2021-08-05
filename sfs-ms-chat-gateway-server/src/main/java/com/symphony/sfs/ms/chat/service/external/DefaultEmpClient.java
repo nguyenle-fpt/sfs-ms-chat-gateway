@@ -104,14 +104,14 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public void deleteAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber) {
+  public void deleteAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    client.getUserApi().deleteUserOrFail(symphonyId, emailAddress, phoneNumber);
+    client.getUserApi().deleteUserOrFail(symphonyId, phoneNumber, tenantId);
   }
 
   @Override
-  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String emailAddress, String phoneNumber, String firstName, String lastName, String companyName) {
+  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId, String firstName, String lastName, String companyName) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     UpdateUserRequest request = new UpdateUserRequest()
@@ -120,7 +120,7 @@ public class DefaultEmpClient implements EmpClient {
       .companyName(companyName);
 
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return client.getUserApi().updateUserOrFail(symphonyId, emailAddress, phoneNumber, request);
+    return client.getUserApi().updateUserOrFail(symphonyId, phoneNumber, tenantId, request);
   }
 
   @Override
