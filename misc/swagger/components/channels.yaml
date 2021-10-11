@@ -1,18 +1,4 @@
 #Requests
-create-channel-request:
-  type: object
-  required:
-    - federatedUserId
-    - emp
-    - advisorUserId
-  properties:
-    federatedUserId:
-      type: string
-    emp:
-      type: string
-    advisorUserId:
-      type: string
-
 deleteChannel-request:
   type: object
   required:
@@ -34,13 +20,8 @@ deleteChannels-request:
       type: array
       items:
         $ref: '#/deleteChannel-request'
-#Responses
-create-channel-response:
-  type: object
-  properties:
-    channelId:
-      type: string
 
+#Responses
 retrieve-channel-response:
   type: object
   properties:

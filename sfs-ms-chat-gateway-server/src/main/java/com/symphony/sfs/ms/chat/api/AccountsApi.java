@@ -13,10 +13,6 @@ import org.springframework.cloud.sleuth.annotation.ContinueSpan;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-
 import static com.symphony.sfs.ms.starter.logging.LogUtils.obfuscatePhone;
 
 @Slf4j
@@ -41,13 +37,6 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
       .symphonyUsername(account.getSymphonyUsername());
     return ResponseEntity.ok(response);
   }
-/*
-  @Override
-  public ResponseEntity<Void> deleteFederatedAccounts(@Valid DeleteAccountsRequest body) {
-    federatedAccountService.deleteAccounts(body.getAccounts());
-    return ResponseEntity.ok().build();
-  }
-*/
 
   @Override
   public ResponseEntity<Void> deleteFederatedAccount(String federatedUserId, String emp, String tenantId, Boolean deleteEMPAccount) {

@@ -158,10 +158,10 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, authenticationService, botConfiguration));
     empSchemaService = new EmpSchemaService(adminClient);
-    channelService = new ChannelService(streamService, symphonyMessageSender, podConfiguration, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, adminClient, empSchemaService, symphonyService, channelRepository, authenticationService, botConfiguration, messageSource);
+    channelService = new ChannelService(symphonyMessageSender, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, empSchemaService, channelRepository, messageSource);
     channelService.registerAsDatafeedListener();
     usersInfoService = mock(UsersInfoService.class);
-    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient, messageSource);
+    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient);
     roomService.registerAsDatafeedListener();
 
     tenantDetailRepository = new TenantDetailRepository(db, new SharedTableSchema(dynamoConfiguration.getDynamoSchema().getTableName()));

@@ -98,10 +98,8 @@ public class SymphonyMessageService implements DatafeedListener {
   private final PodConfiguration podConfiguration;
   private final BotConfiguration botConfiguration;
   private final AuthenticationService authenticationService;
-  private final UsersInfoService usersInfoService;
   private final StreamService streamService;
   private final MessageIOMonitor messageMetrics;
-  private final ChannelService channelService;
   private final MessageSource messageSource;
 
 
@@ -248,13 +246,6 @@ public class SymphonyMessageService implements DatafeedListener {
           //  Proposition 1: block the chat (system message indicated that the chat is not possible until everyone has joined
           //  Proposition 2: allow chatting as soon as one federated has joined. In this case, what about the history of messages?
 
-          // We will not create new channels if you have the permission CAN_CHAT_NO_CREATE_IM
-          // this means that old conversations should still work but the user won't be able to create a new one
-          // we don't know if the conversation already exists so we cannot send a specific message.
-          // we let the normal mechanism take care of that.
-          if (!gatewaySocialMessage.isRoom() && canChat.isPresent() && canChat.get() != CanChatResponse.CAN_CHAT_NO_CREATE_IM) {
-            channelService.createIMChannel(streamId, gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp.get(0));
-          }
           messageMetrics.onSendMessageFromSymphony(gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp, streamId);
 
           Optional<SendMessageResponse> sendMessageResponse = empClient.sendMessage(emp,
@@ -333,7 +324,6 @@ public class SymphonyMessageService implements DatafeedListener {
       messageMetrics.onMessageBlockFromSymphony(NO_CONTACT, streamId);
       return false;
     }
-    // CAN_CHAT_NO_CREATE_IM is seen as a canchat for this function
     return true;
   }
 
@@ -534,7 +524,6 @@ public class SymphonyMessageService implements DatafeedListener {
     // We can still send notifications to advisors without contacts. Useful for onboarding when we need to send a notification before the contact is created
     // TODO REFACTOR, adding a message type and checking on that might make more sense than checking the formatting to change behaviour
     if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT ||
-      canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM ||
       canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.NO_CONTACT && formatting != null) {
       return Optional.empty();
     }

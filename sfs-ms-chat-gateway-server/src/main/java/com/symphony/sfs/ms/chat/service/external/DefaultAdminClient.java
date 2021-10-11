@@ -3,10 +3,7 @@ package com.symphony.sfs.ms.chat.service.external;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.SfsAdminClient;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
-import com.symphony.sfs.ms.admin.generated.model.CustomerRoomResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
-import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
-import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
 import com.symphony.sfs.ms.admin.generated.model.RoomLeftNotification;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
@@ -36,21 +33,9 @@ public class DefaultAdminClient implements AdminClient {
   }
 
   @Override
-  public Optional<EntitlementResponse> getEntitlementAccess(String symphonyId, String entitlementType) {
-    adminClient.getEntitlementsApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return adminClient.getEntitlementsApi().getInternalEntitlement(symphonyId, entitlementType);
-  }
-
-  @Override
   public Optional<CanChatResponse> canChat(String advisorSymphonyId, String federatedUserId, String entitlementType) {
     adminClient.getContactApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return adminClient.getContactApi().canChat(advisorSymphonyId, federatedUserId, entitlementType);
-  }
-
-  @Override
-  public Optional<CustomerRoomResponse> createIMRoom(ImCreatedNotification imRequest) {
-    adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return adminClient.getWebhookApi().imCreated(imRequest);
   }
 
   @Override

@@ -21,8 +21,6 @@ paths:
     $ref: './paths/accounts.yaml#/delete-account'
   /api/v1/internal/accounts/{federatedUserId}/tenantId/{tenantId}:
     $ref: './paths/accounts.yaml#/modify-account'
-  /api/v1/internal/channels:
-    $ref: './paths/channels.yaml#/channels'
   /api/v1/internal/channels/advisor/{advisorSymphonyId}/user/{federatedUserId}/emp/{emp}:
     $ref: './paths/channels.yaml#/retrieve-channel'
   /api/v1/internal/channels/delete:

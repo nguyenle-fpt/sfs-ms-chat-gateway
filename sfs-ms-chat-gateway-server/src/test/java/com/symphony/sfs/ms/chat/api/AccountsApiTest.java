@@ -1,12 +1,10 @@
 package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
-import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountResponse;
@@ -51,14 +49,10 @@ import static clients.symphony.api.constants.PodConstants.GETIM;
 import static clients.symphony.api.constants.PodConstants.GETUSERSV3;
 import static clients.symphony.api.constants.PodConstants.SENDCONNECTIONREQUEST;
 import static clients.symphony.api.constants.PodConstants.UPDATEUSERSTATUSADMIN;
-import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getAcceptedConnectionRequestMaestroMessage;
-import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getEnvelopeMessage;
-import static com.symphony.sfs.ms.chat.api.util.SnsMessageUtil.getSnsMaestroMessage;
 import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.DELETEFEDERATEDACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.UPDATEFEDERATEDACCOUNT_ENDPOINT;
-import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.CREATECHANNEL_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -97,19 +91,12 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       podConfiguration,
       botConfiguration,
       chatConfiguration,
-      connectionRequestManager,
-      channelService,
-      forwarderQueueConsumer,
       new UsersInfoService(sessionManager),
       empSchemaService,
       empClient,
       symphonyAuthFactory,
-      adminClient,
-      channelRepository,
-      podVersionChecker,
-      tenantDetailRepository);
-    federatedAccountService.registerAsDatafeedListener();
-    channelApi = new ChannelsApi(federatedAccountService, channelService);
+      channelRepository);
+    channelApi = new ChannelsApi(channelService);
 
     accountsApi = new AccountsApi(federatedAccountService);
   }
@@ -245,24 +232,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     assertEquals(new CreateAccountResponse()
       .symphonyUserId(accountSession.getUserId())
       .symphonyUsername(accountSession.getUsername()), response);
-    CreateChannelRequest createChannelRequest = new CreateChannelRequest()
-      .federatedUserId("federatedUserId")
-      .advisorUserId("2")
-      .emp("WHATSAPP");
-
-    configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
-      .contentType(MediaType.APPLICATION_JSON_VALUE)
-      .body(createChannelRequest)
-      .when()
-      .post(CREATECHANNEL_ENDPOINT)
-      .then()
-      .statusCode(HttpStatus.OK.value());
-
-    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
   }
 
   @Test
-  public void createAccountWithAdvisor_NeedConnectionRequest() throws IOException {
+  public void createAccountWithAdvisor_NeedConnectionRequest() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
@@ -324,29 +297,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .symphonyUsername(accountSession.getUsername()), response);
 
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-    when(empClient.createChannel(any(), any(), any(), any(), any())).thenReturn(Optional.of("streamId"));
-    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
-      FederatedAccount.builder()
-        .emailAddress(createAccountRequest.getEmailAddress())
-        .phoneNumber(createAccountRequest.getPhoneNumber())
-        .firstName(createAccountRequest.getFirstName())
-        .lastName(createAccountRequest.getLastName())
-        .symphonyUserId(accountSession.getUserId())
-        .symphonyUsername(accountSession.getUsername())
-        .build(),
-      FederatedAccount.builder()
-        .symphonyUserId("2")
-        .build()
-    )));
-    adminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
-    forwarderQueueConsumer.consume(notification, "1");
-    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
-    assertEquals(1, adminClient.getImRequests().size());
-    verify(empClient).createChannel(any(), any(), any(), any(), any());
   }
 
   @Test
-  public void createAccountWithAdvisor_ThenDelete() throws IOException {
+  public void createAccountWithAdvisor_ThenDelete() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
@@ -410,29 +364,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
 
     assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isEmpty());
-
-    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getAcceptedConnectionRequestMaestroMessage(
-      FederatedAccount.builder()
-        .emailAddress(createAccountRequest.getEmailAddress())
-        .phoneNumber(createAccountRequest.getPhoneNumber())
-        .firstName(createAccountRequest.getFirstName())
-        .lastName(createAccountRequest.getLastName())
-        .symphonyUserId(accountSession.getUserId())
-        .symphonyUsername(accountSession.getUsername())
-        .build(),
-      FederatedAccount.builder()
-        .symphonyUserId("2")
-        .build()
-    )));
-    adminClient.setCanChatResponse(Optional.of(CanChatResponse.CAN_CHAT));
-    when(empClient.createChannel(any(), any(), any(), any(), any())).thenReturn(Optional.of("streamId"));
-    forwarderQueueConsumer.consume(notification, "1");
-    assertEquals(1, ((MockEmpClient) empClient).getChannels().size());
-
-    verify(empClient).createChannel(any(), any(), any(), any(), any());
-    assertEquals(1, adminClient.getImRequests().size());
-
-    //assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isPresent());
 
     mockServer.expect()
       .post()
@@ -460,7 +391,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void createAccountWithAdvisor_ThenUpdate() throws IOException {
+  public void createAccountWithAdvisor_ThenUpdate() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 

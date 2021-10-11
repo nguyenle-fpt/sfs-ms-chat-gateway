@@ -109,7 +109,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     symphonyService = mock(SymphonyService.class);
 
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
 

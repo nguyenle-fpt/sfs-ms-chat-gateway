@@ -1,42 +1,26 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.Hashing;
-import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.oss.models.chat.canon.facade.User;
-import com.symphony.oss.models.core.canon.facade.PodAndUserId;
-import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
-import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
-import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
-import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
-import com.symphony.sfs.ms.chat.generated.model.ConnectionRequestCreationFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
-import com.symphony.sfs.ms.chat.generated.model.CreateChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateUserFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.EmpNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountAlreadyExistsProblem;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
-import com.symphony.sfs.ms.chat.generated.model.UnknownFederatedAccountProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.health.PodVersionChecker;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
-import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
-import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
-import com.symphony.sfs.ms.starter.symphony.tds.TenantSettings;
 import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
 import com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUser;
@@ -44,10 +28,7 @@ import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserKeyRequest;
 import com.symphony.sfs.ms.starter.symphony.user.UserStatus;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
-import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
-import com.symphony.sfs.ms.starter.util.PodVersion;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
-import com.symphony.sfs.ms.starter.util.UserIdUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
@@ -55,7 +36,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
@@ -74,7 +54,7 @@ import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUserKeyRequest.A
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class FederatedAccountService implements DatafeedListener {
+public class FederatedAccountService {
 
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
@@ -83,23 +63,11 @@ public class FederatedAccountService implements DatafeedListener {
   private final PodConfiguration podConfiguration;
   private final BotConfiguration botConfiguration;
   private final ChatConfiguration chatConfiguration;
-  private final ConnectionRequestManager connectionRequestManager;
-  private final ChannelService channelService;
-  private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final UsersInfoService usersInfoService;
   private final EmpSchemaService empSchemaService;
   private final EmpClient empClient;
   private final SymphonyAuthFactory symphonyAuthFactory;
-  private final AdminClient adminClient;
   private final ChannelRepository channelRepository;
-  private final PodVersionChecker podVersionChecker;
-  private final TenantDetailRepository tenantDetailRepository;
-
-  @PostConstruct
-  @VisibleForTesting
-  public void registerAsDatafeedListener() {
-    forwarderQueueConsumer.registerDatafeedListener(this);
-  }
 
   @NewSpan
   public FederatedAccount createAccount(CreateAccountRequest request) {
@@ -183,46 +151,6 @@ public class FederatedAccountService implements DatafeedListener {
 
 
     federatedAccountRepository.save(federatedAccount);
-  }
-
-  @NewSpan
-  public String createChannel(CreateChannelRequest request) {
-    FederatedAccount existingAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(request.getFederatedUserId(), request.getEmp()).orElseThrow(UnknownFederatedAccountProblem::new);
-
-    String advisorSymphonyId = request.getAdvisorUserId();
-    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-    DatafeedSession session = datafeedSessionPool.listenDatafeed(existingAccount);
-
-    // If for whatever reason the connection request is already accepted
-    // Maybe in case of offboarding and re-onboarding?
-    //
-    // Otherwise, the createIMChannel will be called when the ConnectionRequestStatus.ACCEPTED event is received from the forwarder queue
-    LOG.info("sending connection request | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
-    if (connectionRequestManager.sendConnectionRequest(session, advisorSymphonyId).orElseThrow(ConnectionRequestCreationFailedProblem::new) == ConnectionRequestStatus.ACCEPTED) {
-      LOG.info("Connection request already accepted | advisor={} federatedUser={}", request.getAdvisorUserId(), request.getFederatedUserId());
-      return channelService.createIMChannel(session, existingAccount, getCustomerInfo(advisorSymphonyId, botSession));
-    }
-
-    return null;
-  }
-
-  @Override
-  @NewSpan
-  public void onConnectionAccepted(IUser requesting, IUser requested) {
-    LOG.info("Connection request accepted | requesting={} requested={}", requesting.getId(), requested.getId());
-    if (shouldWeCreateIM(requested.getId().longValue())) {
-      Optional<FederatedAccount> federatedAccount = federatedAccountRepository.findBySymphonyId(requesting.getId().toString());
-      if (federatedAccount.isPresent()) {
-        FederatedAccount account = federatedAccount.get();
-        Optional<CanChatResponse> canChatResponse = adminClient.canChat(requested.getId().toString(), account.getFederatedUserId(), account.getEmp());
-        if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
-          LOG.info("Let's create an IM between {} and {} ", requesting.getId(), requested.getId());
-          channelService.createIMChannel(account, requested);
-        }
-      }
-    } else {
-      LOG.info("We won't create an IM between {} and {} ", requesting.getId(), requested.getId());
-    }
   }
 
   @NewSpan
@@ -316,63 +244,6 @@ public class FederatedAccountService implements DatafeedListener {
     federatedServiceAccount.setEmp(account.getEmp());
 
     return federatedServiceAccount;
-  }
-
-  private IUser getCustomerInfo(String symphonyId, SymphonySession botSession) {
-    UserInfo info = usersInfoService.getUserFromId(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), symphonyId)
-      .orElseThrow(() -> new IllegalStateException("Error retrieving customer info"));
-
-    return new User.Builder()
-      .withId(PodAndUserId.newBuilder().build(Long.parseLong(symphonyId)))
-      .withUsername(info.getUsername())
-      .withFirstName(info.getFirstName())
-      .withSurname(info.getLastName())
-      .withCompany(info.getCompany())
-      .build();
-  }
-
-  /**
-   * Starting from a given pod version we should not create IM anymore
-   * as they will be created by the customer pod when accepting the connection request
-   * @param advisorSymphonyId
-   * @return
-   */
-  private boolean shouldWeCreateIM(long advisorSymphonyId) {
-    try {
-      int externalPodId = UserIdUtils.extractPodId(advisorSymphonyId);
-      Optional<TenantDetailEntity> optTenantDetail = tenantDetailRepository.findByPodId(Integer.toString(externalPodId));
-      if (optTenantDetail.isPresent()) {
-        TenantDetailEntity tenantDetail = optTenantDetail.get();
-        TenantSettings.ImCreation imCreation = TenantSettings.parseImCreationSetting(tenantDetail.getImCreationSetting());
-        switch (imCreation) {
-          case ALWAYS:
-            return true;
-          case NEVER:
-            return false;
-          // otherwise we'll create the IM only the the tenant won't
-          default:
-            return !willTenantCreateTheIM(tenantDetail);
-        }
-      }
-    } catch (RuntimeException ex) {
-      LOG.error("Failed to determine if IM needs to be created", ex);
-    }
-    // whatever went wrong we'll return true
-    return true;
-  }
-
-  /**
-   * Check a tenant SBE version to determine if it will create the IM itself
-   */
-  private boolean willTenantCreateTheIM(TenantDetailEntity tenantDetail) {
-    String podUrl = tenantDetail.getPodUrl();
-    PodVersion podVersion = podVersionChecker.retrievePodVersion(podUrl);
-    if (podVersion.compareTo(new PodVersion(chatConfiguration.getStopImCreationAt())) > -1) {
-      // this pod reached 2.10.1 or higher
-      LOG.info("Tenant {} version ({}) is at equals of hiher than {}, it will create the IM", tenantDetail.getPodId(), podVersion, chatConfiguration.getStopImCreationAt());
-      return true;
-    }
-    return false;
   }
 
 }

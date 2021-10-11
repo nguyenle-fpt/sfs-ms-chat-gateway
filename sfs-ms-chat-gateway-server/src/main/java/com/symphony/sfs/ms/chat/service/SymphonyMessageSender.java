@@ -20,10 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.UNKNOWN_SENDER;
 

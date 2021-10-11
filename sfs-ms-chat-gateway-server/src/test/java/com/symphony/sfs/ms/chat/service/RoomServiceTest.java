@@ -101,7 +101,7 @@ class RoomServiceTest implements I18nTest {
     adminClient = mock(AdminClient.class);
     when(adminClient.getEmpList()).thenReturn(new EmpList());
 
-    roomService = spy(new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, mock(ForwarderQueueConsumer.class), streamService, authenticationService, usersInfoService, empClient, adminClient, messageSource));
+    roomService = spy(new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, mock(ForwarderQueueConsumer.class), streamService, authenticationService, usersInfoService, empClient, adminClient));
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }

@@ -5,44 +5,16 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
-import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-/**
- *
- */
+
 public interface EmpClient {
-
-  String CREATE_CHANNEL_ENDPOINT = "/api/v1/channel/create";
-  String SEND_MESSAGE_ENDPOINT = "/api/v1/messages";
-  String SEND_SYSTEM_MESSAGE_ENDPOINT = "/api/v1/system-messages";
-
-  // TODO MAKE IT THROW
-  Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers);
-
-  /**
-   * IM
-   *
-   * @param emp
-   * @param streamId
-   * @param messageId
-   * @param fromSymphonyUser
-   * @param toFederatedAccount
-   * @param timestamp
-   * @param message
-   * @param disclaimer
-   * @return
-   */
-  public default Optional<SendMessageResponse> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
-    return sendMessage(emp, streamId, messageId, fromSymphonyUser, Collections.singletonList(toFederatedAccount), timestamp, message, disclaimer, attachments);
-  }
 
   /**
    * MIM/Room with disclaimer
@@ -71,16 +43,6 @@ public interface EmpClient {
    * @return
    */
   Optional<String> sendSystemMessage(String emp, String streamId, String symphonyId, Long timestamp, String message, SendSystemMessageRequest.TypeEnum type);
-
-
-  /**
-   *
-   * @param emp
-   * @param channels
-   * @param message
-   * @return
-   */
-  void sendSystemMessageToChannels(String emp, List<ChannelIdentifier> channels, String message, boolean shouldBeResent);
 
   /**
    * Internal usage for QA

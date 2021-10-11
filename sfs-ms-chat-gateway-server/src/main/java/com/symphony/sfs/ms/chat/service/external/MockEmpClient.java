@@ -35,24 +35,6 @@ public class MockEmpClient implements EmpClient {
   @Setter
   private Set<String> federatedUserFailing = new HashSet<>();
 
-
-  @Override
-  public Optional<String> createChannel(String emp, String streamId, List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
-    if(federatedUsers != null) {
-      for (FederatedAccount federatedAccount : federatedUsers) {
-        if (federatedUserFailing.contains(federatedAccount.getFederatedUserId())) {
-          return Optional.empty();
-        }
-      }
-    }
-    String operationId = channels.get(emp + ":" + streamId);
-    if (operationId == null) {
-      operationId = UUID.randomUUID().toString();
-      channels.putIfAbsent(emp + ":" + streamId, operationId);
-    }
-    return Optional.ofNullable(operationId);
-  }
-
   @Override
   public Optional<SendMessageResponse> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments) {
     // For now use the same mock implementation as channels
@@ -73,11 +55,6 @@ public class MockEmpClient implements EmpClient {
       messages.putIfAbsent(emp + ":" + streamId + ":" + message + ":" + type, operationId);
     }
     return Optional.of(operationId);
-  }
-
-  @Override
-  public void sendSystemMessageToChannels(String emp, List<ChannelIdentifier> channels, String message, boolean shouldBeResent) {
-
   }
 
   @Override

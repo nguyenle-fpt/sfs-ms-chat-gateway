@@ -2,38 +2,26 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
-import com.symphony.sfs.ms.admin.generated.model.ImCreatedNotification;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
-import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.ChannelNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.chat.model.Channel;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
-import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
-import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
-import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
-import com.symphony.sfs.ms.starter.webclient.WebCallException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.context.MessageSource;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -58,19 +46,13 @@ import static java.util.stream.Collectors.toMap;
 @Slf4j
 public class ChannelService implements DatafeedListener {
 
-  private final StreamService streamService;
   private final SymphonyMessageSender symphonyMessageSender;
-  private final PodConfiguration podConfiguration;
   private final EmpClient empClient;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
-  private final AdminClient adminClient;
   private final EmpSchemaService empSchemaService;
-  private final SymphonyService symphonyService;
   private final ChannelRepository channelRepository;
-  private final AuthenticationService authenticationService;
-  private final BotConfiguration botConfiguration;
   private final MessageSource messageSource;
 
   @PostConstruct
@@ -89,112 +71,10 @@ public class ChannelService implements DatafeedListener {
     // TODO check also advisors like in connection requests?
 
     if (members.size() == 2) {
-      handleIMCreation(streamId, members, initiator, crosspod);
+      handleIMCreation(streamId, members, initiator);
     } else {
-      handleMIMCreation(streamId, members, initiator, crosspod);
+      handleMIMCreation(streamId, members);
     }
-  }
-
-  @NewSpan
-  public String createIMChannel(FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
-    try {
-      SymphonySession session = datafeedSessionPool.refreshSession(fromFederatedAccount.getSymphonyUserId());
-      return createIMChannel(session, fromFederatedAccount, toSymphonyUser);
-    } catch (UnknownDatafeedUserException e) {
-      // should never happen, as we have a FederatedAccount
-      throw new IllegalStateException(e);
-    }
-  }
-
-  @NewSpan
-  public String createIMChannel(SymphonySession session, FederatedAccount fromFederatedAccount, IUser toSymphonyUser) {
-    String streamId = streamService.getIM(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), toSymphonyUser.getId().toString())
-      .orElseThrow(CannotRetrieveStreamIdProblem::new);
-
-    Optional<String> channelId;
-    try {
-      channelId = empClient.createChannel(fromFederatedAccount.getEmp(), streamId, Collections.singletonList(fromFederatedAccount), fromFederatedAccount.getSymphonyUserId(), Collections.singletonList(toSymphonyUser));
-    } catch (WebCallException wbe) {
-      if (wbe.getStatusCode() != HttpStatus.CONFLICT) {
-        // We are in an iM, the connect bot is not a member
-        symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault()), Collections.emptyList());
-      }
-      return streamId;
-    }
-
-    if (channelId.isEmpty()) {
-      // We are in an iM, the connect bot is not a member
-      symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault()), Collections.emptyList());
-    } else {
-      ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
-      imCreatedNotification.setAdvisorSymphonyId(toSymphonyUser.getId().toString());
-      imCreatedNotification.setFederatedUserId(fromFederatedAccount.getFederatedUserId());
-      imCreatedNotification.setStreamId(streamId);
-      imCreatedNotification.setEmp(fromFederatedAccount.getEmp());
-      adminClient.createIMRoom(imCreatedNotification);
-    }
-    return streamId;
-  }
-
-  @NewSpan
-  public String createIMChannel(String streamId, IUser fromSymphonyUser, FederatedAccount toFederatedAccount) {
-    return createChannel(
-      streamId,
-      fromSymphonyUser,
-      Collections.singletonMap(toFederatedAccount.getEmp(), Collections.singletonList(toFederatedAccount)),
-      Collections.singletonList(fromSymphonyUser));
-  }
-
-  // CES-1292 - As part of the cleanup, I let this method as it is but put it in private. Some questions are still interesting when we decide to properly support MIM/Rooms
-  private String createChannel(String streamId, IUser fromSymphonyUser, Map<String, List<FederatedAccount>> toFederatedAccounts, List<IUser> toSymphonyUsers) {
-
-    try {
-      for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
-        List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
-        List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
-        for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
-          // TODO The process stops at first UnknownDatafeedUserException
-          //  Some EMPs may have been called, others may have not
-          //  Do we check first all sessions are ok?
-          userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
-        }
-
-        // Check there are only 2 users
-        if (toFederatedAccounts.size() == 1 && toSymphonyUsers.size() == 1 && toSymphonyUsers.get(0) == fromSymphonyUser) {
-
-          Optional<String> channelId;
-          try {
-            channelId = empClient.createChannel(entry.getKey(), streamId, toFederatedAccountsForEmp, fromSymphonyUser.getId().toString(), toSymphonyUsers);
-          } catch (WebCallException wbe) {
-            if (wbe.getStatusCode() != HttpStatus.CONFLICT) {
-              // We are in an IM, the connect bot is not a member
-              userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault()), Collections.emptyList()));
-            }
-            return streamId;
-          }
-
-          if (channelId.isEmpty()) {
-            // We are in an IM, the connect bot is not a member
-            userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.create.im", null, Locale.getDefault()), Collections.emptyList()));
-          } else {
-            ImCreatedNotification imCreatedNotification = new ImCreatedNotification();
-            imCreatedNotification.setAdvisorSymphonyId(fromSymphonyUser.getId().toString());
-            imCreatedNotification.setFederatedUserId(toFederatedAccountsForEmp.get(0).getFederatedUserId());
-            imCreatedNotification.setStreamId(streamId);
-            imCreatedNotification.setEmp(entry.getKey());
-            adminClient.createIMRoom(imCreatedNotification);
-          }
-        } else {
-          // We are in an IM, the connect bot is not a member
-          String alertMessage = messageSource.getMessage("create.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
-        }
-      }
-    } catch (UnknownDatafeedUserException e) {
-      // should never happen, as we have a FederatedAccount
-      throw new IllegalStateException(e);
-    }
-    return streamId;
   }
 
   @Override
@@ -204,10 +84,8 @@ public class ChannelService implements DatafeedListener {
   }
 
   @NewSpan
-  public void refuseToJoinRoomOrMIM(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts, boolean isRoom) {
+  public void refuseToJoinMIM(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts) {
     try {
-      SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-
       for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
         List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
@@ -217,19 +95,9 @@ public class ChannelService implements DatafeedListener {
           //  Do we check first all sessions are ok?
           userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
-
-        // Remove all federated users
-        if (isRoom) {
-          // TODO isRoom is always false, can we remove this ?
-          // Send message to alert it is impossible to add EMP user into a room
-          String alertMessage = messageSource.getMessage("create.room.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
-          symphonyMessageSender.sendAlertMessage(botSession, streamId, alertMessage, Collections.emptyList());
-          userSessions.forEach(session -> symphonyService.removeMemberFromRoom(streamId, session));
-        } else {
-          // Send message to alert it is impossible to add EMP user into a MIM
-          String alertMessage = messageSource.getMessage("create.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
-          userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
-        }
+        // Send message to alert it is impossible to add EMP user into a MIM
+        String alertMessage = messageSource.getMessage("create.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
+        userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
       }
     } catch (UnknownDatafeedUserException e) {
       // should never happen, as we have a FederatedAccount
@@ -237,48 +105,32 @@ public class ChannelService implements DatafeedListener {
     }
   }
 
-  private void handleIMCreation(String streamId, List<String> members, IUser initiator, boolean crosspod) {
+  private void handleIMCreation(String streamId, List<String> members, IUser initiator) {
     members.remove(initiator.getId().toString());
     if (members.size() == 1) {
       String toFederatedAccountId = members.get(0);
-      //check canChat, we assume the initiator is not a federated user
+      //we assume the initiator is not a federated user
 
-      Optional<FederatedAccount> toFederatedAccount = federatedAccountRepository.findBySymphonyId(toFederatedAccountId);
-      if (toFederatedAccount.isPresent()) {
-        Optional<CanChatResponse> canChatResponse = adminClient.canChat(initiator.getId().toString(), toFederatedAccount.get().getFederatedUserId(), toFederatedAccount.get().getEmp());
-        if (canChatResponse.isPresent() && canChatResponse.get() == CanChatResponse.CAN_CHAT) {
-          createIMChannel(streamId, initiator, toFederatedAccount.get());
-        } else {
-          // send error message
-          try {
-            String createChannelErrorMessage;
-            if (canChatResponse.isPresent() && (canChatResponse.get() == CanChatResponse.NO_ENTITLEMENT || canChatResponse.get() == CanChatResponse.CAN_CHAT_NO_CREATE_IM)) {
-              createChannelErrorMessage = messageSource.getMessage("cannot.chat.not.entitled", new Object[]{empSchemaService.getEmpDisplayName(toFederatedAccount.get().getEmp())}, Locale.getDefault());
-            } else {
-              createChannelErrorMessage = messageSource.getMessage("cannot.chat.no.contact", null, Locale.getDefault());
-            }
-            // We are in a IM, the connect bot is not a member
-            symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, createChannelErrorMessage, Collections.emptyList());
-          } catch (UnknownDatafeedUserException e) {
-            throw new IllegalStateException();
-          }
-        }
-      } else {
-        LOG.warn("onIMCreated towards a non-federated account {}", toFederatedAccountId);
+      try {
+        String createChannelErrorMessage = messageSource.getMessage("cannot.create.im", null, Locale.getDefault());
+        symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, createChannelErrorMessage, Collections.emptyList());
+      } catch (UnknownDatafeedUserException e) {
+        throw new IllegalStateException();
       }
+
     } else {
       LOG.warn("Member list does not contain initiator: list={} initiator={}", members, initiator.getId());
     }
   }
 
-  private void handleMIMCreation(String streamId, List<String> members, IUser initiator, boolean crosspod) {
+  private void handleMIMCreation(String streamId, List<String> members) {
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
 
     for (String symphonyId : members) {
       federatedAccountRepository.findBySymphonyId(symphonyId).ifPresent(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount));
     }
 
-    refuseToJoinRoomOrMIM(streamId, federatedAccountsByEmp, false);
+    refuseToJoinMIM(streamId, federatedAccountsByEmp);
   }
 
 

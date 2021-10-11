@@ -7,7 +7,6 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
-import com.symphony.sfs.ms.admin.generated.model.EntitlementResponse;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -39,7 +38,6 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.testing.I18nTest;
-import com.symphony.sfs.ms.starter.testing.MultipleResultsCaptor;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import model.UserInfo;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -136,7 +134,7 @@ class MessageServiceTest implements I18nTest {
     channelService = mock(ChannelService.class);
 
     usersInfoService = mock(UsersInfoService.class);
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
@@ -158,7 +156,7 @@ class MessageServiceTest implements I18nTest {
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
     // really instantiate SymphonyMessageSender to test Handlebars templates.
     symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService,  templateProcessor, messageMetrics));
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, usersInfoService, streamService, new MessageIOMonitor(meterManager), channelService, messageSource);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
   }
 
   @Test
@@ -203,16 +201,12 @@ class MessageServiceTest implements I18nTest {
   @ParameterizedTest
   @MethodSource("textProvider")
   void onIMMessage(String inputText, String expectedSentText) {
-    EntitlementResponse response = new EntitlementResponse();
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
 
     IUser fromSymphonyUser = buildDefaultFromUser();
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
-    List<OperationIdBySymId> empResult = List.of(new OperationIdBySymId().symphonyId(toFederatedAccount.getSymphonyUserId()).operationId("leaseId"));
-    SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult);
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, expectedSentText, null, null)).thenReturn(Optional.of(sendMessageResponse));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent(inputText).build();
     messageService.onIMMessage(message);
 
@@ -223,7 +217,6 @@ class MessageServiceTest implements I18nTest {
 
   @Test
   void onIMMessage_No_entitlements() {
-    EntitlementResponse response = new EntitlementResponse();
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
     FederatedAccount toFederatedAccount = FederatedAccount.builder()
       .emp("emp")
@@ -234,9 +227,6 @@ class MessageServiceTest implements I18nTest {
     IUser fromSymphonyUser = newIUser(FROM_SYMPHONY_USER_ID);
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
-    List<OperationIdBySymId> empResult = List.of(new OperationIdBySymId().symphonyId(toFederatedAccount.getSymphonyUserId()).operationId("leaseId"));
-    SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult);
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, "text", null, null)).thenReturn(Optional.of(sendMessageResponse));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").build();
     messageService.onIMMessage(message);
 
@@ -248,10 +238,7 @@ class MessageServiceTest implements I18nTest {
   }
 
   @Test
-  void onIMMessage_No_PartiallySent(MessageSource messageSource) {
-    MultipleResultsCaptor<String> messageSourceGetMessageResultCaptor = captureMessageSourceGetMessageResult(messageSource);
-
-    EntitlementResponse response = new EntitlementResponse();
+  void onIMMessage_No_PartiallySent() {
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
     String id1 = TO_SYMPHONY_USER_ID + "1";
     String id2 = TO_SYMPHONY_USER_ID + "2";
@@ -294,9 +281,7 @@ class MessageServiceTest implements I18nTest {
   @Test
   void onIMMessage_No_PartiallySent_WithErrors(MessageSource messageSource) {
     spySymphonyMessageSender(messageSource);
-    MultipleResultsCaptor<String> messageSourceGetMessageResultCaptor = captureMessageSourceGetMessageResult(messageSource);
 
-    EntitlementResponse response = new EntitlementResponse();
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
     String id1 = TO_SYMPHONY_USER_ID + "1";
     String id2 = TO_SYMPHONY_USER_ID + "2";
@@ -369,7 +354,6 @@ class MessageServiceTest implements I18nTest {
 
   @Test
   void onIMMessage_No_Contact() {
-    EntitlementResponse response = new EntitlementResponse();
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_CONTACT));
     FederatedAccount toFederatedAccount = FederatedAccount.builder()
       .emp("emp")
@@ -380,9 +364,6 @@ class MessageServiceTest implements I18nTest {
     IUser fromSymphonyUser = newIUser(FROM_SYMPHONY_USER_ID);
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
-    List<OperationIdBySymId> empResult = List.of(new OperationIdBySymId().symphonyId(toFederatedAccount.getSymphonyUserId()).operationId("leaseId"));
-    SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult);
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, "text", null, null)).thenReturn(Optional.of(sendMessageResponse));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").build();
     messageService.onIMMessage(message);
 
