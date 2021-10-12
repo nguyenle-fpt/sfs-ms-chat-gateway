@@ -5,6 +5,7 @@ import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.chat.generated.model.SetMessagesAsReadRequest;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,5 +41,12 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   public ResponseEntity<RetrieveMessagesResponse> retrieveMessages(@Valid RetrieveMessagesRequest body) {
     RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getMessagesIds(), body.getSymphonyUserId());
     return ResponseEntity.ok(response);
+  }
+
+  @Override
+  @ContinueSpan
+  public ResponseEntity<Void> markMessagesAsRead(@Valid SetMessagesAsReadRequest setMessagesAsReadRequest) {
+    symphonyMessageService.markMessagesAsRead(setMessagesAsReadRequest);
+    return ResponseEntity.ok().build();
   }
 }

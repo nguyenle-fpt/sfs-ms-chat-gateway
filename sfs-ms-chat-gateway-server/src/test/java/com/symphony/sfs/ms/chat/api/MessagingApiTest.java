@@ -13,6 +13,7 @@ import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendSystemMessageRequest;
+import com.symphony.sfs.ms.chat.generated.model.SetMessagesAsReadRequest;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
@@ -28,8 +29,12 @@ import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
+import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
@@ -46,18 +51,24 @@ import org.springframework.http.MediaType;
 import org.zalando.problem.DefaultProblem;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
+import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.MARKMESSAGESASREAD_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.RETRIEVEMESSAGES_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.SENDSYSTEMMESSAGE_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
+import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MessagingApiTest extends AbstractIntegrationTest {
@@ -65,6 +76,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   protected MessagingApi symphonyMessagingApi;
   private SymphonyMessageSender symphonyMessageSender;
   private SymphonyService symphonyService;
+  private MessageStatusService messageStatusService;
 
   private DatafeedSessionPool.DatafeedSession datafeedSession;
   private SymphonySession symphonySession;
@@ -108,8 +120,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
     DatafeedSessionPool datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
 
     symphonyService = mock(SymphonyService.class);
+    messageStatusService = mock(MessageStatusService.class);
 
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService,  streamService,  new MessageIOMonitor(meterManager), messageSource);
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
 
@@ -244,6 +257,17 @@ class MessagingApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void markMessagesAsRead() {
+    Long timestamp = Instant.now().toEpochMilli();
+    List<String> messagesIds = Collections.singletonList("messageId");
+    SetMessagesAsReadRequest setMessagesAsReadRequest = new SetMessagesAsReadRequest().symphonyUserId("symphonyUserId").streamId("streamId").messageIds(messagesIds).timestamp(timestamp);
+    SendMessageStatusRequest sendMessageStatusRequest = new SendMessageStatusRequest(timestamp, messagesIds, true, "streamId");
+    markMessagesAsRead(setMessagesAsReadRequest);
+
+    verify(messageStatusService, once()).markMessagesAsRead(eq("podUrl"), any(StaticSessionSupplier.class), eq(Collections.singletonList(sendMessageStatusRequest)));
+  }
+
+  @Test
   void retrieveMessages_ok() {
     RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("messageId1"), new MessageId().messageId("messageId2"))).symphonyUserId("fromSymphonyUserId");
 
@@ -328,6 +352,16 @@ class MessagingApiTest extends AbstractIntegrationTest {
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
       .as(SendMessageResponse.class);
+  }
+
+  private void markMessagesAsRead(SetMessagesAsReadRequest setMessagesAsReadRequest) {
+    configuredGiven(objectMapper, new ExceptionHandling(tracer), symphonyMessagingApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(setMessagesAsReadRequest)
+      .when()
+      .post(MARKMESSAGESASREAD_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value());
   }
 
   private SendMessageRequest createTestMessage(String streamId, String fromSymphonyUserId, String text, FormattingEnum formatting) {

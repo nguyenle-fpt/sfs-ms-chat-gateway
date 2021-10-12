@@ -67,6 +67,27 @@ message-id:
     messageId:
       type: string
 
+set-messages-as-read-request:
+  type: object
+  required:
+    - symphonyUserId
+    - streamId
+    - message-ids
+    - timestamp
+  properties:
+    symphonyUserId:
+      type: string
+    streamId:
+      type: string
+    message-ids:
+      type: array
+      description: List of messages ids
+      minItems: 1
+      items:
+        type: string
+    timestamp:
+      type: integer
+      format: int64
 
 #Responses
 send-message-response:

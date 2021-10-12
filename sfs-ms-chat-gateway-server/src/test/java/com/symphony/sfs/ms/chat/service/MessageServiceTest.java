@@ -31,6 +31,7 @@ import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
@@ -89,6 +90,7 @@ class MessageServiceTest implements I18nTest {
   private ChannelService channelService;
   private StreamService streamService;
   private UsersInfoService usersInfoService;
+  private MessageStatusService messageStatusService;
 
   private SymphonySession userSession;
 
@@ -134,7 +136,10 @@ class MessageServiceTest implements I18nTest {
     channelService = mock(ChannelService.class);
 
     usersInfoService = mock(UsersInfoService.class);
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
+
+    messageStatusService = mock(MessageStatusService.class);
+
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
@@ -156,7 +161,7 @@ class MessageServiceTest implements I18nTest {
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
     // really instantiate SymphonyMessageSender to test Handlebars templates.
     symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService,  templateProcessor, messageMetrics));
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
   }
 
   @Test

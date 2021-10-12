@@ -105,3 +105,21 @@ system-messages:
             schema:
               $ref: '../errors/messaging.yaml#/message-send-failed'
 
+messages-status-read:
+  post:
+    tags:
+      - Messaging
+    summary: Mark messages as read by Emp users
+    operationId: markMessagesAsRead
+    description: >
+      => Mark messages as read by Emp users.
+    security:
+      - sfsAuthentication: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/messaging.yaml#/set-messages-as-read-request'
+    responses:
+      '200':
+        description: Message successfully set as read

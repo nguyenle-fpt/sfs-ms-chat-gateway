@@ -24,6 +24,7 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import model.UserInfo;
@@ -111,7 +112,9 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     EmpSchemaService empSchemaService = new EmpSchemaService(adminClient);
 
-    symphonyMessageService = spy(new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource));
+    MessageStatusService messageStatusService = mock(MessageStatusService.class);
+
+    symphonyMessageService = spy(new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource));
     symphonyMessageService.registerAsDatafeedListener();
 
     ChannelService channelService = new ChannelService(symphonyMessageSender, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, empSchemaService, channelRepository, messageSource);

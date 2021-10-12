@@ -19,6 +19,7 @@ import com.symphony.sfs.ms.chat.generated.model.MessageSenderNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.SetMessagesAsReadRequest;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
@@ -38,10 +39,11 @@ import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
+import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
-import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.log4j.MDC;
@@ -95,6 +97,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private final AdminClient adminClient;
   private final EmpSchemaService empSchemaService;
   private final SymphonyService symphonyService;
+  private final MessageStatusService messageStatusService;
   private final PodConfiguration podConfiguration;
   private final BotConfiguration botConfiguration;
   private final AuthenticationService authenticationService;
@@ -325,6 +328,17 @@ public class SymphonyMessageService implements DatafeedListener {
       return false;
     }
     return true;
+  }
+
+  @NewSpan
+  public void markMessagesAsRead(SetMessagesAsReadRequest setMessagesAsReadRequest) {
+    try {
+      SymphonySession userSession = datafeedSessionPool.refreshSession(setMessagesAsReadRequest.getSymphonyUserId());
+      SendMessageStatusRequest sendMessageStatusRequest = new SendMessageStatusRequest(setMessagesAsReadRequest.getTimestamp(), setMessagesAsReadRequest.getMessageIds(), true, setMessagesAsReadRequest.getStreamId());
+      messageStatusService.markMessagesAsRead(podConfiguration.getUrl(), new StaticSessionSupplier<>(userSession), Collections.singletonList(sendMessageStatusRequest));
+    } catch (UnknownDatafeedUserException e) {
+      LOG.error("Mark Messages as read | Session not found from symphony user {}", setMessagesAsReadRequest.getSymphonyUserId());
+    }
   }
 
   @NewSpan
