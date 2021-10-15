@@ -3,6 +3,9 @@ package com.symphony.sfs.ms.chat.service;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.io.ClassPathTemplateLoader;
 import com.github.jknack.handlebars.io.TemplateLoader;
+import com.symphony.oss.models.chat.canon.AttachmentEntity;
+import com.symphony.oss.models.chat.canon.IAttachment;
+import com.symphony.oss.models.chat.canon.IAttachmentEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
@@ -47,6 +50,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.testing.I18nTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import model.Attachment;
 import model.UserInfo;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Assertions;
@@ -59,6 +63,7 @@ import org.mockito.InOrder;
 import org.springframework.context.MessageSource;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -211,13 +216,18 @@ class MessageServiceTest implements I18nTest {
 
     IUser fromSymphonyUser = buildDefaultFromUser();
 
+    List<IAttachment> attachments = new ArrayList<>();
+
+    attachments.add(new AttachmentEntity.Builder().withName("abc").withContentType("image/png").withFileId("123").build());
+
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     GatewaySocialMessage message = GatewaySocialMessage.builder()
       .streamId("streamId")
       .messageId("messageId")
       .fromUser(fromSymphonyUser)
       .members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID))
-      .timestamp(NOW)
+        .attachments(attachments)
+        .timestamp(NOW)
       .textContent("12345ThisIsAMessage")
       .customEntities(Collections.singletonList(
         CustomEntity.builder()
