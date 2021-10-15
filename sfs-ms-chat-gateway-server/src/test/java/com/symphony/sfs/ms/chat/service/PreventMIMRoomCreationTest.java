@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.oss.models.chat.canon.IAttachment;
+import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
@@ -114,7 +115,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
     MessageStatusService messageStatusService = mock(MessageStatusService.class);
 
-    symphonyMessageService = spy(new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource));
+    symphonyMessageService = spy(new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, null));
     symphonyMessageService.registerAsDatafeedListener();
 
     ChannelService channelService = new ChannelService(symphonyMessageSender, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, empSchemaService, channelRepository, messageSource);
@@ -237,7 +238,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       whatsAppUser,
       sender
     )));
-    doNothing().when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    doNothing().when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
     forwarderQueueConsumer.consume(notification, "1");
 
     verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not permitted to send messages to WHATSAPP users."), eq(Collections.emptyList()));
@@ -274,7 +275,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       GatewaySocialMessage message = answer.getArgument(2);
       message.setTextContent("message decrypted");
       return answer;
-    }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
     when(adminClient.canChat("1", "federatedUserId", "WHATSAPP")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SymphonySession.class))).thenAnswer(ans -> ans.getArgument(2));
@@ -327,7 +328,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       GatewaySocialMessage message = answer.getArgument(2);
       message.setTextContent("message decrypted");
       return answer;
-    }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SymphonySession.class))).thenAnswer(ans -> ans.getArgument(2));
     long messageNumber = empClient.getMessages().size();
@@ -379,7 +380,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       GatewaySocialMessage message = answer.getArgument(2);
       message.setTextContent("message decrypted");
       return answer;
-    }).when(messageDecryptor).decrypt(any(), eq(whatsAppUser.getSymphonyUserId()), any());
+    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SymphonySession.class))).thenAnswer(ans -> ans.getArgument(2));
     long messageNumber = empClient.getMessages().size();

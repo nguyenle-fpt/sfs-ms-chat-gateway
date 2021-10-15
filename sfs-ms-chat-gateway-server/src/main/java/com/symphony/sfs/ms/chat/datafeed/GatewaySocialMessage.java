@@ -15,6 +15,7 @@ import org.jsoup.nodes.Document;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import static org.jsoup.nodes.Entities.escape;
 
@@ -75,6 +76,10 @@ public class GatewaySocialMessage {
 
   public boolean containsCustomEntityType(String entityType) {
     return customEntities.stream().anyMatch(customEntity -> entityType.equals(customEntity.getType()));
+  }
+
+  public Optional<CustomEntity> getCustomEntity(String entityType) {
+    return customEntities.stream().filter(customEntity -> entityType.equals(customEntity.getType())).findFirst();
   }
 
   @Override

@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.datafeed;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
+import com.symphony.oss.models.core.canon.facade.ThreadId;
 import com.symphony.security.clientsdk.transport.CiphertextFactory;
 import com.symphony.security.clientsdk.transport.ICiphertextTransport;
 import com.symphony.security.exceptions.CiphertextTransportIsEmptyException;
@@ -49,12 +50,39 @@ public class MessageDecryptor {
       if(socialMessage.getCustomEntities() != null) {
         String customEntitiesJson = new String(cryptoHandler.decryptMsg(contentKey, socialMessage.getCustomEntities().toByteArray()));
         gatewaySocialMessage.setCustomEntities(CustomEntity.fromJSONString(customEntitiesJson, objectMapper));
+
       }
     } catch (SymphonyInputException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException e) {
       throw new DecryptionException(e);
     } catch (JsonProcessingException e) {
       LOG.error("Error parsing custom entities in social message | {} ", e.getMessage());
     }
+  }
+
+  public void decrypt(SBEEventMessage socialMessage, String userId) throws UnknownDatafeedUserException, ContentKeyRetrievalException, DecryptionException {
+    try {
+      // Get message ciphertext transport to extract rotation Id of key that was used to cipher the text.
+      ICiphertextTransport msgCipherTransport = CiphertextFactory.getTransport(socialMessage.getText());
+
+      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(socialMessage.getThreadId()), userId, msgCipherTransport.getRotationId());
+      if (socialMessage.getText() != null) {
+        socialMessage.setText(cryptoHandler.decryptMsg(contentKey, socialMessage.getText()));
+
+      }
+      if (socialMessage.getPresentationML() != null) {
+        socialMessage.setPresentationML(cryptoHandler.decryptMsg(contentKey, socialMessage.getPresentationML()));
+      }
+
+
+      if(socialMessage.getCustomEntities() != null) {
+        String customEntitiesJson = cryptoHandler.decryptMsg(contentKey, socialMessage.getCustomEntities());
+        socialMessage.setParsedCustomEntities(CustomEntity.fromJSONString(customEntitiesJson, objectMapper));
+
+      }
+    } catch (SymphonyInputException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException | JsonProcessingException e) {
+      throw new DecryptionException(e);
+    }
+
   }
 
 }

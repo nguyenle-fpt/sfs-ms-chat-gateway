@@ -113,6 +113,33 @@ message-info:
       type: string
     disclaimer:
       type: string
+    firstName:
+      type: string
+    lastName:
+      type: string
+    displayName:
+      type: string
+    symphonyId:
+      type: string
+    timestamp:
+      type: long
+    attachments:
+      type: array
+      items:
+        $ref: "#/attachment-info"
+    parentMessage:
+      $ref: "#/message-info"
+
+attachment-info:
+  type: object
+  required:
+    - contentType
+    - fileName
+  properties:
+    contentType:
+      type: string
+    fileName:
+      type: string
 
 symphony-attachment:
   type: object

@@ -2,7 +2,13 @@ package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
+import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
+import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
+import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
+import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
+import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
@@ -55,6 +61,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.MARKMESSAGESASREAD_ENDPOINT;
@@ -80,6 +87,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   private DatafeedSessionPool.DatafeedSession datafeedSession;
   private SymphonySession symphonySession;
+  private MessageDecryptor messageDecryptor;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
@@ -122,7 +130,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
     symphonyService = mock(SymphonyService.class);
     messageStatusService = mock(MessageStatusService.class);
 
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService,  streamService,  new MessageIOMonitor(meterManager), messageSource);
+    messageDecryptor = mock(MessageDecryptor.class);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService,  streamService,  new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
 
@@ -271,14 +281,117 @@ class MessagingApiTest extends AbstractIntegrationTest {
   void retrieveMessages_ok() {
     RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("messageId1"), new MessageId().messageId("messageId2"))).symphonyUserId("fromSymphonyUserId");
 
-    when(symphonyService.getMessage("messageId1", datafeedSession)).thenReturn(Optional.of(new MessageInfo().messageId("messageId1").disclaimer("disclaimer1").message("This is the message 1")));
-    when(symphonyService.getMessage("messageId2", datafeedSession)).thenReturn(Optional.of(new MessageInfo().messageId("messageId2").disclaimer("disclaimer2").message("This is the message 2")));
+    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This is the message 1")
+      .ingestionDate(123L)
+      .from(SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build()).build();
+
+    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+
+
+    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2").disclaimer("disclaimer2").text("This is the message 2")
+      .ingestionDate(123L)
+      .from(SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build()).build();
+
+    when(symphonyService.getEncryptedMessage("messageId2", datafeedSession)).thenReturn(Optional.of(sbeEventMessage2));
+
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Arrays.asList(
-      new MessageInfo().messageId("messageId1").disclaimer("disclaimer1").message("This is the message 1"),
-      new MessageInfo().messageId("messageId2").disclaimer("disclaimer2").message("This is the message 2"))
-    );
+      new MessageInfo()
+        .messageId("messageId1")
+        .disclaimer("disclaimer1")
+        .message("This is the message 1")
+        .firstName("first")
+        .lastName("last")
+        .symphonyId("12345")
+        .timestamp(123L),
+      new MessageInfo()
+        .messageId("messageId2")
+        .disclaimer("disclaimer2")
+        .message("This is the message 2")
+        .firstName("first")
+        .lastName("last")
+        .symphonyId("12345")
+        .timestamp(123L)
+    ));
+
+    assertEquals(expectedResponse, response);
+  }
+
+  @Test
+  void retrieveMessages_ok_withParent() {
+    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Collections.singletonList(new MessageId().messageId("messageId1"))).symphonyUserId("fromSymphonyUserId");
+
+    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("12345This is the message 1")
+      .ingestionDate(123L)
+      .parsedCustomEntities(Collections.singletonList(
+        CustomEntity.builder()
+          .type(CustomEntity.QUOTE_TYPE)
+          .endIndex(5)
+          .data(Map.of("id", "otherMsg"))
+          .build()
+      ))
+      .from(SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build()).build();
+
+    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+
+
+    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("otherMsg").disclaimer("disclaimer2").text("123456This is the message 2")
+      .ingestionDate(123L)
+      .parsedCustomEntities(Collections.singletonList(
+        CustomEntity.builder()
+          .type(CustomEntity.QUOTE_TYPE)
+          .endIndex(6)
+          .data(Map.of("id", "messageId2"))
+          .build()
+      ))
+      .from(SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build())
+      .attachments(Collections.singletonList(
+        SBEMessageAttachment.builder().contentType("image/png").name("hello.png").build()
+      )).build();
+
+    when(symphonyService.getEncryptedMessage("otherMsg", datafeedSession)).thenReturn(Optional.of(sbeEventMessage2));
+
+    RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
+    RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Arrays.asList(
+      new MessageInfo()
+        .messageId("messageId1")
+        .disclaimer("disclaimer1")
+        .message("This is the message 1")
+        .firstName("first")
+        .lastName("last")
+        .symphonyId("12345")
+        .timestamp(123L)
+        .parentMessage(new MessageInfo()
+          .messageId("otherMsg")
+          .disclaimer("disclaimer2")
+          .message("This is the message 2")
+          .firstName("first")
+          .lastName("last")
+          .symphonyId("12345")
+          .timestamp(123L)
+          .addAttachmentsItem(new AttachmentInfo().contentType("image/png").fileName("hello.png")))
+    ));
 
     assertEquals(expectedResponse, response);
   }
@@ -287,10 +400,28 @@ class MessagingApiTest extends AbstractIntegrationTest {
   void retrieveMessages_ok_specialCharacters() {
     RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Collections.singletonList(new MessageId().messageId("messageId1"))).symphonyUserId("fromSymphonyUserId");
 
-    when(symphonyService.getMessage("messageId1", datafeedSession)).thenReturn(Optional.of(new MessageInfo().messageId("messageId1").disclaimer("disclaimer1").message("This \\+ is \\_the\\_message \\*1")));
+    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This \\+ is \\_the\\_message \\*1")
+      .ingestionDate(123L)
+      .from(SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build()).build();
+
+    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+
+
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
-    RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Collections.singletonList(new MessageInfo().messageId("messageId1").disclaimer("disclaimer1").message("This + is _the_message *1")));
+    RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Collections.singletonList(new MessageInfo()
+      .messageId("messageId1")
+      .disclaimer("disclaimer1")
+      .message("This + is _the_message *1")
+      .firstName("first")
+      .lastName("last")
+      .symphonyId("12345")
+      .timestamp(123L)));
 
     assertEquals(expectedResponse, response);
   }
@@ -299,8 +430,18 @@ class MessagingApiTest extends AbstractIntegrationTest {
   void retrieveMessages_fails() {
     RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("messageId1"), new MessageId().messageId("messageId2"), new MessageId().messageId("messageId3"))).symphonyUserId("fromSymphonyUserId");
 
-    when(symphonyService.getMessage("messageId1", datafeedSession)).thenReturn(Optional.of(new MessageInfo().messageId("messageId1").disclaimer("disclaimer1").message("This is the message 1")));
-    when(symphonyService.getMessage("messageId2", datafeedSession)).thenReturn(Optional.of(new MessageInfo().messageId("messageId2").disclaimer("disclaimer2").message("This is the message 2")));
+
+    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This \\+ is \\_the\\_message \\*1")
+      .ingestionDate(123L)
+      .from(SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build()).build();
+
+    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("messageId2", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
 
     HttpRequestUtils.getRequestFail(symphonyMessagingApi, retrieveMessagesRequest, RETRIEVEMESSAGES_ENDPOINT, Collections.emptyList(), objectMapper, tracer, RetrieveMessageFailedProblem.class.getName(), null, HttpStatus.BAD_REQUEST);
   }

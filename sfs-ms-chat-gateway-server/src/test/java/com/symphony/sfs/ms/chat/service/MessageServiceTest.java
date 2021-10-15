@@ -12,17 +12,24 @@ import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
+import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
+import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
+import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
+import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
+import com.symphony.sfs.ms.emp.generated.model.AttachmentInfo;
+import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.EmpError;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum;
+import com.symphony.sfs.ms.emp.generated.model.SendmessagerequestInlineMessage;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
@@ -56,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -139,7 +147,7 @@ class MessageServiceTest implements I18nTest {
 
     messageStatusService = mock(MessageStatusService.class);
 
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, mock(MessageDecryptor.class));
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }
@@ -161,7 +169,7 @@ class MessageServiceTest implements I18nTest {
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
     // really instantiate SymphonyMessageSender to test Handlebars templates.
     symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService,  templateProcessor, messageMetrics));
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource);
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, null);
   }
 
   @Test
@@ -183,17 +191,81 @@ class MessageServiceTest implements I18nTest {
     messageService.onIMMessage(message);
 
     InOrder orderVerifier = inOrder(empClient);
-    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null);
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null);
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null, null);
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null, null);
     orderVerifier.verifyNoMoreInteractions();
 
     // With disclaimer
     GatewaySocialMessage messageWithDisclaimer = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(members).timestamp(now).textContent("message").disclaimer("disclaimer").build();
     messageService.onIMMessage(messageWithDisclaimer);
 
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null);
-    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null);
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null, null);
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null, null);
     orderVerifier.verifyNoMoreInteractions();
+  }
+
+  @Test
+  void onMessageReply() {
+    when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+
+    IUser fromSymphonyUser = buildDefaultFromUser();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+    GatewaySocialMessage message = GatewaySocialMessage.builder()
+      .streamId("streamId")
+      .messageId("messageId")
+      .fromUser(fromSymphonyUser)
+      .members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID))
+      .timestamp(NOW)
+      .textContent("12345ThisIsAMessage")
+      .customEntities(Collections.singletonList(
+        CustomEntity.builder()
+          .type(CustomEntity.QUOTE_TYPE)
+          .endIndex(5)
+          .data(Map.of("id", "Rp6N+cRznOWTwnD80vg7OX///oOAgiSfbQ=="))
+          .build()
+      ))
+      .build();
+
+    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("Rp6N+cRznOWTwnD80vg7OX///oOAgiSfbQ==").disclaimer("disclaimer1").text("123This is the inline message")
+      .ingestionDate(123L)
+      .parsedCustomEntities(Collections.singletonList(
+          CustomEntity.builder()
+            .type(CustomEntity.QUOTE_TYPE)
+            .endIndex(3)
+            .data(Map.of("id", "otherMsg"))
+            .build()
+        ))
+      .from(
+        SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build())
+      .attachments(Collections.singletonList(
+        SBEMessageAttachment.builder().contentType("image/png").name("hello.png").build()
+      ))
+      .build();
+
+
+    when(symphonyService.getEncryptedMessage(eq("Rp6N-cRznOWTwnD80vg7OX___oOAgiSfbQ"), any())).thenReturn(Optional.of(sbeEventMessage));
+
+    SendmessagerequestInlineMessage sendmessagerequestInlineMessage = new SendmessagerequestInlineMessage()
+      .messageId("Rp6N-cRznOWTwnD80vg7OX___oOAgiSfbQ")
+      .text("This is the inline message")
+      .timestamp(123L)
+      .fromMember(new ChannelMember().firstName("first").lastName("last").symphonyId("12345").companyName("company"))
+      .addAttachmentsItem(new AttachmentInfo().contentType("image/png").fileName("hello.png"));
+
+
+
+    messageService.onIMMessage(message);
+
+    verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
+    verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "ThisIsAMessage", "", null, sendmessagerequestInlineMessage);
   }
 
   private static Stream<Arguments> textProvider() {
@@ -217,7 +289,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, expectedSentText, "", null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, expectedSentText, "", null, null);
   }
 
   @Test
@@ -237,7 +309,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You are not permitted to send messages to emp users.", Collections.emptyList());
   }
@@ -275,7 +347,7 @@ class MessageServiceTest implements I18nTest {
       // no operation ID ==> message not sent for user 2
       new OperationIdBySymId().symphonyId(toFedAcc2.getSymphonyUserId()));
     SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult);
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null)).thenReturn(Optional.of(sendMessageResponse));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null, null)).thenReturn(Optional.of(sendMessageResponse));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(id1, id2, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chatType("CHATROOM").build();
 
     messageService.onIMMessage(message);
@@ -324,7 +396,7 @@ class MessageServiceTest implements I18nTest {
       new EmpError().statusCode(400).detail("error coming directly from EMP"));
 
     SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult).errors(empErrors);
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null)).thenReturn(Optional.of(sendMessageResponse));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null, null)).thenReturn(Optional.of(sendMessageResponse));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(id1, id2, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chatType("CHATROOM").build();
 
     messageService.onIMMessage(message);
@@ -374,7 +446,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Sorry, you're not permitted to chat with this user.", Collections.emptyList());
   }
@@ -399,12 +471,6 @@ class MessageServiceTest implements I18nTest {
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chime(true).build(),
         "You cannot chime your contacts here."),
       arguments(toFederatedAccount,
-        GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").parentRelationshipType(ParentRelationshipType.REPLY).build(),
-        "Sorry, you can't send an inline reply."),
-      arguments(toFederatedAccount,
-        GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").customEntities(Collections.singletonList(new CustomEntity(CustomEntity.QUOTE_TYPE))).build(),
-        "Sorry, you can't send an inline reply."),
-      arguments(toFederatedAccount,
         GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").table(true).build(),
         "Sorry, you can't send tables here.")
     );
@@ -417,7 +483,7 @@ class MessageServiceTest implements I18nTest {
     //when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, "text", null, null)).thenReturn(Optional.of("leaseId"));
     messageService.onIMMessage(message);
 
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", expectedAlertMessage, Collections.emptyList());   }
 

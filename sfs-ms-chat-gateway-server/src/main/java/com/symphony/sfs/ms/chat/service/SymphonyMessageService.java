@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
+import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
@@ -9,8 +10,14 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
+import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
+import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
+import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
+import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
+import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
@@ -29,11 +36,13 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SpecialCharactersUtils;
 import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
+import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.EmpError;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum;
+import com.symphony.sfs.ms.emp.generated.model.SendmessagerequestInlineMessage;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
@@ -44,6 +53,8 @@ import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
+import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
+import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.log4j.MDC;
@@ -69,6 +80,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.DECRYPTION_FAILED;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_CONTACT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
@@ -104,6 +116,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private final StreamService streamService;
   private final MessageIOMonitor messageMetrics;
   private final MessageSource messageSource;
+  private final MessageDecryptor messageDecryptor;
 
 
   @PostConstruct
@@ -146,10 +159,11 @@ public class SymphonyMessageService implements DatafeedListener {
   private void handleFromSymphonyIMorMIM(GatewaySocialMessage gatewaySocialMessage) {
     String streamId = gatewaySocialMessage.getStreamId();
     MultiValueMap<String, FederatedAccount> federatedAccountsByEmp = new LinkedMultiValueMap<>();
-    List<IUser> symphonyUsers = new ArrayList<>();
+    List<FederatedAccount> federatedAccounts = new ArrayList<>();
 
     for (String symphonyId : gatewaySocialMessage.getToUserIds()) {
-      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresentOrElse(federatedAccount -> federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount), () -> symphonyUsers.add(SymphonyUserUtils.newIUser(symphonyId)));
+      federatedAccountRepository.findBySymphonyId(symphonyId).ifPresent(
+        federatedAccount -> { federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount); federatedAccounts.add(federatedAccount); });
     }
 
     if (federatedAccountsByEmp.isEmpty()) {
@@ -174,6 +188,8 @@ public class SymphonyMessageService implements DatafeedListener {
           allUserSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
         }
       }
+      SendmessagerequestInlineMessage inlineMessageRequest =   null;
+
 
       // Check if message contents can be sent
       if (gatewaySocialMessage.isChime()) {
@@ -184,11 +200,8 @@ public class SymphonyMessageService implements DatafeedListener {
         allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault()), Collections.emptyList()));
         messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
         return;
-      } else if (gatewaySocialMessage.getParentRelationshipType() == ParentRelationshipType.REPLY ||
-        gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("inline.replies.not.supported", null, Locale.getDefault()), Collections.emptyList()));
-        messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
-        return;
+      } else if (gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
+        inlineMessageRequest = getInlineQuote(gatewaySocialMessage, streamId, federatedAccounts, allUserSessions);
       }
 
       // Forward the message to all EMP users
@@ -259,7 +272,8 @@ public class SymphonyMessageService implements DatafeedListener {
             gatewaySocialMessage.getTimestamp(),
             gatewaySocialMessage.getMessageForEmp(),
             gatewaySocialMessage.getDisclaimerForEmp(),
-            attachmentsContent);
+            attachmentsContent,
+            inlineMessageRequest);
           if (sendMessageResponse.isEmpty()) {
             allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault()), Collections.emptyList()));
           } else {
@@ -271,6 +285,53 @@ public class SymphonyMessageService implements DatafeedListener {
       // should never happen, as we have a FederatedAccount
       throw new IllegalStateException(e);
     }
+  }
+
+  private SendmessagerequestInlineMessage getInlineQuote(GatewaySocialMessage gatewaySocialMessage, String streamId, List<FederatedAccount> federatedAccounts, List<SymphonySession> allUserSessions) throws UnknownDatafeedUserException {
+    SendmessagerequestInlineMessage inlineMessageRequest = null;
+    CustomEntity quote = gatewaySocialMessage.getCustomEntity(CustomEntity.QUOTE_TYPE).get();
+    gatewaySocialMessage.setTextContent(gatewaySocialMessage.getTextContent().substring(quote.getEndIndex()));
+    String id  = StreamUtil.toUrlSafeStreamId(quote.getData().get("id").toString());
+    Optional<SBEEventMessage> messageSearch = symphonyService.getEncryptedMessage(id, allUserSessions.get(0));
+    if(messageSearch.isPresent()) {
+      SBEEventMessage inlineMessage = messageSearch.get();
+      try {
+        // federatedAccounts is never empty
+        messageDecryptor.decrypt(inlineMessage, federatedAccounts.get(0).getSymphonyUserId());
+      } catch (ContentKeyRetrievalException e) {
+        LOG.error("Unable to find key for social message: stream={} members={}", streamId, id, e);
+        return null;
+      } catch (DecryptionException e) {
+        LOG.error("Unable to decrypt social message: stream={} members={}", streamId, id, e);
+        return null;
+      }
+
+      Optional<CustomEntity> inlineQuote = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
+
+      if (inlineQuote.isPresent()) {
+        inlineMessage.setText(inlineMessage.getText().substring(inlineQuote.get().getEndIndex()));
+      }
+      inlineMessageRequest = new SendmessagerequestInlineMessage()
+        .messageId(StreamUtil.toUrlSafeStreamId(inlineMessage.getMessageId()))
+        .text(inlineMessage.getText())
+        .timestamp(inlineMessage.getIngestionDate())
+        .fromMember(new ChannelMember()
+          .symphonyId(String.valueOf(inlineMessage.getFrom().getId()))
+          .displayName(inlineMessage.getFrom().getPrettyName())
+          .firstName(inlineMessage.getFrom().getFirstName())
+          .lastName(inlineMessage.getFrom().getSurName())
+          .companyName(inlineMessage.getFrom().getCompany())
+        );
+      if (inlineMessage.getAttachments() != null) {
+        List<com.symphony.sfs.ms.emp.generated.model.AttachmentInfo> attachmentInfos = inlineMessage
+          .getAttachments()
+          .stream()
+          .map(a -> new com.symphony.sfs.ms.emp.generated.model.AttachmentInfo().fileName(a.getName()).contentType(a.getContentType()))
+          .collect(Collectors.toList());
+        inlineMessageRequest.setAttachments(attachmentInfos);
+      }
+    }
+    return inlineMessageRequest;
   }
 
   private void dealWithMessageSentPartially(GatewaySocialMessage gatewaySocialMessage, SendMessageResponse sendMessageResponse, List<SymphonySession> allUserSessions) {
@@ -348,15 +409,66 @@ public class SymphonyMessageService implements DatafeedListener {
 
       SymphonySession userSession = datafeedSessionPool.refreshSession(symphonyUserId);
       for (MessageId id : messageIds) {
-        MessageInfo message = symphonyService.getMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
-        messageInfos.add(message.message(SpecialCharactersUtils.unescapeSpecialCharacters(message.getMessage())));
+        SBEEventMessage sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
+        messageDecryptor.decrypt(sbeEventMessage, symphonyUserId);
+
+        // TODO handle inline replies
+
+        MessageInfo messageInfo = buildMessageInfo(sbeEventMessage);
+
+        Optional<CustomEntity> quote = sbeEventMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
+
+        if (quote.isPresent()) {
+          messageInfo.setMessage(messageInfo.getMessage().substring(quote.get().getEndIndex()));
+          String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
+          SBEEventMessage inlineMessage = symphonyService.getEncryptedMessage(quotedId, userSession).orElseThrow(RetrieveMessageFailedProblem::new);
+          messageDecryptor.decrypt(inlineMessage, symphonyUserId);
+          MessageInfo inlineMessageInfo = buildMessageInfo(inlineMessage);
+          Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
+
+          if (quoteInline.isPresent()) {
+            inlineMessageInfo.setMessage(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex()));
+          }
+
+          messageInfo.setParentMessage(inlineMessageInfo);
+        }
+
+        messageInfos.add(messageInfo);
       }
 
       return new RetrieveMessagesResponse().messages(messageInfos);
     } catch (UnknownDatafeedUserException e) {
       LOG.error("Session not found from symphony user {}", symphonyUserId);
       throw new MessageSenderNotFoundProblem();
+    } catch (ContentKeyRetrievalException e) {
+      LOG.error("Could not retrieve content key for user {}", symphonyUserId);
+      throw  new RetrieveMessageFailedProblem();
+    } catch (DecryptionException e) {
+      LOG.error("Could not decrypt message for user {}", symphonyUserId);
+      throw  new RetrieveMessageFailedProblem();
     }
+  }
+
+  private MessageInfo buildMessageInfo(SBEEventMessage sbeEventMessage) {
+    MessageInfo messageInfo = new MessageInfo()
+      .message(SpecialCharactersUtils.unescapeSpecialCharacters(sbeEventMessage.getText()))
+      .messageId(sbeEventMessage.getMessageId())
+      .disclaimer(sbeEventMessage.getDisclaimer())
+      .firstName(sbeEventMessage.getFrom().getFirstName())
+      .lastName(sbeEventMessage.getFrom().getSurName())
+      .timestamp(sbeEventMessage.getIngestionDate())
+      .displayName(sbeEventMessage.getFrom().getPrettyName())
+      .symphonyId(String.valueOf(sbeEventMessage.getFrom().getId()));
+
+    if(sbeEventMessage.getAttachments() != null) {
+      List<AttachmentInfo> attachmentInfos = sbeEventMessage.getAttachments()
+        .stream()
+        .map(sbeMessageAttachment -> new AttachmentInfo().contentType(sbeMessageAttachment.getContentType()).fileName(sbeMessageAttachment.getName()))
+        .collect(Collectors.toList());
+
+      messageInfo.setAttachments(attachmentInfos);
+    }
+    return messageInfo;
   }
 
   @NewSpan

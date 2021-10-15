@@ -12,6 +12,7 @@ import lombok.ToString;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -22,6 +23,10 @@ public class CustomEntity {
   public static final String QUOTE_TYPE = "com.symphony.sharing.quote";
 
   private String type;
+  private Integer beginIndex;
+  private Integer endIndex;
+  private Map<String, Object> data;
+
 
   public static List<CustomEntity> fromJSONString(String text, ObjectMapper objectMapper) throws JsonProcessingException {
     return Arrays.asList(objectMapper.readValue(text, CustomEntity[].class));

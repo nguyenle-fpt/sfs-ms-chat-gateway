@@ -1,6 +1,10 @@
 package com.symphony.sfs.ms.chat.service.symphony;
 
 import clients.symphony.api.constants.PodConstants;
+import com.symphony.oss.models.chat.canon.SocialMessageEntity;
+import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
+import com.symphony.oss.models.chat.canon.facade.SocialMessage;
+import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
@@ -31,6 +35,7 @@ public class SymphonyService {
   private final SymMessageParser symMessageParser;
 
   public static final String GETMESSAGE = "/agent/v1/message/{messageId}";
+  public static final String GETMESSAGEENCRYPTED = "/webcontroller/dataquery/retrieveMessagePayload?{messageId}";
   public static final String GETATTACHMENT = "/agent/v1/stream/{streamId}/attachment?messageId={messageId}&fileId={fileId}";
 
   @NewSpan
@@ -77,6 +82,28 @@ public class SymphonyService {
     }
   }
 
+
+  @NewSpan
+  public Optional<SBEEventMessage> getEncryptedMessage(String messageId, SymphonySession session) {
+    try {
+      SBEEventMessage response = webClient.get()
+      .uri(podConfiguration.getUrl() + GETMESSAGEENCRYPTED, messageId)
+      .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .header("sessionToken", session.getSessionToken())
+      .header("keyManagerToken", session.getKmToken())
+      .attribute(BASE_URI, podConfiguration.getUrl())
+      .attribute(BASE_PATH, GETMESSAGE)
+      .retrieve()
+      .bodyToMono(SBEEventMessage.class)
+      .block();
+
+    return Optional.of(response);
+  } catch (Exception e) {
+    logWebClientError(LOG, GETMESSAGEENCRYPTED.replace("{messageId}", messageId), e);
+    return Optional.empty();
+  }
+
+  }
   /**
    * Retrieve an attachment of a message
    *
