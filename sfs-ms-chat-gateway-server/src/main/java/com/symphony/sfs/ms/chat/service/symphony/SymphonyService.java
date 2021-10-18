@@ -1,9 +1,10 @@
 package com.symphony.sfs.ms.chat.service.symphony;
 
 import clients.symphony.api.constants.PodConstants;
-import com.symphony.oss.models.chat.canon.SocialMessageEntity;
-import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
-import com.symphony.oss.models.chat.canon.facade.SocialMessage;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
@@ -16,8 +17,10 @@ import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Collections;
 import java.util.Optional;
 
 import static com.symphony.sfs.ms.starter.logging.WebRequestLoggingFilter.BASE_PATH;
@@ -37,6 +40,7 @@ public class SymphonyService {
   public static final String GETMESSAGE = "/agent/v1/message/{messageId}";
   public static final String GETMESSAGEENCRYPTED = "/webcontroller/dataquery/retrieveMessagePayload?{messageId}";
   public static final String GETATTACHMENT = "/agent/v1/stream/{streamId}/attachment?messageId={messageId}&fileId={fileId}";
+  public static final String REPLYTOMESSAGE = "/webcontroller/ingestor/MessageService/reply?replyMessage=true";
 
   @NewSpan
   public void removeMemberFromRoom(String streamId, SymphonySession session) {
@@ -125,6 +129,28 @@ public class SymphonyService {
       .block();
 
     return response;
+  }
+
+  public SBEEventMessage sendReplyMessage(SBEEventMessage message, SymphonySession session) throws JsonProcessingException {
+    ObjectMapper objectMapper = new ObjectMapper();
+    objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+
+    String payload = objectMapper.writeValueAsString(Collections.singletonList(message));
+    Object response = webClient.post()
+      .uri(podConfiguration.getUrl() + REPLYTOMESSAGE)
+      .contentType(MediaType.APPLICATION_JSON)
+      .header("sessionToken", session.getSessionToken())
+      .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE, MediaType.APPLICATION_JSON_VALUE)
+      .body(BodyInserters.fromFormData("messages", payload))
+      .attribute(BASE_URI, podConfiguration.getUrl())
+      .attribute(BASE_PATH, REPLYTOMESSAGE)
+      .retrieve().bodyToMono(Object.class)
+      .block();
+
+    JsonNode jsonNode = objectMapper.valueToTree(response);
+    String firstNode = jsonNode.fieldNames().next();
+    JsonNode messageNode = jsonNode.get(firstNode).get("message");
+    return objectMapper.treeToValue(messageNode, SBEEventMessage.class);
   }
 
 }

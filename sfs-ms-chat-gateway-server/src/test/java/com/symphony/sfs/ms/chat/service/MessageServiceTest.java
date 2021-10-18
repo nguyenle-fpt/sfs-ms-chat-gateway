@@ -5,7 +5,6 @@ import com.github.jknack.handlebars.io.ClassPathTemplateLoader;
 import com.github.jknack.handlebars.io.TemplateLoader;
 import com.symphony.oss.models.chat.canon.AttachmentEntity;
 import com.symphony.oss.models.chat.canon.IAttachment;
-import com.symphony.oss.models.chat.canon.IAttachmentEntity;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
@@ -16,12 +15,12 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
@@ -50,7 +49,6 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.testing.I18nTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import model.Attachment;
 import model.UserInfo;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Assertions;
@@ -104,6 +102,9 @@ class MessageServiceTest implements I18nTest {
   private StreamService streamService;
   private UsersInfoService usersInfoService;
   private MessageStatusService messageStatusService;
+  private MessageEncryptor messageEncryptor;
+  private MessageDecryptor messageDecryptor;
+  private MessageIOMonitor messageIOMonitor;
 
   private SymphonySession userSession;
 
@@ -155,6 +156,10 @@ class MessageServiceTest implements I18nTest {
     messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, mock(MessageDecryptor.class));
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+
+    messageEncryptor = mock(MessageEncryptor.class);
+    messageDecryptor = mock(MessageDecryptor.class);
+    messageIOMonitor = mock(MessageIOMonitor.class);
   }
 
   /**
@@ -173,8 +178,8 @@ class MessageServiceTest implements I18nTest {
 
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
     // really instantiate SymphonyMessageSender to test Handlebars templates.
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService,  templateProcessor, messageMetrics));
-    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, null);
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService,  templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService));
+    messageService = new SymphonyMessageService(empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
   }
 
   @Test
@@ -521,8 +526,26 @@ class MessageServiceTest implements I18nTest {
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
     when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of("msgId"));
 
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null);
     verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, "<messageML>text</messageML>", null);
+  }
+
+  @Test
+  void sendInlineReplyMessage() {
+    FederatedAccount fromFederatedAccount = FederatedAccount.builder()
+      .emp("emp")
+      .symphonyUserId(FROM_SYMPHONY_USER_ID)
+      .federatedUserId("fed")
+      .build();
+    when(federatedAccountRepository.findBySymphonyId(FROM_SYMPHONY_USER_ID)).thenReturn(Optional.of(fromFederatedAccount));
+    when(adminClient.canChat(TO_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
+    StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
+    when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
+    when(symphonyMessageSender.sendReplyMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
+
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, "parent_message_id");
+    verify(symphonyMessageSender, once()).sendReplyMessage("streamId", FROM_SYMPHONY_USER_ID, "text", "parent_message_id");
   }
 
   @Test
@@ -542,7 +565,7 @@ class MessageServiceTest implements I18nTest {
     userInfo.setDisplayName("display name");
     when(usersInfoService.getUsersFromIds(eq("podUrl"), any(SessionSupplier.class), eq(Collections.singletonList(TO_SYMPHONY_USER_ID)))).thenReturn(Collections.singletonList(userInfo));
 
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null);
     verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
   }
 
@@ -560,7 +583,7 @@ class MessageServiceTest implements I18nTest {
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
     when(usersInfoService.getUsersFromIds("podUrl", new StaticSessionSupplier<>(botSession), Collections.singletonList(TO_SYMPHONY_USER_ID))).thenReturn(Collections.emptyList());
 
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null);
     verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
   }
 
@@ -581,7 +604,7 @@ class MessageServiceTest implements I18nTest {
     when(empClient.sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), anyString(), eq(TypeEnum.INFO))).thenReturn(Optional.of("leaseId"));
     when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
 
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null);
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null, null);
     String expectedTruncatedMsg = tooLongMsg.substring(0, 29997) + "...";
     String expectedTruncatedMsgML = "<messageML>" + tooLongMsg.substring(0, 30000) + "</messageML>";
     String warningMessage = "The message was too long and was truncated. Only the first 30,000 characters were delivered";
@@ -603,7 +626,7 @@ class MessageServiceTest implements I18nTest {
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
 
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null);
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null);
 
     verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
   }

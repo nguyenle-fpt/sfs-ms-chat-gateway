@@ -25,6 +25,7 @@ import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,10 @@ public class ContentKeyManager {
 
   @Cacheable(CachingConfiguration.CONTENT_KEY_CACHE)
   public byte[] getContentKey(ThreadId threadId, String userId, Long rotationId) throws UnknownDatafeedUserException, ContentKeyRetrievalException {
+    return getContentKey(threadId.toString(), threadId.asImmutableByteArray().toByteArray(), userId, rotationId);
+  }
+
+  private byte[] getContentKey(String threadId, byte[] streamId, String userId, Long rotationId) throws UnknownDatafeedUserException, ContentKeyRetrievalException {
     for (int i = 0; i < 2; i++) { // TODO ugly, we need to align retry mechanism with the one in ms-admin
       DatafeedSession session = datafeedSessionPool.refreshSession(userId);
 
@@ -58,9 +63,8 @@ public class ContentKeyManager {
       try {
         IClientKeyRetrieverHandler clientKeyRetriever = new ClientKeyRetrieverHandler(client, authSecretPersister);
         clientKeyRetriever.init(auth, authSecretPersister, false);
-
         Long symphonyUserId = Long.valueOf(userId);
-        KeyIdentifier keyId = new KeyIdentifier(threadId.asImmutableByteArray().toByteArray(), symphonyUserId, rotationId);
+        KeyIdentifier keyId = new KeyIdentifier(streamId, symphonyUserId, rotationId);
         return clientKeyRetriever.getKey(auth, keyId);
       } catch (SymphonyInputException | UnsupportedEncodingException | SymphonySignatureException | SymphonyPEMFormatException | SymphonyNativeException | SymphonyEncryptionException e) {
         throw new ContentKeyRetrievalException(threadId, session.getUserId(), rotationId, e);
@@ -73,7 +77,36 @@ public class ContentKeyManager {
         }
       }
     }
+
     throw new ContentKeyRetrievalException(threadId, userId, rotationId);
+  }
+  
+  @Cacheable(CachingConfiguration.CONTENT_KEY_CACHE)
+  public KeyIdentifier getContentKeyIdentifier(String threadId, String userId) throws ContentKeyRetrievalException, UnknownDatafeedUserException {
+    for (int i = 0; i < 2; i++) {
+      DatafeedSession session = datafeedSessionPool.refreshSession(userId);
+      SymphonyClient client = getSymphonyClient(session.getUsername());
+      AuthProvider auth = getAuthProvider(session);
+
+      try {
+        IClientKeyRetrieverHandler clientKeyRetriever = new ClientKeyRetrieverHandler(client, authSecretPersister);
+        clientKeyRetriever.init(auth, authSecretPersister, false);
+        Long symphonyUserId = Long.valueOf(userId);
+        Long rotationId = client.getRotationId(auth, threadId);
+        return new KeyIdentifier(Base64.decodeBase64(threadId), symphonyUserId, rotationId);
+      } catch (SymphonyInputException | UnsupportedEncodingException | SymphonySignatureException | SymphonyPEMFormatException | SymphonyNativeException | SymphonyEncryptionException e) {
+        LOG.error("getContentKey", e);
+        throw new ContentKeyRetrievalException(threadId, userId, 0L);
+      } catch (ClientKeyRetrieverException e) {
+        if (org.apache.commons.lang.exception.ExceptionUtils.getRootCause(e) instanceof UnauthorizedException) { // UnauthorizedException is wrapped by ClientKeyRetrieverException so we unwrap it.
+          datafeedSessionPool.listenDatafeed(userId);
+          LOG.debug("getContentKey unauthorized, retry...", e);
+        } else {
+          throw new ContentKeyRetrievalException(threadId, userId, 0L);
+        }
+      }
+    }
+    throw new ContentKeyRetrievalException(threadId, userId, 0L);
   }
 
   private SymphonyClient getSymphonyClient(String username) {

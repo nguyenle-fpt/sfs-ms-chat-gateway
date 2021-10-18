@@ -46,6 +46,7 @@ public class SBEEventMessage {
   private boolean isFormReply;
   private String metadata;
   private String fromPod;
+  private Attributes attributes;
 
   @JsonProperty("isChime")
   private boolean isChime;
@@ -63,4 +64,7 @@ public class SBEEventMessage {
     return parsedCustomEntities.stream().filter(customEntity -> entityType.equals(customEntity.getType())).findFirst();
   }
 
+  public enum Versions {
+    SOCIALMESSAGE
+  }
 }

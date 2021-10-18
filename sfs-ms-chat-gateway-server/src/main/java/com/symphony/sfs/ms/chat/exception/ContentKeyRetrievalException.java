@@ -6,11 +6,11 @@ import java.io.IOException;
 
 public class ContentKeyRetrievalException extends IOException {
 
-  public ContentKeyRetrievalException(ThreadId threadId, String userId, Long rotationId, Throwable cause) {
+  public ContentKeyRetrievalException(String threadId, String userId, Long rotationId, Throwable cause) {
     super(String.format("Unable to retrieve key: threadId=%s userId=%s rotation=%s", threadId, userId, rotationId), cause);
   }
 
-  public ContentKeyRetrievalException(ThreadId threadId, String userId, Long rotationId) {
+  public ContentKeyRetrievalException(String threadId, String userId, Long rotationId) {
     super(String.format("Unable to retrieve key: threadId=%s userId=%s rotation=%s, {}", threadId, userId, rotationId));
   }
 }

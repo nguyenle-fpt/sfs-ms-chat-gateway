@@ -69,7 +69,8 @@ public class MessageIOMonitor {
   public enum BlockingCauseToSymphony {
     FEDERATED_ACCOUNT_NOT_FOUND("federated account not found"),
     ADVISOR_NO_LONGER_AVAILABLE("advisor no longer available"),
-    UNKNOWN_SENDER("unknown sender");
+    UNKNOWN_SENDER("unknown sender"),
+    ENCRYPTION_FAILED("encryption failed");
 
     private String blockingCause;
   }

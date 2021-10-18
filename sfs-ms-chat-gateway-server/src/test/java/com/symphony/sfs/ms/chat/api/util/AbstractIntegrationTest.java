@@ -11,13 +11,8 @@ import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
-import com.symphony.sfs.ms.chat.service.ChannelService;
-import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
-import com.symphony.sfs.ms.chat.service.EmpSchemaService;
-import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
-import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
-import com.symphony.sfs.ms.chat.service.RoomService;
-import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
+import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
+import com.symphony.sfs.ms.chat.service.*;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
@@ -59,9 +54,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfileTest, RestApiTest, I18nTest {
   protected AuthenticationService authenticationService;
@@ -96,12 +89,15 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected PodVersionChecker podVersionChecker;
   protected TenantDetailRepository tenantDetailRepository;
   protected SymphonySession botSession;
+  private MessageEncryptor messageEncryptor;
+  private MessageDecryptor messageDecryptor;
+  private SymphonyService symphonyService;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
     this.mockServer = mockServer;
     webClient = buildTestClient();
-    SymphonyService symphonyService = mock(SymphonyService.class);
+    symphonyService = mock(SymphonyService.class);
 
     dynamoConfiguration = provisionTestTable(db);
     objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
@@ -154,7 +150,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // services
     streamService = spy(new StreamService(sessionManager));
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager)));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService));
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, authenticationService, botConfiguration));
     empSchemaService = new EmpSchemaService(adminClient);
@@ -177,6 +173,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // bot session
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
+    messageEncryptor = mock(MessageEncryptor.class);
+    messageDecryptor = mock(MessageDecryptor.class);
   }
 
   @AfterEach

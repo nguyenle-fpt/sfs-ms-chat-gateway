@@ -9,6 +9,8 @@ send-message-request:
       type: string
     fromSymphonyUserId:
       type: string
+    replyToMessageId:
+      type: string
     text:
       type: string
     appendTags:

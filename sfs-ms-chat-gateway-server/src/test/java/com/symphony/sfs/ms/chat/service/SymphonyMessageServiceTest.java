@@ -2,10 +2,12 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
+import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
+import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
@@ -71,6 +73,8 @@ class SymphonyMessageServiceTest {
   private SymphonyMessageService symphonyMessageService;
   private SymphonyService symphonyService;
   private DatafeedSessionPool datafeedSessionPool;
+  private MessageEncryptor messageEncryptor;
+  private MessageDecryptor messageDecryptor;
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -106,7 +110,10 @@ class SymphonyMessageServiceTest {
     userSession = new SymphonySession("username", "kmToken", "sessionToken");
     when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager)));
+    messageEncryptor = mock(MessageEncryptor.class);
+    messageDecryptor = mock(MessageDecryptor.class);
+
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService));
   }
 
   @Test

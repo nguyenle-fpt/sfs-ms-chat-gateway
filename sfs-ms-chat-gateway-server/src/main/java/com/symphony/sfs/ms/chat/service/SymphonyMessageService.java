@@ -2,8 +2,6 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
-import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
-import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
@@ -11,9 +9,7 @@ import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.datafeed.ParentRelationshipType;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
@@ -34,7 +30,6 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SpecialCharactersUtils;
-import com.symphony.sfs.ms.chat.util.SymphonyUserUtils;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.EmpError;
@@ -53,7 +48,6 @@ import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
-import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -80,7 +74,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.DECRYPTION_FAILED;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_CONTACT;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_ENTITLEMENT_ACCESS;
@@ -299,9 +292,6 @@ public class SymphonyMessageService implements DatafeedListener {
       try {
         // federatedAccounts is never empty
         messageDecryptor.decrypt(inlineMessage, federatedAccounts.get(0).getSymphonyUserId());
-      } catch (ContentKeyRetrievalException e) {
-        LOG.error("Unable to find key for social message: stream={} members={}", streamId, id, e);
-        return null;
       } catch (DecryptionException e) {
         LOG.error("Unable to decrypt social message: stream={} members={}", streamId, id, e);
         return null;
@@ -441,9 +431,6 @@ public class SymphonyMessageService implements DatafeedListener {
     } catch (UnknownDatafeedUserException e) {
       LOG.error("Session not found from symphony user {}", symphonyUserId);
       throw new MessageSenderNotFoundProblem();
-    } catch (ContentKeyRetrievalException e) {
-      LOG.error("Could not retrieve content key for user {}", symphonyUserId);
-      throw  new RetrieveMessageFailedProblem();
     } catch (DecryptionException e) {
       LOG.error("Could not decrypt message for user {}", symphonyUserId);
       throw  new RetrieveMessageFailedProblem();
@@ -473,7 +460,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments) {
+  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
@@ -497,7 +484,8 @@ public class SymphonyMessageService implements DatafeedListener {
         // TODO fix this bad management of optional
         messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
         boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
-        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, null, formatting, text, attachments, textTooLong).orElseThrow(SendMessageFailedProblem::new);
+        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, textTooLong)
+          .orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
         if (textTooLong) {
           String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
@@ -564,22 +552,28 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
-  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, String toSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean truncate) {
+
+  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean truncate) {
+    // TODO: remove this parameter for all call using it
+    String toSymphonyUserId = null;
     LOG.info("incoming message");
     if (StringUtils.isEmpty(text)) {
       text = " "; // this is the minimum message for symphony
     } else if (truncate) {
       text = text.substring(0, MAX_TEXT_LENGTH);
     }
-    String messageContent = "<messageML>" + text + "</messageML>";
-    if (attachments != null && attachments.size() > 0) {
-      return symphonyMessageSender.sendRawMessageWithAttachments(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId, attachments);
+    String messageML = "<messageML>" + text + "</messageML>";
+    String messageContent = text;
+    if (parentMessageId != null) {
+      // we need pure text in case of relied message
+      return symphonyMessageSender.sendReplyMessage(streamId, fromSymphonyUserId, messageContent, parentMessageId);
+    } else if (attachments != null && attachments.size() > 0) {
+      return symphonyMessageSender.sendRawMessageWithAttachments(streamId, fromSymphonyUserId, messageML, toSymphonyUserId, attachments);
     } else {
       if (formatting == null) {
-        return symphonyMessageSender.sendRawMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+        return symphonyMessageSender.sendRawMessage(streamId, fromSymphonyUserId, messageML, toSymphonyUserId);
       }
 
-      messageContent = text;
       switch (formatting) {
         case SIMPLE:
           return symphonyMessageSender.sendSimpleMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
