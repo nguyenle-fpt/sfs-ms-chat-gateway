@@ -453,7 +453,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private MessageInfo buildMessageInfo(SBEEventMessage sbeEventMessage) {
     MessageInfo messageInfo = new MessageInfo()
       .message(SpecialCharactersUtils.unescapeSpecialCharacters(sbeEventMessage.getText()))
-      .messageId(sbeEventMessage.getMessageId())
+      .messageId(StreamUtil.toUrlSafeStreamId(sbeEventMessage.getMessageId()))
       .disclaimer(sbeEventMessage.getDisclaimer())
       .firstName(sbeEventMessage.getFrom().getFirstName())
       .lastName(sbeEventMessage.getFrom().getSurName())

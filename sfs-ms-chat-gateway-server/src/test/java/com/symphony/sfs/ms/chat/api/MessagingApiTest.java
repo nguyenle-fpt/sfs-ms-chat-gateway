@@ -279,9 +279,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void retrieveMessages_ok() {
-    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("messageId1"), new MessageId().messageId("messageId2"))).symphonyUserId("fromSymphonyUserId");
+    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ"), new MessageId().messageId("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA"))).symphonyUserId("fromSymphonyUserId");
 
-    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This is the message 1")
+    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("7ThaU2OJ3nJ8A9Kz0qjheX///oOLK1YmbQ==").disclaimer("disclaimer1").text("This is the message 1")
       .ingestionDate(123L)
       .from(SBEEventUser.builder()
         .firstName("first")
@@ -290,10 +290,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
 
 
-    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2").disclaimer("disclaimer2").text("This is the message 2")
+    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("tAMLft+K2vyqWXnHFMeCh3///oQbTZrDdA==").disclaimer("disclaimer2").text("This is the message 2")
       .ingestionDate(123L)
       .from(SBEEventUser.builder()
         .firstName("first")
@@ -302,13 +302,13 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("messageId2", datafeedSession)).thenReturn(Optional.of(sbeEventMessage2));
+    when(symphonyService.getEncryptedMessage("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA", datafeedSession)).thenReturn(Optional.of(sbeEventMessage2));
 
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Arrays.asList(
       new MessageInfo()
-        .messageId("messageId1")
+        .messageId("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ")
         .disclaimer("disclaimer1")
         .message("This is the message 1")
         .firstName("first")
@@ -316,7 +316,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .symphonyId("12345")
         .timestamp(123L),
       new MessageInfo()
-        .messageId("messageId2")
+        .messageId("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA")
         .disclaimer("disclaimer2")
         .message("This is the message 2")
         .firstName("first")
@@ -375,7 +375,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Arrays.asList(
       new MessageInfo()
-        .messageId("messageId1")
+        .messageId("messageIdw")
         .disclaimer("disclaimer1")
         .message("This is the message 1")
         .firstName("first")
@@ -415,7 +415,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Collections.singletonList(new MessageInfo()
-      .messageId("messageId1")
+      .messageId("messageIdw")
       .disclaimer("disclaimer1")
       .message("This + is _the_message *1")
       .firstName("first")
