@@ -282,6 +282,73 @@ class MessageServiceTest implements I18nTest {
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
     verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "ThisIsAMessage", "", null, sendmessagerequestInlineMessage);
   }
+  @Test
+  void onMessageReplyToBot() {
+    when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+
+    IUser fromSymphonyUser = buildDefaultFromUser();
+
+    List<IAttachment> attachments = new ArrayList<>();
+
+    attachments.add(new AttachmentEntity.Builder().withName("abc").withContentType("image/png").withFileId("123").build());
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+    GatewaySocialMessage message = GatewaySocialMessage.builder()
+      .streamId("streamId")
+      .messageId("messageId")
+      .fromUser(fromSymphonyUser)
+      .members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID))
+        .attachments(attachments)
+        .timestamp(NOW)
+      .textContent("12345ThisIsAMessage")
+      .customEntities(Collections.singletonList(
+        CustomEntity.builder()
+          .type(CustomEntity.QUOTE_TYPE)
+          .endIndex(5)
+          .data(Map.of("id", "Rp6N+cRznOWTwnD80vg7OX///oOAgiSfbQ=="))
+          .build()
+      ))
+      .build();
+
+    SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("Rp6N+cRznOWTwnD80vg7OX///oOAgiSfbQ==").disclaimer("disclaimer1").text("123This is the inline message")
+      .ingestionDate(123L)
+      .parsedCustomEntities(Collections.singletonList(
+          CustomEntity.builder()
+            .type(CustomEntity.QUOTE_TYPE)
+            .endIndex(3)
+            .data(Map.of("id", "otherMsg"))
+            .build()
+        ))
+      .from(
+        SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(Long.valueOf(botConfiguration.getSymphonyId()))
+        .company("company")
+        .build())
+      .build();
+
+
+    when(symphonyService.getEncryptedMessage(eq("Rp6N-cRznOWTwnD80vg7OX___oOAgiSfbQ"), any())).thenReturn(Optional.of(sbeEventMessage));
+
+    SendmessagerequestInlineMessage sendmessagerequestInlineMessage = new SendmessagerequestInlineMessage()
+      .messageId("Rp6N-cRznOWTwnD80vg7OX___oOAgiSfbQ")
+      .text("This is the inline message")
+      .timestamp(123L)
+      .fromMember(new ChannelMember().firstName("first").lastName("last").symphonyId("12345").companyName("company"))
+      .addAttachmentsItem(new AttachmentInfo().contentType("image/png").fileName("hello.png"));
+
+
+
+    messageService.onIMMessage(message);
+
+    verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
+    verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    // session is mocked, null for now
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You can't reply to this type of message.", Collections.emptyList());
+  }
 
   private static Stream<Arguments> textProvider() {
     return Stream.of(

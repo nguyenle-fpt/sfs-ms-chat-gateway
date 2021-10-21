@@ -195,6 +195,11 @@ public class SymphonyMessageService implements DatafeedListener {
         return;
       } else if (gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
         inlineMessageRequest = getInlineQuote(gatewaySocialMessage, streamId, federatedAccounts, allUserSessions);
+        if (inlineMessageRequest != null && botConfiguration.getSymphonyId().equals(inlineMessageRequest.getFromMember().getSymphonyId())) {
+          allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.reply.to.message.type", null, Locale.getDefault()), Collections.emptyList()));
+          messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
+          return;
+        }
         gatewaySocialMessage.getAttachments().clear(); // attachment cannot be sent as replies and we do not want to forward them
       }
 
