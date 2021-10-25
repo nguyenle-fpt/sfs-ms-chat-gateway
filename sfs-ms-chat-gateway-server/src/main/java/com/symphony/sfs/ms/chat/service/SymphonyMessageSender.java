@@ -16,6 +16,7 @@ import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
@@ -65,6 +66,7 @@ public class SymphonyMessageSender {
   private final MessageEncryptor messageEncryptor;
   private final MessageDecryptor messageDecryptor;
   private final SymphonyService symphonyService;
+  private final SymphonyAuthFactory symphonyAuthFactory;
 
   public Optional<String> sendRawMessage(SymphonySession session, String streamId, String messageContent) {
     LOG.debug("Send message to symphony");
@@ -185,7 +187,17 @@ public class SymphonyMessageSender {
   }
 
   private SBEEventMessage getReplyMessage(String userId, SymphonySession session, String messageId) throws DecryptionException {
-    SBEEventMessage eventMessage = symphonyService.getEncryptedMessage(messageId, session).get();
+    SBEEventMessage eventMessage;
+    try {
+      eventMessage = symphonyService.getEncryptedMessage(messageId, session).get();
+    } catch (Exception e) {
+      // See: https://perzoinc.atlassian.net/browse/CES-4690
+      // Use gateway bot to retrieve message if the "messageId" belongs to a room and the bot is in the room
+      // This is required when an whatsapp user was in a room, then getting removed, and added again
+      // In this  case, the whatsapp service account could not retrieve historic message, only the whatsapp room bot could
+      SymphonySession botSession = symphonyAuthFactory.getBotAuth().get();
+      eventMessage = symphonyService.getEncryptedMessage(messageId, botSession).get();
+    }
     messageDecryptor.decrypt(eventMessage, userId);
 
     return eventMessage;

@@ -16,6 +16,7 @@ import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
@@ -75,6 +76,7 @@ class SymphonyMessageServiceTest {
   private DatafeedSessionPool datafeedSessionPool;
   private MessageEncryptor messageEncryptor;
   private MessageDecryptor messageDecryptor;
+  private SymphonyAuthFactory symphonyAuthFactory;
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -112,8 +114,9 @@ class SymphonyMessageServiceTest {
 
     messageEncryptor = mock(MessageEncryptor.class);
     messageDecryptor = mock(MessageDecryptor.class);
+    symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
 
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, symphonyAuthFactory));
   }
 
   @Test
