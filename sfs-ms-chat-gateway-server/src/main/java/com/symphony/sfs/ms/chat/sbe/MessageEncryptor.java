@@ -109,7 +109,7 @@ public class MessageEncryptor {
   private String generateRepliedMessageMetaData(SBEEventMessage repliedToMessage) {
     String dateTime = new SimpleDateFormat("dd/MM/yy @ hh:mm").format(new Date(repliedToMessage.getIngestionDate()));
     return String.format("%s %s",
-        repliedToMessage.getFrom().getPrettyNameNormalized(),
+        repliedToMessage.getFrom().getPrettyName(),
         dateTime);
   }
 
@@ -134,7 +134,7 @@ public class MessageEncryptor {
     String dash = org.apache.commons.lang3.StringUtils.repeat('\u2014', 11);
     String dateTime = new SimpleDateFormat("dd/MM/yy @ hh:mm").format(new Date(repliedToMessage.getIngestionDate()));
     return String.format("**In reply to:**%n**%s %s**%n_%s_%n%s%n",
-        repliedToMessage.getFrom().getPrettyNameNormalized(),
+        repliedToMessage.getFrom().getPrettyName(),
         dateTime,
         text,
         dash);

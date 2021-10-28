@@ -83,6 +83,7 @@ import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFro
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ADVISOR_NO_LONGER_AVAILABLE;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.FEDERATED_ACCOUNT_NOT_FOUND;
 import static com.symphony.sfs.ms.starter.util.ProblemUtils.newConstraintViolation;
+import static org.jsoup.nodes.Entities.escape;
 
 @Service
 @Slf4j
@@ -309,7 +310,7 @@ public class SymphonyMessageService implements DatafeedListener {
       }
       inlineMessageRequest = new SendmessagerequestInlineMessage()
         .messageId(StreamUtil.toUrlSafeStreamId(inlineMessage.getMessageId()))
-        .text(inlineMessage.getText())
+        .text(SpecialCharactersUtils.unescapeSpecialCharacters(inlineMessage.getText()))
         .timestamp(inlineMessage.getIngestionDate())
         .fromMember(new ChannelMember()
           .symphonyId(String.valueOf(inlineMessage.getFrom().getId()))
