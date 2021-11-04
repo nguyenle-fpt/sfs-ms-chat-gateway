@@ -72,7 +72,12 @@ public class MessageEncryptorTest {
     assertEquals(encryptedMessage.getEntities().toString(), "{}");
     assertEquals(encryptedMessage.getEncryptedEntities(), "encrypted**{}**");
     assertEquals(encryptedMessage.getEncryptedMedia(), "encrypted**{\"content\":[],\"mediaType\":\"JSON\"}**");
-    assertEquals(encryptedMessage.getCustomEntities(), "encrypted**[{\"type\":\"com.symphony.sharing.quote\",\"beginIndex\":0,\"endIndex\":79,\"data\":{\"version\":null,\"id\":null,\"messageId\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"from\":{\"id\":null,\"username\":null,\"prettyNameNormalized\":\"USER 1\",\"emailAddress\":null,\"firstName\":null,\"surName\":null,\"prettyName\":\"User 1\",\"company\":null},\"ingestionDate\":1634118131913,\"chatType\":null,\"event\":null,\"streamId\":null,\"threadId\":null,\"text\":\"parent message text\",\"entityJSON\":null,\"presentationML\":null,\"disclaimer\":null,\"customEntities\":null,\"entities\":null,\"encryptedMedia\":null,\"encryptedEntities\":null,\"jsonMedia\":null,\"format\":null,\"parentMessageId\":null,\"parentRelationshipType\":null,\"encryptedFileKey\":null,\"msgFeatures\":0,\"metadata\":\"User 1 13/10/21 @ 11:42\",\"fromPod\":null,\"attributes\":null,\"attachments\":null,\"fileKeyEncryptedAttachments\":null,\"parsedCustomEntities\":[],\"formReply\":false,\"isBlast\":false,\"isChime\":false},\"version\":\"0.0.1\"}]**");
+    assertEquals(encryptedMessage.getCustomEntities(), "encrypted**[" +
+      "{\"type\":\"com.symphony.sharing.quote\"," +
+      "\"beginIndex\":0,\"endIndex\":79," +
+      "\"data\":{\"text\":\"parent message text\",\"ingestionDate\":1634118131913,\"metadata\":\"User 1 13/10/21 @ 11:42\",\"attachments\":[],\"streamId\":null,\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"presentationML\":null,\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]},\"customEntities\":[],\"entityJSON\":{}}," +
+      "\"version\":\"0.0.1\"}]" +
+      "**");
     assertEquals(encryptedMessage.getFormat(), "com.symphony.markdown");
 
 

@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.sbe;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.core.canon.facade.ThreadId;
@@ -11,6 +12,7 @@ import com.symphony.security.helper.IClientCryptoHandler;
 import com.symphony.security.helper.KeyIdentifier;
 import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
+import com.symphony.sfs.ms.chat.datafeed.MessageEntityData;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
@@ -96,14 +98,28 @@ public class MessageEncryptor {
     String prefix = generatePrefix(repliedToMessage);
     CustomEntity customEntity = new CustomEntity();
     customEntity.setType(CustomEntity.QUOTE_TYPE);
-    customEntity.setVersion("0.0.1");
-    repliedToMessage.setText(getPureText(repliedToMessage));
-    repliedToMessage.setMetadata(generateRepliedMessageMetaData(repliedToMessage));
-    customEntity.setData(objectMapper.convertValue(repliedToMessage, Map.class));
     customEntity.setBeginIndex(0);
     customEntity.setEndIndex(prefix.length());
+    customEntity.setVersion("0.0.1");
+    MessageEntityData customEntityData = getQuotingEntityData(repliedToMessage);
+    customEntity.setData(objectMapper.convertValue(customEntityData, Map.class));
 
     return objectMapper.writeValueAsString(Collections.singletonList(customEntity));
+  }
+
+  private MessageEntityData getQuotingEntityData(SBEEventMessage repliedToMessage) throws IOException {
+    return MessageEntityData.builder()
+      .id(repliedToMessage.getMessageId())
+      .streamId(repliedToMessage.getStreamId())
+      .presentationML(repliedToMessage.getPresentationML())
+      .text(getPureText(repliedToMessage))
+      .ingestionDate(repliedToMessage.getIngestionDate())
+      .metadata(generateRepliedMessageMetaData(repliedToMessage))
+      .attachments(Collections.emptyList())
+      .entities(objectMapper.readTree("{ \"hashtags\": [], \"userMentions\": [], \"urls\": [] }"))
+      .customEntities(Collections.emptyList())
+      .entityJSON(objectMapper.readTree("{}"))
+      .build();
   }
 
   private String generateRepliedMessageMetaData(SBEEventMessage repliedToMessage) {
