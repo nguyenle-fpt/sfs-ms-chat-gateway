@@ -25,6 +25,7 @@ pod:
   url: ${POD_URL}
   sessionAuth: ${POD_SESSIONAUTH}
   keyAuth: ${POD_KEYAUTH}
+  usernameSuffix: _des
 
 bot:
   username: ${BOT_USERNAME}

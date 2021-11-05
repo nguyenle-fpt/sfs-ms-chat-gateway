@@ -15,20 +15,16 @@ import com.symphony.sfs.ms.chat.service.FederatedAccountService;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.security.SessionManager;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
-import com.symphony.sfs.ms.starter.symphony.stream.StringId;
 import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUser;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes;
 import com.symphony.sfs.ms.starter.symphony.user.SymphonyUserSystemAttributes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
-import com.symphony.sfs.ms.starter.symphony.xpod.ConnectionRequestStatus;
 import com.symphony.sfs.ms.starter.testing.TestUtils;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import io.opentracing.Tracer;
-import model.InboundConnectionRequest;
-import model.UserInfo;
-import model.UserInfoList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.MessageSource;
@@ -41,25 +37,25 @@ import org.zalando.problem.Problem;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
 import static clients.symphony.api.constants.PodConstants.ADMINUPDATEUSER;
-import static clients.symphony.api.constants.PodConstants.GETCONNECTIONSTATUS;
-import static clients.symphony.api.constants.PodConstants.GETIM;
-import static clients.symphony.api.constants.PodConstants.GETUSERSV3;
-import static clients.symphony.api.constants.PodConstants.SENDCONNECTIONREQUEST;
 import static clients.symphony.api.constants.PodConstants.UPDATEUSERSTATUSADMIN;
 import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.DELETEFEDERATEDACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.UPDATEFEDERATEDACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
+import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,6 +65,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   protected FederatedAccountService federatedAccountService;
   protected AccountsApi accountsApi;
   protected EmpSchemaService empSchemaService;
+  protected AdminUserManagementService adminUserManagementService;
   protected ChannelsApi channelApi;
   private Tracer tracer = mock(Tracer.class);
 
@@ -83,10 +80,13 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
 
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
+
+    adminUserManagementService = spy(new AdminUserManagementService(sessionManager));
+
     federatedAccountService = new FederatedAccountService(
       datafeedSessionPool,
       federatedAccountRepository,
-      new AdminUserManagementService(sessionManager),
+      adminUserManagementService,
       authenticationService,
       podConfiguration,
       botConfiguration,
@@ -102,7 +102,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void createAccountWithoutAdvisors() {
+  public void createAccount() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
@@ -135,6 +135,15 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
       .as(CreateAccountResponse.class);
+
+    Pattern pattern = Pattern.compile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}@symphony\\.com$");
+
+    verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
+      SymphonyUserAttributes userAttributes = args.getUserAttributes();
+      return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
+        userAttributes.getUserName().equals("WHATSAPP_+33601020304") &&
+        pattern.matcher(userAttributes.getEmailAddress()).matches());
+    }));
 
     assertEquals(new CreateAccountResponse()
       .symphonyUserId(accountSession.getUserId())
@@ -162,7 +171,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void createAccountWithAdvisor_AlreadyConnected() {
+  public void createAccount_DES_environment() {
+
+    podConfiguration.setUsernameSuffix("_des");
+
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
@@ -173,23 +185,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
-    UserInfo userInfo = new UserInfo();
-    userInfo.setId(2L);
-    userInfo.setUsername("username");
-    userInfo.setFirstName("firstName");
-    userInfo.setLastName("lastName");
-    userInfo.setCompany("companyName");
-
-    UserInfoList userInfoList = new UserInfoList();
-    userInfoList.setUsers(Collections.singletonList(userInfo));
-
-    mockServer.expect()
-      .get()
-      .withPath(GETUSERSV3 + "?local=false&uid=" + userInfo.getId())
-      .andReturn(HttpStatus.OK.value(), userInfoList)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
     SymphonyUser symphonyUser = new SymphonyUser();
     symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
     symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
@@ -198,22 +193,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .post()
       .withPath(ADMINCREATEUSER)
       .andReturn(HttpStatus.OK.value(), symphonyUser)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
-    inboundConnectionRequest.setStatus(ConnectionRequestStatus.ACCEPTED.toString());
-    mockServer.expect()
-      .get()
-      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
-      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
@@ -229,13 +208,42 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .extract().response().body()
       .as(CreateAccountResponse.class);
 
+    Pattern pattern = Pattern.compile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}@symphony\\.com$");
+
+    verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
+      SymphonyUserAttributes userAttributes = args.getUserAttributes();
+      return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
+        userAttributes.getUserName().equals("WHATSAPP_+33601020304_des") &&
+        pattern.matcher(userAttributes.getEmailAddress()).matches());
+    }));
+
     assertEquals(new CreateAccountResponse()
       .symphonyUserId(accountSession.getUserId())
       .symphonyUsername(accountSession.getUsername()), response);
+
+    DatafeedSession session = datafeedSessionPool.getSession(accountSession.getUserId());
+    assertEquals(accountSession, session);
+
+    FederatedAccount expectedAccount = FederatedAccount.builder()
+      .emailAddress(createAccountRequest.getEmailAddress())
+      .phoneNumber(createAccountRequest.getPhoneNumber())
+      .firstName(createAccountRequest.getFirstName())
+      .lastName(createAccountRequest.getLastName())
+      .companyName(createAccountRequest.getCompanyName())
+      .federatedUserId(createAccountRequest.getFederatedUserId())
+      .emp(createAccountRequest.getEmp())
+      .symphonyUserId(accountSession.getUserId())
+      .symphonyUsername(accountSession.getUsername())
+      .kmToken(accountSession.getKmToken())
+      .sessionToken(accountSession.getSessionToken())
+      .build();
+
+    FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
+    assertEquals(expectedAccount, actualAccount);
   }
 
   @Test
-  public void createAccountWithAdvisor_NeedConnectionRequest() {
+  public void createAccount_ThenDelete() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
     DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
@@ -254,94 +262,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .post()
       .withPath(ADMINCREATEUSER)
       .andReturn(HttpStatus.OK.value(), symphonyUser)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .get()
-      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
-      .andReturn(HttpStatus.NOT_FOUND.value(), null)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
-    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
-    mockServer.expect()
-      .post()
-      .withPath(SENDCONNECTIONREQUEST)
-      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
-
-    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
-      .contentType(MediaType.APPLICATION_JSON_VALUE)
-      .body(createAccountRequest)
-      .when()
-      .post(CREATEACCOUNT_ENDPOINT)
-      .then()
-      .statusCode(HttpStatus.OK.value())
-      .extract().response().body()
-      .as(CreateAccountResponse.class);
-
-    assertEquals(new CreateAccountResponse()
-      .symphonyUserId(accountSession.getUserId())
-      .symphonyUsername(accountSession.getUsername()), response);
-
-    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-  }
-
-  @Test
-  public void createAccountWithAdvisor_ThenDelete() {
-    SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
-
-    EmpEntity empEntity = new EmpEntity()
-      .name("WHATSAPP")
-      .serviceAccountSuffix("WHATSAPP");
-    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
-    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
-
-    SymphonyUser symphonyUser = new SymphonyUser();
-    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
-    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
-
-    mockServer.expect()
-      .post()
-      .withPath(ADMINCREATEUSER)
-      .andReturn(HttpStatus.OK.value(), symphonyUser)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .get()
-      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
-      .andReturn(HttpStatus.NOT_FOUND.value(), null)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
-    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
-    mockServer.expect()
-      .post()
-      .withPath(SENDCONNECTIONREQUEST)
-      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
@@ -410,29 +330,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .post()
       .withPath(ADMINCREATEUSER)
       .andReturn(HttpStatus.OK.value(), symphonyUser)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .get()
-      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
-      .andReturn(HttpStatus.NOT_FOUND.value(), null)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
-    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
-    mockServer.expect()
-      .post()
-      .withPath(SENDCONNECTIONREQUEST)
-      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 
@@ -531,35 +428,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .post()
       .withPath(ADMINCREATEUSER)
       .andReturn(HttpStatus.OK.value(), symphonyUser2)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .get()
-      .withPath(GETCONNECTIONSTATUS.replace("{userId}", "2"))
-      .andReturn(HttpStatus.NOT_FOUND.value(), null)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    InboundConnectionRequest inboundConnectionRequest = new InboundConnectionRequest();
-    inboundConnectionRequest.setStatus(ConnectionRequestStatus.PENDING_OUTGOING.toString());
-    mockServer.expect()
-      .post()
-      .withPath(SENDCONNECTIONREQUEST)
-      .andReturn(HttpStatus.OK.value(), inboundConnectionRequest)
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId"))
-      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-      .always();
-    mockServer.expect()
-      .post()
-      .withPath(GETIM)
-      .andReturn(HttpStatus.OK.value(), new StringId("streamId2"))
       .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
       .always();
 

@@ -1,7 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
-import com.google.common.hash.Hashing;
+import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -36,7 +36,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,6 +49,7 @@ import static com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement.ENTIT
 import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUser.ROLE_INDIVIDUAL;
 import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUserAttributes.ACCOUNT_TYPE_SYSTEM;
 import static com.symphony.sfs.ms.starter.symphony.user.SymphonyUserKeyRequest.ACTION_SAVE;
+import static com.symphony.sfs.ms.starter.util.FormatUtils.formatPhoneNumber;
 
 @Slf4j
 @Service
@@ -79,7 +79,7 @@ public class FederatedAccountService {
     SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
     try {
-      SymphonyUser symphonyUser = createSymphonyUser(new StaticSessionSupplier<>(botSession), request.getFirstName(), request.getLastName(), request.getEmailAddress(), request.getEmp());
+      SymphonyUser symphonyUser = createSymphonyUser(new StaticSessionSupplier<>(botSession), request.getFirstName(), request.getLastName(), request.getPhoneNumber(), request.getEmp());
       LOG.info("created symphony user | federatedUser={} symphonyId={}", request.getFederatedUserId(), symphonyUser.getUserSystemInfo().getId());
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
@@ -154,7 +154,7 @@ public class FederatedAccountService {
   }
 
   @NewSpan
-  public SymphonyUser createSymphonyUser(SessionSupplier<SymphonySession> session, String firstName, String lastName, String emailAddress, String emp) {
+  public SymphonyUser createSymphonyUser(SessionSupplier<SymphonySession> session, String firstName, String lastName, String phoneNumber, String emp) {
     String publicKey = null;
     try {
       publicKey = RsaUtils.encodeRSAKey(RsaUtils.parseRSAPublicKey(chatConfiguration.getSharedPublicKey().getData()));
@@ -167,12 +167,10 @@ public class FederatedAccountService {
       .action(ACTION_SAVE)
       .build();
 
-    String uuid = UUID.randomUUID().toString();
-
     SymphonyUserAttributes userAttributes = SymphonyUserAttributes.builder()
       .displayName(displayName(firstName, lastName, emp))
-      .userName(userName(emp, uuid))
-      .emailAddress(emailAddress(emailAddress, emp, uuid, session))
+      .userName(userName(emp, phoneNumber))
+      .emailAddress(emailAddress(session))
       .currentKey(userKey)
       .accountType(ACCOUNT_TYPE_SYSTEM)
       .build();
@@ -201,22 +199,20 @@ public class FederatedAccountService {
   }
 
   /**
-   * Returns a username with pattern: {emp}_{random uuid}
+   * Returns a username with pattern: {emp}_{phoneNumber}
+   * a suffix is added for avoid conflicts with DES environment
    */
-  private String userName(String emp, String uuid) {
-    return emp + '_' + uuid;
+  private String userName(String emp, String phoneNumber) {
+    return emp + '_' + formatPhoneNumber(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164) + ((StringUtils.isNotBlank(podConfiguration.getUsernameSuffix()))? podConfiguration.getUsernameSuffix() : "");
   }
 
   /**
-   * Returns an email address with pattern: {emp}_{random uuid}|{originalEmail}
+   * Returns an email address with pattern: {uuid}@symphony.com
    */
-  private String emailAddress(String emailAddress, String emp, String uuid, SessionSupplier<SymphonySession> session) {
+  private String emailAddress(SessionSupplier<SymphonySession> session) {
     List<String> candidates = IntStream.range(0, 5)
-      .mapToObj(i -> Hashing.murmur3_32().hashString(UUID.randomUUID().toString() + emailAddress, StandardCharsets.UTF_8).toString() + '|' + emailAddress)
+      .mapToObj(i -> UUID.randomUUID().toString() + "@symphony.com")
       .collect(Collectors.toList());
-
-    // we also test if the unprefixed address is free, and we will use it if available
-    candidates.add(0, emailAddress);
 
     List<UserInfo> userInfos = usersInfoService.getUsersFromEmails(podConfiguration.getUrl(), session, candidates);
     userInfos.forEach(info -> candidates.remove(info.getEmailAddress()));
