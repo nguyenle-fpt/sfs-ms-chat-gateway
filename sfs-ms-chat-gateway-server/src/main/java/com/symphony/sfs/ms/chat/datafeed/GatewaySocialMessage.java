@@ -63,7 +63,7 @@ public class GatewaySocialMessage {
   }
 
   public String getMessageForEmp() {
-    return escape(SpecialCharactersUtils.unescapeSpecialCharacters(this.textContent));
+    return SpecialCharactersUtils.unescapeSpecialCharacters(this.textContent);
   }
 
   public String getDisclaimerForEmp() {

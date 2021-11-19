@@ -357,7 +357,7 @@ class MessageServiceTest implements I18nTest {
   private static Stream<Arguments> textProvider() {
     return Stream.of(
       arguments("text", "text"),
-      arguments("<b onclick=\"alert('hello')\">text</b>", "&lt;b onclick=\"alert('hello')\"&gt;text&lt;/b&gt;")
+      arguments("<b onclick=\"alert('hello')\">text</b>", "<b onclick=\"alert('hello')\">text</b>")
     );
   }
 
