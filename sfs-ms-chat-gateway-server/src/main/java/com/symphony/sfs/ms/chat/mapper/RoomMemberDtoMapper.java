@@ -14,7 +14,6 @@ public interface RoomMemberDtoMapper {
   RoomMemberDtoMapper MAPPER = Mappers.getMapper(RoomMemberDtoMapper.class);
 
   RoomMemberResponse roomMemberRequestToRoomMemberResponse(RoomMemberRequest request);
-  @Mapping(source= "federatedAccount.emailAddress", target = "emailAddress")
   @Mapping(source= "onboarderInfo.firstName", target = "onboarderFirstName")
   @Mapping(source= "onboarderInfo.lastName", target = "onboarderLastName")
   @Mapping(source= "onboarderInfo.displayName", target = "onboarderDisplayName")

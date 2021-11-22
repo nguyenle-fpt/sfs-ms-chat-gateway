@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
@@ -125,7 +126,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   @Test
   public void createMIMChannel() throws Exception {
     FederatedAccount whatsAppUserInvited = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33612345678")
       .firstName("firstName")
       .lastName("lastName")
@@ -157,7 +157,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   @Test
   public void createIMChannel() throws Exception {
     FederatedAccount whatsAppUserInvited = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -187,7 +186,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   @Test
   public void onUserJoinedRoom() throws Exception {
     FederatedAccount whatsAppUserInvited = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -218,7 +216,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   @Test
   public void onIMMessageNotEntitled() throws Exception {
     FederatedAccount whatsAppUser = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -247,7 +244,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   @Test
   public void onIMMessage() throws Exception {
     FederatedAccount whatsAppUser = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -296,7 +292,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   @Test
   public void onRoomMessage() throws Exception {
     FederatedAccount whatsAppUser = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -348,7 +343,6 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   @Test
   public void onRoomMessage_fromBot() throws Exception {
     FederatedAccount whatsAppUser = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -600,7 +594,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "    }," +
       "    {" +
       "      \"company\":\"Symphony\"," +
-      "      \"emailAddress\":\"" + whatsAppUserInvited.getEmailAddress() + "\"," +
+      "      \"emailAddress\":\"" + UUID.randomUUID() + "@symphony.com" + "\"," +
       "      \"firstName\":\"" + whatsAppUserInvited.getFirstName() + "\"," +
       "      \"id\":" + whatsAppUserInvited.getSymphonyUserId() + "," +
       "      \"imageUrl\":\"../avatars/static/150/default.png\"," +

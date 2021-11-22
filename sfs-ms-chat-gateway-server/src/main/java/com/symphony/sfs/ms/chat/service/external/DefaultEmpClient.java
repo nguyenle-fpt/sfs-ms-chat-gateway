@@ -117,7 +117,6 @@ public class DefaultEmpClient implements EmpClient {
   private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
     List<ChannelMember> members = new ArrayList<>();
     federatedUsers.forEach(account -> members.add(new ChannelMember()
-      .emailAddress(account.getEmailAddress())
       .phoneNumber(account.getPhoneNumber())
       .firstName(account.getFirstName())
       .lastName(account.getLastName())

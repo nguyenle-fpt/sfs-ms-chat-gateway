@@ -4,6 +4,8 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import model.UserInfo;
 import org.apache.commons.codec.binary.Base64;
 
+import java.util.UUID;
+
 public class SnsMessageUtil {
   public static String getSnsMaestroMessage(String podId, String payload) {
     return "{" +
@@ -44,7 +46,7 @@ public class SnsMessageUtil {
       "  \"affectedUsers\":[" +
       "    {" +
       "      \"companyName\":\"Symphony\"," +
-      "      \"emailAddress\":\"" + requester.getEmailAddress() + "\"," +
+      "      \"emailAddress\":\"" + UUID.randomUUID() + "@symphony.com" + "\"," +
       "      \"firstName\":\"" + requester.getFirstName() + "\"," +
       "      \"givenName\":\"" + requester.getFirstName() + "\"," +
       "      \"id\":" + requester.getSymphonyUserId() + "," +
@@ -102,7 +104,7 @@ public class SnsMessageUtil {
       "  ]," +
       "  \"requestingUser\":{" +
       "    \"company\":\"Symphony\"," +
-      "    \"emailAddress\":\"" + requested.getEmailAddress() + "\"," +
+      "    \"emailAddress\":\"" + UUID.randomUUID() + "@symphony.com" + "\"," +
       "    \"firstName\":\"" + requested.getFirstName() + "\"," +
       "    \"id\":" + requested.getSymphonyUserId() + "," +
       "    \"imageUrl\":\"../avatars/static/150/default.png\"," +
@@ -190,7 +192,7 @@ public class SnsMessageUtil {
       "  ]," +
       "  \"requestingUser\":{" +
       "    \"company\":\"Symphony\"," +
-      "    \"emailAddress\":\"" + requested.getEmailAddress() + "\"," +
+      "    \"emailAddress\":\"" + UUID.randomUUID() + "@symphony.com" + "\"," +
       "    \"firstName\":\"" + requested.getFirstName() + "\"," +
       "    \"id\":" + requested.getSymphonyUserId() + "," +
       "    \"imageUrl\":\"../avatars/static/150/default.png\"," +

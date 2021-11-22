@@ -3,7 +3,6 @@ create-account-request:
   type: object
   required:
     - phoneNumber
-    - emailAddress
     - firstName
     - lastName
     - companyName
@@ -13,7 +12,7 @@ create-account-request:
     phoneNumber:
       type: string
       format: phone
-    emailAddress:
+    emailAddress: # kept but unused for transition
       type: string
       format: sfs-email
     firstName:
@@ -31,7 +30,6 @@ update-account-request:
   type: object
   required:
     - phoneNumber
-    - emailAddress
     - firstName
     - lastName
     - companyName

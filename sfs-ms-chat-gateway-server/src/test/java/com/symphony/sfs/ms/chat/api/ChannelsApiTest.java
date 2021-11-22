@@ -143,7 +143,6 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
   private void createFederatedAccounts(String emp, List<String> suffixes){
     for (String suffix : suffixes) {
       FederatedAccount account = FederatedAccount.builder()
-        .emailAddress("emailAddress" + suffix + "@symphony.com")
         .phoneNumber("+336010203" + suffix)
         .firstName("firstName" + suffix)
         .lastName("lastName" + suffix)

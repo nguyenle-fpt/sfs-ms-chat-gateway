@@ -150,8 +150,6 @@ room-member-response:
       type: string
     phoneNumber:
       type: string
-    emailAddress:
-      type: string
 
 room-members-response:
   type: object

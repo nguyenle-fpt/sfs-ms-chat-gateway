@@ -31,7 +31,6 @@ public class FederatedAccount extends DynamoDocument {
   private String firstName;
   private String lastName;
   private String companyName;
-  private String emailAddress;
   private String phoneNumber;
   private String emp;
   private String symphonyUserId;
@@ -42,7 +41,6 @@ public class FederatedAccount extends DynamoDocument {
   public FederatedAccount(AttributeMap attributes) {
     super(attributes);
     this.federatedUserId = attributes.getString("federatedUserId");
-    this.emailAddress = attributes.getString("emailAddress");
     this.phoneNumber = attributes.getString("phoneNumber");
     this.firstName = attributes.getString("firstName");
     this.lastName = attributes.getString("lastName");
@@ -62,7 +60,6 @@ public class FederatedAccount extends DynamoDocument {
     attributes.putString("firstName", getFirstName());
     attributes.putString("lastName", getLastName());
     attributes.putString("companyName", getCompanyName());
-    attributes.putString("emailAddress", getEmailAddress());
     attributes.putString("phoneNumber", getPhoneNumber());
     attributes.putString("emp", getEmp());
     attributes.putString("symphonyUserId", getSymphonyUserId());

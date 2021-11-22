@@ -313,7 +313,6 @@ class RoomApiTest extends AbstractIntegrationTest {
       .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
       .federatedUserId(federatedUserId("11"))
       .emp(emp("11"))
-      .emailAddress(emailAddress("11"))
       .phoneNumber((phoneNumber("11")))
       .build());
     RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME);
@@ -325,7 +324,6 @@ class RoomApiTest extends AbstractIntegrationTest {
     assertEquals(federatedUserId("11"), roomMemberResponse.getFederatedUserId());
     assertEquals(emp("11"), roomMemberResponse.getEmp());
     assertEquals(phoneNumber("11"), roomMemberResponse.getPhoneNumber());
-    assertEquals(emailAddress("11"), roomMemberResponse.getEmailAddress());
 
     com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
     verify(empClient, once()).addRoomMemberOrFail(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
@@ -353,7 +351,6 @@ class RoomApiTest extends AbstractIntegrationTest {
       .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
       .federatedUserId(federatedUserId("11"))
       .emp(emp("11"))
-      .emailAddress(emailAddress("11"))
       .phoneNumber((phoneNumber("11")))
       .build());
 

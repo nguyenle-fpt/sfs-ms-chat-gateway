@@ -273,7 +273,6 @@ class ChannelServiceTest implements I18nTest {
       .firstName(symphonyUserId + "firstName")
       .lastName(symphonyUserId + "lastName")
       .companyName(symphonyUserId + "companyName")
-      .emailAddress(symphonyUserId + "@symphony.com")
       .emp(emp)
       .symphonyUserId(symphonyUserId)
       .build();

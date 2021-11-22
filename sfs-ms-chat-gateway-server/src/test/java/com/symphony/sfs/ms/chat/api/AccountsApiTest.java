@@ -153,7 +153,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     assertEquals(accountSession, session);
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName(createAccountRequest.getFirstName())
       .lastName(createAccountRequest.getLastName())
@@ -225,7 +224,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     assertEquals(accountSession, session);
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName(createAccountRequest.getFirstName())
       .lastName(createAccountRequest.getLastName())
@@ -350,7 +348,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .always();
 
     UpdateAccountRequest updateAccountRequest = new UpdateAccountRequest()
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName("firstName2")
       .lastName("lastName2")
@@ -370,12 +367,10 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .firstName(updateAccountRequest.getFirstName())
       .lastName(updateAccountRequest.getLastName())
       .companyName(updateAccountRequest.getCompanyName())
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber());
     assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName(updateAccountRequest.getFirstName())
       .lastName(updateAccountRequest.getLastName())
@@ -461,7 +456,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .always();
 
     UpdateAccountRequest updateAccountRequest = new UpdateAccountRequest()
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName("firstName2")
       .lastName("lastName2")
@@ -482,7 +476,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .firstName(updateAccountRequest.getFirstName())
       .lastName(updateAccountRequest.getLastName())
       .companyName(updateAccountRequest.getCompanyName())
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber());
     assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
 
@@ -490,7 +483,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     verify(empClient).updateAccountOrFail(empEntity2.getName(), accountSession.getUserId(),  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
-      .emailAddress(createAccountRequest.getEmailAddress())
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName(updateAccountRequest.getFirstName())
       .lastName(updateAccountRequest.getLastName())
@@ -517,7 +509,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
 
     FederatedAccount existingAccount = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -530,7 +521,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     federatedAccountRepository.save(existingAccount);
 
     CreateAccountRequest createAccountRequest = new CreateAccountRequest()
-      .emailAddress(existingAccount.getEmailAddress())
       .phoneNumber(existingAccount.getPhoneNumber())
       .firstName(existingAccount.getFirstName())
       .lastName(existingAccount.getLastName())
@@ -555,7 +545,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
 
     FederatedAccount existingAccount = FederatedAccount.builder()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")
@@ -599,7 +588,6 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
   CreateAccountRequest createDefaultAccountRequest() {
     return new CreateAccountRequest()
-      .emailAddress("emailAddress@symphony.com")
       .phoneNumber("+33601020304")
       .firstName("firstName")
       .lastName("lastName")

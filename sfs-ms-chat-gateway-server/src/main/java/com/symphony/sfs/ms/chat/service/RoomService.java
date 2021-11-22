@@ -188,7 +188,6 @@ public class RoomService implements DatafeedListener {
       FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(roomMemberRequest.getSymphonyId()).orElseThrow(UnknownFederatedAccountProblem::new);
       roomMemberResponse.setFederatedUserId(federatedAccount.getFederatedUserId());
       roomMemberResponse.setEmp(federatedAccount.getEmp());
-      roomMemberResponse.setEmailAddress(federatedAccount.getEmailAddress());
       roomMemberResponse.setPhoneNumber(federatedAccount.getPhoneNumber());
       UserInfo advisorInfo = getUserInfo(roomMemberRequest.getAdvisorSymphonyId(), botSession);
       com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);

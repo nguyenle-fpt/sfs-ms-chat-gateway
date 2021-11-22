@@ -228,7 +228,6 @@ public class FederatedAccountService {
 
     FederatedAccount federatedServiceAccount = new FederatedAccount();
 
-    federatedServiceAccount.setEmailAddress(account.getEmailAddress());
     federatedServiceAccount.setPhoneNumber(account.getPhoneNumber());
     federatedServiceAccount.setFirstName(account.getFirstName());
     federatedServiceAccount.setLastName(account.getLastName());
