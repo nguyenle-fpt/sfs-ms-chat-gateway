@@ -96,7 +96,7 @@ public class SymphonyService {
       .header("sessionToken", session.getSessionToken())
       .header("keyManagerToken", session.getKmToken())
       .attribute(BASE_URI, podConfiguration.getUrl())
-      .attribute(BASE_PATH, GETMESSAGE)
+      .attribute(BASE_PATH, GETMESSAGEENCRYPTED)
       .retrieve()
       .bodyToMono(SBEEventMessage.class)
       .block();
