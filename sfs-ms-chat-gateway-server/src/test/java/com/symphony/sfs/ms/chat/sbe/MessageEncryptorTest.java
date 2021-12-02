@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.sbe;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.symphony.security.exceptions.CiphertextTransportVersionException;
 import com.symphony.security.exceptions.SymphonyEncryptionException;
 import com.symphony.security.exceptions.SymphonyInputException;
@@ -15,11 +16,15 @@ import org.junit.Test;
 import org.mockito.Matchers;
 import org.mockito.stubbing.Answer;
 
+import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class MessageEncryptorTest {
@@ -48,10 +53,10 @@ public class MessageEncryptorTest {
   }
 
   @Test
-  public void encrypt_shouldPutEncryptedInfoIntoMessage() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException {
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L));
+  public void encrypt_shouldPutEncryptedInfoIntoMessage() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+    KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
     doAnswer((Answer<String>) invocation -> {
-      Object[] args = invocation.getArguments();
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(Matchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
@@ -80,6 +85,29 @@ public class MessageEncryptorTest {
       "**");
     assertEquals(encryptedMessage.getFormat(), "com.symphony.markdown");
 
+    verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
+      eq("**In reply to:**\n**User 1 13/10/21 @ 11:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage));
+
+  }
+
+  @Test
+  public void encrypt_shouldPutEncryptedInfoIntoMessage_emoji() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+    KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    doAnswer((Answer<String>) invocation -> {
+      String content = invocation.getArgument(2);
+      return String.format("encrypted**%s**", content);
+    }).when(messageEncryptor).encrypt(Matchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
+    SBEEventMessage encryptedMessage = messageEncryptor.encrypt("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", parentMessage);
+
+    assertEquals(encryptedMessage.getText(), "encrypted****In reply to:**\n" +
+      "**User 1 13/10/21 @ 11:42**\n" +
+      "_parent message text_\n" +
+      "———————————\n" +
+      ":grinning:**");
+
+    verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
+      eq("**In reply to:**\n**User 1 13/10/21 @ 11:42**\n_parent message text_\n———————————\n:grinning:"), eq(null), anyString(), eq(parentMessage));
 
   }
 }

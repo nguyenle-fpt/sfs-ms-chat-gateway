@@ -28,6 +28,11 @@
       <artifactId>sfs-ms-emp-client</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.symphony.sfs</groupId>
+      <artifactId>sfs-ms-emp-starter</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>io.awspring.cloud</groupId>

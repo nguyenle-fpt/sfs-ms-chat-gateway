@@ -1,6 +1,6 @@
 package com.symphony.sfs.ms.chat.sbe;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.core.canon.facade.ThreadId;
@@ -17,6 +17,7 @@ import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.starter.emojis.EmojiService;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.codec.binary.Base64;
@@ -32,6 +33,7 @@ import java.util.*;
 public class MessageEncryptor {
   private IClientCryptoHandler cryptoHandler;
   private final ContentKeyManager contentKeyManager;
+  private final EmojiService emojiService = new EmojiService();
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   public MessageEncryptor(ContentKeyManager contentKeyManager) {
@@ -45,38 +47,42 @@ public class MessageEncryptor {
       KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId);
       byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(threadId), userId, keyId.getRotationId());
 
-      String text = repliedToMessage == null ? messageText : generateRepliedMessageText(messageText, repliedToMessage);
-      String encryptedText = encrypt(contentKey, keyId, text);
+      String text = emojiService.convertEmojisFromUtf8ToMarkdown(repliedToMessage == null ? messageText : generateRepliedMessageText(messageText, repliedToMessage));
 
-      String presentationML = repliedToMessage == null ? String.format("<div data-format=\"PresentationML\" data-version=\"2.0\" class=\"wysiwyg\"><p>%s</p></div>", messageText) : null;
-      String encryptedPresentationML = presentationML == null ? null : encrypt(contentKey, keyId, presentationML);
+      String presentationML = repliedToMessage == null ? String.format("<div data-format=\"PresentationML\" data-version=\"2.0\" class=\"wysiwyg\"><p>%s</p></div>", emojiService.convertEmojisFromUtf8ToMessageML(messageText)) : null;
 
-      String encryptedMedia = encrypt(contentKey, keyId, "{\"content\":[],\"mediaType\":\"JSON\"}");
-      String encryptedEntities = encrypt(contentKey, keyId, "{}");
-      String encryptedEntityJSON = encrypt(contentKey, keyId, "{}");
       String customEntitiesText = repliedToMessage == null ? null : generateCustomEntitiesText(repliedToMessage);
-      String encryptedCustomEntities = customEntitiesText == null ? null : encrypt(contentKey, keyId, customEntitiesText);
-      return SBEEventMessage.builder()
-        .threadId(threadId)
-        .parentMessageId(repliedToMessage != null ? repliedToMessage.getMessageId() : null)
-        .parentRelationshipType(repliedToMessage != null ? "REPLY" : null)
-        .text(encryptedText)
-        .presentationML(encryptedPresentationML)
-        .encryptedMedia(encryptedMedia)
-        .encryptedEntities(encryptedEntities)
-        .entityJSON(encryptedEntityJSON)
-        .customEntities(encryptedCustomEntities)
-        .entities(objectMapper.readValue("{}", Object.class))
-        .attachments(Collections.emptyList())
-        .msgFeatures(repliedToMessage == null ? 7 : 3)
-        .version(SBEEventMessage.Versions.SOCIALMESSAGE.toString())
-        .format(repliedToMessage == null ? "com.symphony.messageml.v2" : "com.symphony.markdown")
-        .from(SBEEventUser.builder().id(Long.parseLong(userId)).build())
-        .chatType(repliedToMessage == null ? "INSTANT_CHAT" : "CHATROOM")
-        .build();
+
+      return generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationML, customEntitiesText, repliedToMessage);
+
     } catch (UnknownDatafeedUserException | IOException e) {
       throw new EncryptionException(e);
     }
+  }
+
+
+  public SBEEventMessage generateSBEEventMessage(KeyIdentifier keyId, byte[] contentKey,
+                                                 String userId, String threadId, String text,
+                                                 String presentationML, String customEntitiesText,
+                                                 SBEEventMessage repliedToMessage) throws JsonProcessingException, EncryptionException {
+    return SBEEventMessage.builder()
+      .threadId(threadId)
+      .parentMessageId(repliedToMessage != null ? repliedToMessage.getMessageId() : null)
+      .parentRelationshipType(repliedToMessage != null ? "REPLY" : null)
+      .text(encrypt(contentKey, keyId, text))
+      .presentationML(presentationML == null ? null : encrypt(contentKey, keyId, presentationML))
+      .encryptedMedia(encrypt(contentKey, keyId, "{\"content\":[],\"mediaType\":\"JSON\"}"))
+      .encryptedEntities(encrypt(contentKey, keyId, "{}"))
+      .entityJSON(encrypt(contentKey, keyId, "{}"))
+      .customEntities(customEntitiesText == null ? null : encrypt(contentKey, keyId, customEntitiesText))
+      .entities(objectMapper.readValue("{}", Object.class))
+      .attachments(Collections.emptyList())
+      .msgFeatures(repliedToMessage == null ? 7 : 3)
+      .version(SBEEventMessage.Versions.SOCIALMESSAGE.toString())
+      .format(repliedToMessage == null ? "com.symphony.messageml.v2" : "com.symphony.markdown")
+      .from(SBEEventUser.builder().id(Long.parseLong(userId)).build())
+      .chatType(repliedToMessage == null ? "INSTANT_CHAT" : "CHATROOM")
+      .build();
   }
 
   @VisibleForTesting

@@ -10,7 +10,6 @@ import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
@@ -83,7 +82,6 @@ import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFro
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ADVISOR_NO_LONGER_AVAILABLE;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.FEDERATED_ACCOUNT_NOT_FOUND;
 import static com.symphony.sfs.ms.starter.util.ProblemUtils.newConstraintViolation;
-import static org.jsoup.nodes.Entities.escape;
 
 @Service
 @Slf4j
@@ -569,10 +567,9 @@ public class SymphonyMessageService implements DatafeedListener {
       text = text.substring(0, MAX_TEXT_LENGTH);
     }
     String messageML = "<messageML>" + text + "</messageML>";
-    String messageContent = text;
     if (parentMessageId != null) {
       // we need pure text in case of relied message
-      return symphonyMessageSender.sendReplyMessage(streamId, fromSymphonyUserId, messageContent, parentMessageId);
+      return symphonyMessageSender.sendReplyMessage(streamId, fromSymphonyUserId, text, parentMessageId);
     } else if (attachments != null && attachments.size() > 0) {
       return symphonyMessageSender.sendRawMessageWithAttachments(streamId, fromSymphonyUserId, messageML, toSymphonyUserId, attachments);
     } else {
@@ -582,13 +579,13 @@ public class SymphonyMessageService implements DatafeedListener {
 
       switch (formatting) {
         case SIMPLE:
-          return symphonyMessageSender.sendSimpleMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+          return symphonyMessageSender.sendSimpleMessage(streamId, fromSymphonyUserId, text, toSymphonyUserId);
         case NOTIFICATION:
-          return symphonyMessageSender.sendNotificationMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+          return symphonyMessageSender.sendNotificationMessage(streamId, fromSymphonyUserId, text, toSymphonyUserId);
         case INFO:
-          return symphonyMessageSender.sendInfoMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+          return symphonyMessageSender.sendInfoMessage(streamId, fromSymphonyUserId, text, toSymphonyUserId);
         case ALERT:
-          return symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, messageContent, toSymphonyUserId);
+          return symphonyMessageSender.sendAlertMessage(streamId, fromSymphonyUserId, text, toSymphonyUserId);
         default:
           throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));
       }
