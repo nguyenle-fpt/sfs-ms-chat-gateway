@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
+import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
@@ -35,7 +36,6 @@ import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
-import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
@@ -60,6 +60,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -108,6 +109,11 @@ class MessagingApiTest extends AbstractIntegrationTest {
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
 
+    EmpConfig empConfig = new EmpConfig();
+    Map<String, Integer> maxTextLengths = new HashMap<>();
+    maxTextLengths.put("emp", 1000);
+    empConfig.setMaxTextLength(maxTextLengths);
+
     FederatedAccountRepository federatedAccountRepository = mock(FederatedAccountRepository.class);
     FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUsername("username").symphonyUserId("fromSymphonyUserId").build();
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.of(federatedAccount));
@@ -131,7 +137,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     messageStatusService = mock(MessageStatusService.class);
 
     messageDecryptor = mock(MessageDecryptor.class);
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService,  streamService,  new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService,  streamService,  new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
 
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }

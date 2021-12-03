@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
+import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -93,6 +94,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private static final int MAX_TEXT_LENGTH = 30000;
   private static final String TEXT_TOO_LONG_WARNING = "The message was too long and was truncated. Only the first %,d characters were delivered";
 
+  private final EmpConfig empConfig;
   private final EmpClient empClient;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
@@ -487,12 +489,13 @@ public class SymphonyMessageService implements DatafeedListener {
       } else {
         // TODO fix this bad management of optional
         messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
-        boolean textTooLong = (text.length() > MAX_TEXT_LENGTH);
-        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, textTooLong)
+        int maxTextLength = empConfig.getMaxTextLength().getOrDefault(federatedAccount.getEmp(), MAX_TEXT_LENGTH);
+        boolean textTooLong = (text.length() > maxTextLength);
+        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, textTooLong, maxTextLength)
           .orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
         if (textTooLong) {
-          String alertMessage = String.format(TEXT_TOO_LONG_WARNING, MAX_TEXT_LENGTH);
+          String alertMessage = String.format(TEXT_TOO_LONG_WARNING, maxTextLength);
           feedbackAboutIncomingMessage(federatedAccount.getEmp(), streamId, fromSymphonyUserId, alertMessage, TypeEnum.ALERT);
 
           boolean isRoom = streamInfo.getStreamType().getType() == StreamTypes.ROOM;
@@ -557,14 +560,14 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
 
-  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean truncate) {
+  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean truncate, int maxTextLength) {
     // TODO: remove this parameter for all call using it
     String toSymphonyUserId = null;
     LOG.info("incoming message");
     if (StringUtils.isEmpty(text)) {
       text = " "; // this is the minimum message for symphony
     } else if (truncate) {
-      text = text.substring(0, MAX_TEXT_LENGTH);
+      text = text.substring(0, maxTextLength);
     }
     String messageML = "<messageML>" + text + "</messageML>";
     if (parentMessageId != null) {

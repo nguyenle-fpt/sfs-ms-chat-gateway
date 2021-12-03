@@ -25,6 +25,9 @@ microservice:
     # SBE version at which we stop issuing IM
     stopImCreationAt: "20.10.1"
 
+emp:
+  maxTextLength.WHATSAPP: 4000
+
 aws:
   dynamodb:
     tableName: sfs-ms-chat-gateway
