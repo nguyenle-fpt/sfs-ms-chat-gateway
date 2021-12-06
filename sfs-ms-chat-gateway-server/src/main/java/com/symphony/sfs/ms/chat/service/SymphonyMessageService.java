@@ -179,7 +179,7 @@ public class SymphonyMessageService implements DatafeedListener {
       } else {
         allUserSessions = new ArrayList<>(gatewaySocialMessage.getToUserIds().size());
         for (FederatedAccount toFederatedAccount : federatedAccountsByEmp.values().stream().flatMap(Collection::stream).collect(Collectors.toList())) {
-          allUserSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
+          allUserSessions.add(datafeedSessionPool.listenDatafeed(toFederatedAccount.getSymphonyUserId()));
         }
       }
       SendmessagerequestInlineMessage inlineMessageRequest =   null;
@@ -404,7 +404,7 @@ public class SymphonyMessageService implements DatafeedListener {
     try {
       List<MessageInfo> messageInfos = new ArrayList<>();
 
-      SymphonySession userSession = datafeedSessionPool.refreshSession(symphonyUserId);
+      SymphonySession userSession = datafeedSessionPool.listenDatafeed(symphonyUserId);
       for (MessageId id : messageIds) {
         SBEEventMessage sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
         messageDecryptor.decrypt(sbeEventMessage, symphonyUserId);
