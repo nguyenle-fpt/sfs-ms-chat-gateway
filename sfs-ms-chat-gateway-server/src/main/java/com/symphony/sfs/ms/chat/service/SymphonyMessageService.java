@@ -416,7 +416,7 @@ public class SymphonyMessageService implements DatafeedListener {
         Optional<CustomEntity> quote = sbeEventMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
 
         if (quote.isPresent()) {
-          messageInfo.setMessage(messageInfo.getMessage().substring(quote.get().getEndIndex()));
+          messageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(messageInfo.getMessage().substring(quote.get().getEndIndex())));
           String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
           SBEEventMessage inlineMessage = symphonyService.getEncryptedMessage(quotedId, userSession).orElseThrow(RetrieveMessageFailedProblem::new);
           messageDecryptor.decrypt(inlineMessage, symphonyUserId);
@@ -424,10 +424,14 @@ public class SymphonyMessageService implements DatafeedListener {
           Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
 
           if (quoteInline.isPresent()) {
-            inlineMessageInfo.setMessage(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex()));
+            inlineMessageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex())));
+          } else {
+            inlineMessageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(inlineMessageInfo.getMessage()));
           }
 
           messageInfo.setParentMessage(inlineMessageInfo);
+        } else {
+          messageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(messageInfo.getMessage()));
         }
 
         messageInfos.add(messageInfo);
@@ -445,7 +449,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
   private MessageInfo buildMessageInfo(SBEEventMessage sbeEventMessage) {
     MessageInfo messageInfo = new MessageInfo()
-      .message(SpecialCharactersUtils.unescapeSpecialCharacters(sbeEventMessage.getText()))
+      .message(sbeEventMessage.getText())
       .messageId(StreamUtil.toUrlSafeStreamId(sbeEventMessage.getMessageId()))
       .disclaimer(sbeEventMessage.getDisclaimer())
       .firstName(sbeEventMessage.getFrom().getFirstName())
