@@ -122,9 +122,9 @@ public class MessageEncryptor {
       .ingestionDate(repliedToMessage.getIngestionDate())
       .metadata(generateRepliedMessageMetaData(repliedToMessage))
       .attachments(Collections.emptyList())
-      .entities(objectMapper.readTree("{ \"hashtags\": [], \"userMentions\": [], \"urls\": [] }"))
+      .entities(objectMapper.readTree(repliedToMessage.getEncryptedEntities()))
       .customEntities(Collections.emptyList())
-      .entityJSON(objectMapper.readTree("{}"))
+      .entityJSON(objectMapper.readTree(repliedToMessage.getEntityJSON()))
       .build();
   }
 
