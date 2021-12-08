@@ -418,7 +418,19 @@ public class SymphonyMessageService implements DatafeedListener {
         if (quote.isPresent()) {
           messageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(messageInfo.getMessage().substring(quote.get().getEndIndex())));
           String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
-          SBEEventMessage inlineMessage = symphonyService.getEncryptedMessage(quotedId, userSession).orElseThrow(RetrieveMessageFailedProblem::new);
+            Optional<SBEEventMessage> inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);
+            if (inlineMessageOptional.isEmpty()) {
+              // The message might not been retrieve with the federated account session
+              // We try with the connect bot session
+              SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+              inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, botSession);
+            }
+          if (inlineMessageOptional.isEmpty()) {
+            throw new RetrieveMessageFailedProblem();
+          }
+
+          SBEEventMessage inlineMessage = inlineMessageOptional.get();
+
           messageDecryptor.decrypt(inlineMessage, symphonyUserId);
           MessageInfo inlineMessageInfo = buildMessageInfo(inlineMessage);
           Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
