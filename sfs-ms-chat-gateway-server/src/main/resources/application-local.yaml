@@ -21,6 +21,7 @@ pod:
   url: https://ces3-dev.symphony.com
   sessionAuth: https://ces3-dev.symphony.com
   keyAuth: https://ces3-dev.symphony.com
+  usernameSuffix: ${random.uuid}
 
 bot:
   username: sfs-admin
