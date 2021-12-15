@@ -15,6 +15,8 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
+import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
@@ -93,8 +95,8 @@ class ChannelServiceTest implements I18nTest {
     IUser fromSymphonyUser = newIUser("1");
 
     when(federatedAccountRepository.findBySymphonyId("101")).thenReturn(Optional.of(toFederatedAccount));
-    DatafeedSessionPool.DatafeedSession userSession101 = new DatafeedSessionPool.DatafeedSession(userSession, "101");
-    when(datafeedSessionPool.refreshSession("101")).thenReturn(userSession101);
+    SessionSupplier<SymphonySession> userSession101 = new StaticSessionSupplier<>(userSession);
+    when(datafeedSessionPool.getSessionSupplierOrFail("101")).thenReturn(userSession101);
     when(empSchemaService.getEmpDisplayName("emp1")).thenReturn("External Messaging Platform");
 
     List<String> members = new ArrayList<>();

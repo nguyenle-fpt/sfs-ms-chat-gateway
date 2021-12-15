@@ -3,15 +3,12 @@ package com.symphony.sfs.ms.chat.service;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
-import com.symphony.sfs.ms.admin.generated.model.RoomMemberIdentifier;
-import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
-import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
@@ -33,16 +30,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
-import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,7 +94,7 @@ class RoomServiceTest implements I18nTest {
     adminClient = mock(AdminClient.class);
     when(adminClient.getEmpList()).thenReturn(new EmpList());
 
-    roomService = spy(new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, mock(ForwarderQueueConsumer.class), streamService, authenticationService, usersInfoService, empClient, adminClient));
+    roomService = spy(new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, mock(ForwarderQueueConsumer.class), streamService, datafeedSessionPool, usersInfoService, empClient, adminClient));
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
   }

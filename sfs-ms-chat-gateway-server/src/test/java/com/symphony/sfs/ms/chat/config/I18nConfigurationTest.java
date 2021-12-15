@@ -4,11 +4,9 @@ import com.symphony.sfs.ms.starter.i18n.DatabaseMessageSource;
 import com.symphony.sfs.ms.starter.i18n.MessageEntityRepository;
 import org.junit.jupiter.api.Test;
 
-import javax.mail.Message;
-
 import java.util.Collections;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 
 class I18nConfigurationTest {

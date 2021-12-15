@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -14,9 +15,10 @@ import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.health.MeterManager;
-import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonyRsaAuthFunction;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
@@ -46,11 +48,11 @@ import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESS
 import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
+import static com.symphony.sfs.ms.starter.util.RsaUtils.parseRSAPrivateKey;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -60,7 +62,7 @@ import static org.mockito.Mockito.when;
 
 class SymphonyMessageServiceTest {
 
-  private SymphonySession userSession;
+  private SessionSupplier<SymphonySession> userSession;
   private AuthenticationService authenticationService;
   private PodConfiguration podConfiguration;
   private BotConfiguration botConfiguration;
@@ -93,7 +95,7 @@ class SymphonyMessageServiceTest {
     podConfiguration.setKeyAuth("keyAuth");
 
     chatConfiguration = new ChatConfiguration();
-    chatConfiguration.setSharedPrivateKey(new PemResource("-----sharedPrivateKey"));
+    chatConfiguration.setSharedPrivateKey(new PemResource((RsaUtils.encodeRSAKey(keyPair.getPrivate()))));
 
     botConfiguration = new BotConfiguration();
     botConfiguration.setPrivateKey(new PemResource(RsaUtils.encodeRSAKey(keyPair.getPrivate())));
@@ -109,14 +111,14 @@ class SymphonyMessageServiceTest {
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     symphonyService = mock(SymphonyService.class);
 
-    userSession = new SymphonySession("username", "kmToken", "sessionToken");
-    when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
+    userSession = new SessionSupplier<>("username", new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
+
 
     messageEncryptor = mock(MessageEncryptor.class);
     messageDecryptor = mock(MessageDecryptor.class);
     symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
 
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, symphonyAuthFactory));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService));
   }
 
   @Test
@@ -124,18 +126,21 @@ class SymphonyMessageServiceTest {
     FederatedAccount federatedAccount = FederatedAccount.builder()
       .symphonyUsername("username")
       .build();
+    when(datafeedSessionPool.getSessionSupplier(federatedAccount)).thenReturn(mock(SessionSupplier.class));
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.of(federatedAccount));
 
     symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId");
 
-    verify(streamService, once()).sendMessage(eq(podConfiguration.getUrl()), any(StaticSessionSupplier.class), eq("streamId"), eq("text"));
+    verify(streamService, once()).sendMessage(eq(podConfiguration.getUrl()), any(SessionSupplier.class), eq("streamId"), eq("text"));
   }
 
   @Test
-  void sendRawMessageWithAttachment() {
+  void sendRawMessageWithAttachment() throws UnknownDatafeedUserException {
     FederatedAccount federatedAccount = FederatedAccount.builder()
       .symphonyUsername("username")
       .build();
+
+    when(datafeedSessionPool.getSessionSupplier(federatedAccount)).thenReturn(mock(SessionSupplier.class));
 
     byte[] data = new byte[] {1, 2, 3, 4, 5};
     SymphonyAttachment attachment = new SymphonyAttachment()
@@ -149,7 +154,7 @@ class SymphonyMessageServiceTest {
     SymphonyOutboundMessage symphonyOutboundMessage = SymphonyOutboundMessage.builder().message("text")
       .attachment(new SymphonyOutboundAttachment[] { SymphonyOutboundAttachment.builder().mediaType(MediaType.IMAGE_PNG).name("filename.png").data(data).build()}).build();
 
-    verify(streamService, once()).sendMessageMultiPart(eq(podConfiguration.getUrl()), any(StaticSessionSupplier.class), eq("streamId"), eq(symphonyOutboundMessage), eq(false));
+    verify(streamService, once()).sendMessageMultiPart(eq(podConfiguration.getUrl()), any(SessionSupplier.class), eq("streamId"), eq(symphonyOutboundMessage), eq(false));
   }
 
   @TestInstance(PER_CLASS)
@@ -157,7 +162,7 @@ class SymphonyMessageServiceTest {
   class SystemMessagesTest {
     @ParameterizedTest
     @MethodSource("templateProvider")
-    public void sendSystemMessage(String templateName, String detemplatizedMessage, TriConsumer<SymphonySession, String, String> messageSender) {
+    public void sendSystemMessage(String templateName, String detemplatizedMessage, TriConsumer<SessionSupplier<SymphonySession>, String, String> messageSender) {
 
       when(templateProcessor.process("templatizedText", templateName)).thenReturn(detemplatizedMessage);
 
@@ -171,9 +176,9 @@ class SymphonyMessageServiceTest {
     private Stream<Arguments> templateProvider() {
       return Stream.of(
         // arguments(<templateName>, <detemplatizedMessage>, <Method to send message as a TriConsumer>)
-        arguments(SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE, "simpleDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendSimpleMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE, "infoDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendInfoMessage(session, streamId, text)),
-        arguments(SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE, "notificationDetemplatizedText", (TriConsumer<SymphonySession, String, String>) (session, streamId, text) -> symphonyMessageSender.sendNotificationMessage(session, streamId, text))
+        arguments(SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE, "simpleDetemplatizedText", (TriConsumer<SessionSupplier<SymphonySession>, String, String>) (session, streamId, text) -> symphonyMessageSender.sendSimpleMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE, "infoDetemplatizedText", (TriConsumer<SessionSupplier<SymphonySession>, String, String>) (session, streamId, text) -> symphonyMessageSender.sendInfoMessage(session, streamId, text)),
+        arguments(SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE, "notificationDetemplatizedText", (TriConsumer<SessionSupplier<SymphonySession>, String, String>) (session, streamId, text) -> symphonyMessageSender.sendNotificationMessage(session, streamId, text))
       );
     }
 

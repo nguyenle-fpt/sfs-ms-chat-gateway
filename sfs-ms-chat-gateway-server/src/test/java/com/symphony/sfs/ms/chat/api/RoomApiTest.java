@@ -1,8 +1,8 @@
 package com.symphony.sfs.ms.chat.api;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.symphony.sfs.ms.admin.generated.model.RoomMemberIdentifier;
 import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
@@ -22,7 +22,6 @@ import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
-import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
@@ -36,19 +35,15 @@ import com.symphony.sfs.ms.starter.webclient.WebCallException;
 import model.UserInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-
-import java.util.ArrayList;
-import org.springframework.lang.Nullable;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.zalando.problem.Problem;
-import org.zalando.problem.ProblemBuilder;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;

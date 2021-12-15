@@ -10,7 +10,6 @@ import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
-import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -62,6 +61,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.springframework.context.MessageSource;
 
+import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -110,7 +111,7 @@ class MessageServiceTest implements I18nTest {
   private MessageIOMonitor messageIOMonitor;
   private EmpConfig empConfig;
 
-  private SymphonySession userSession;
+  private SessionSupplier<SymphonySession> userSession;
 
   private SymphonySession botSession;
 
@@ -122,7 +123,7 @@ class MessageServiceTest implements I18nTest {
   public static final String STREAM_ID_1 = "streamId_1";
 
   @BeforeEach
-  public void setUp(MessageSource messageSource) {
+  public void setUp(MessageSource messageSource) throws NoSuchAlgorithmException {
     meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
     empClient = mock(EmpClient.class);
     federatedAccountRepository = mock(FederatedAccountRepository.class);
@@ -150,8 +151,6 @@ class MessageServiceTest implements I18nTest {
 
     streamService = mock(StreamService.class);
 
-    userSession = new SymphonySession("username", "kmToken", "sessionToken");
-    when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(userSession);
 
     adminClient = mock(AdminClient.class);
     when(adminClient.getEmpList()).thenReturn(new EmpList());
@@ -180,8 +179,6 @@ class MessageServiceTest implements I18nTest {
    * @param messageSource
    */
   private void spySymphonyMessageSender(MessageSource messageSource) {
-    ChatConfiguration chatConfiguration = new ChatConfiguration();
-
     TemplateLoader loader = new ClassPathTemplateLoader();
     loader.setPrefix("/templates");
     loader.setSuffix(".hbs");
@@ -190,10 +187,9 @@ class MessageServiceTest implements I18nTest {
 
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
     // really instantiate SymphonyMessageSender to test Handlebars templates.
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService,  templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, symphonyAuthFactory));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService,  templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService));
     messageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
   }
-
   @Test
   public void testMessageWithDisclaimer() {
     IUser fromSymphonyUser = newIUser("1");
@@ -227,7 +223,7 @@ class MessageServiceTest implements I18nTest {
   }
 
   @Test
-  void onMessageReply() {
+  void onMessageReply() throws NoSuchAlgorithmException {
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
 
@@ -409,7 +405,7 @@ class MessageServiceTest implements I18nTest {
   }
 
   @Test
-  void onIMMessage_No_PartiallySent() {
+  void onIMMessage_No_PartiallySent() throws GeneralSecurityException {
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
     String id1 = TO_SYMPHONY_USER_ID + "1";
     String id2 = TO_SYMPHONY_USER_ID + "2";
@@ -446,11 +442,13 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(new SymphonySession("username", "kmToken", "sessionToken"), "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.", null);
+    SessionSupplier<SymphonySession> symphonySession = null;// new SessionSupplier<>("username", new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
+
+    verify(symphonyMessageSender, once()).sendAlertMessage(symphonySession, "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.", null);
   }
 
   @Test
-  void onIMMessage_No_PartiallySent_WithErrors(MessageSource messageSource) {
+  void onIMMessage_No_PartiallySent_WithErrors(MessageSource messageSource) throws GeneralSecurityException {
     spySymphonyMessageSender(messageSource);
 
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.NO_ENTITLEMENT));
@@ -495,8 +493,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
     // session is mocked, null for now
-    SymphonySession symphonySession = new SymphonySession("username", "kmToken", "sessionToken");
-    verify(symphonyMessageSender, once()).sendAlertMessage(symphonySession, "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.",
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.",
       Arrays.asList("error coming directly from EMP"));
     String expectedMessage = "<messageML>\n" +
       "  <div>\n" +
@@ -520,7 +517,7 @@ class MessageServiceTest implements I18nTest {
       "    </card>\n" +
       "  </div>\n" +
       "</messageML>\n";
-    verify(streamService, once()).sendMessage(eq("podUrl"), any(StaticSessionSupplier.class), eq("streamId"), eq(expectedMessage));
+    verify(streamService, once()).sendMessage(eq("podUrl"), any(), eq("streamId"), eq(expectedMessage));
   }
 
   @Test
@@ -660,6 +657,7 @@ class MessageServiceTest implements I18nTest {
     StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
+    botSession = new SymphonySession();
     when(usersInfoService.getUsersFromIds("podUrl", new StaticSessionSupplier<>(botSession), Collections.singletonList(TO_SYMPHONY_USER_ID))).thenReturn(Collections.emptyList());
 
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null);

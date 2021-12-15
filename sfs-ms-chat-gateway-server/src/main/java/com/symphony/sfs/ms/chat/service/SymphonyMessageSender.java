@@ -1,7 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.util.Base64;
-import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
+import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
@@ -14,9 +14,7 @@ import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
-import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
@@ -57,8 +55,7 @@ public class SymphonyMessageSender {
   public static final String SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE = "system_message_simple";
 
   private final PodConfiguration podConfiguration;
-  private final ChatConfiguration chatConfiguration;
-  private final AuthenticationService authenticationService;
+  private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
   private final StreamService streamService;
   private final SymphonySystemMessageTemplateProcessor templateProcessor;
@@ -66,11 +63,10 @@ public class SymphonyMessageSender {
   private final MessageEncryptor messageEncryptor;
   private final MessageDecryptor messageDecryptor;
   private final SymphonyService symphonyService;
-  private final SymphonyAuthFactory symphonyAuthFactory;
 
-  public Optional<String> sendRawMessage(SymphonySession session, String streamId, String messageContent) {
+  public Optional<String> sendRawMessage(SessionSupplier<SymphonySession> session, String streamId, String messageContent) {
     LOG.debug("Send message to symphony");
-    return streamService.sendMessage(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), streamId, messageContent);
+    return streamService.sendMessage(podConfiguration.getUrl(), session, streamId, messageContent);
   }
 
   public Optional<String> sendRawMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
@@ -82,13 +78,7 @@ public class SymphonyMessageSender {
 
     messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
 
-    SymphonySession userSession = authenticationService.authenticate(
-      podConfiguration.getSessionAuth(),
-      podConfiguration.getKeyAuth(),
-      federatedAccount.getSymphonyUsername(),
-      chatConfiguration.getSharedPrivateKey().getData());
-
-    return sendRawMessage(userSession, streamId, messageContent);
+    return sendRawMessage(datafeedSessionPool.getSessionSupplier(federatedAccount), streamId, messageContent);
   }
 
   public Optional<String> sendSimpleMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
@@ -96,7 +86,7 @@ public class SymphonyMessageSender {
     return sendRawMessage(streamId, fromSymphonyUserId, detemplatized, toSymphonyUserId);
   }
 
-  public Optional<String> sendSimpleMessage(SymphonySession userSession, String streamId, String messageContent) {
+  public Optional<String> sendSimpleMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
     String detemplatized = templateProcessor.process(messageContent, SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE);
     return sendRawMessage(userSession, streamId, detemplatized);
   }
@@ -105,7 +95,7 @@ public class SymphonyMessageSender {
     return sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE), toSymphonyUserId);
   }
 
-  public Optional<String> sendNotificationMessage(SymphonySession userSession, String streamId, String messageContent) {
+  public Optional<String> sendNotificationMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE));
   }
 
@@ -113,15 +103,15 @@ public class SymphonyMessageSender {
     return sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE), toSymphonyUserId);
   }
 
-  public Optional<String> sendInfoMessage(SymphonySession userSession, String streamId, String messageContent) {
+  public Optional<String> sendInfoMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
-  public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent, String title, List<String> errors) {
+  public Optional<String> sendAlertMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent, String title, List<String> errors) {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, title, errors, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
   }
 
-  public Optional<String> sendAlertMessage(SymphonySession userSession, String streamId, String messageContent, List<String> errors) {
+  public Optional<String> sendAlertMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent, List<String> errors) {
     return sendAlertMessage(userSession, streamId, messageContent, null, errors);
   }
 
@@ -138,11 +128,6 @@ public class SymphonyMessageSender {
 
     messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
 
-    SymphonySession userSession = authenticationService.authenticate(
-      podConfiguration.getSessionAuth(),
-      podConfiguration.getKeyAuth(),
-      federatedAccount.getSymphonyUsername(),
-      chatConfiguration.getSharedPrivateKey().getData());
     SymphonyOutboundMessage symphonyOutboundMessage = SymphonyOutboundMessage.builder()
       .message(messageContent)
       .attachment(attachments.stream().map(attachment ->
@@ -152,7 +137,7 @@ public class SymphonyMessageSender {
           .mediaType(MediaType.parseMediaType(attachment.getContentType()))
           .build()
       ).toArray(SymphonyOutboundAttachment[]::new)).build();
-    Optional<SymphonyInboundMessage> response =  streamService.sendMessageMultiPart(podConfiguration.getUrl(), new StaticSessionSupplier<>(userSession), streamId, symphonyOutboundMessage, false);
+    Optional<SymphonyInboundMessage> response =  streamService.sendMessageMultiPart(podConfiguration.getUrl(), datafeedSessionPool.getSessionSupplier(federatedAccount), streamId, symphonyOutboundMessage, false);
     return response.map(SymphonyInboundMessage::getMessageId);
   }
 
@@ -165,11 +150,7 @@ public class SymphonyMessageSender {
 
     messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
 
-    SymphonySession userSession = authenticationService.authenticate(
-      podConfiguration.getSessionAuth(),
-      podConfiguration.getKeyAuth(),
-      federatedAccount.getSymphonyUsername(),
-      chatConfiguration.getSharedPrivateKey().getData());
+    SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplier(federatedAccount);
 
     try {
       SBEEventMessage replyToMessage = getReplyMessage(fromSymphonyUserId, userSession, parentMessageId);
@@ -186,7 +167,7 @@ public class SymphonyMessageSender {
     return Optional.empty();
   }
 
-  private SBEEventMessage getReplyMessage(String userId, SymphonySession session, String messageId) throws DecryptionException {
+  private SBEEventMessage getReplyMessage(String userId, SessionSupplier<SymphonySession> session, String messageId) throws DecryptionException {
     SBEEventMessage eventMessage;
     try {
       eventMessage = symphonyService.getEncryptedMessage(messageId, session).get();
@@ -195,8 +176,7 @@ public class SymphonyMessageSender {
       // Use gateway bot to retrieve message if the "messageId" belongs to a room and the bot is in the room
       // This is required when an whatsapp user was in a room, then getting removed, and added again
       // In this  case, the whatsapp service account could not retrieve historic message, only the whatsapp room bot could
-      SymphonySession botSession = symphonyAuthFactory.getBotAuth().get();
-      eventMessage = symphonyService.getEncryptedMessage(messageId, botSession).get();
+      eventMessage = symphonyService.getEncryptedMessage(messageId, datafeedSessionPool.getBotSessionSupplier()).get();
     }
     messageDecryptor.decrypt(eventMessage, userId);
 

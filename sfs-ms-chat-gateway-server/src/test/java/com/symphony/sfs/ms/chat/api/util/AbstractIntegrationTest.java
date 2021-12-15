@@ -12,7 +12,13 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
-import com.symphony.sfs.ms.chat.service.*;
+import com.symphony.sfs.ms.chat.service.ChannelService;
+import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
+import com.symphony.sfs.ms.chat.service.EmpSchemaService;
+import com.symphony.sfs.ms.chat.service.FederatedAccountSessionService;
+import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
+import com.symphony.sfs.ms.chat.service.RoomService;
+import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.external.MockEmpClient;
@@ -54,7 +60,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfileTest, RestApiTest, I18nTest {
   protected AuthenticationService authenticationService;
@@ -133,31 +141,31 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // authentication
     authenticationService = mock(AuthenticationService.class);
     symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
+    SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
 
     // account and datafeed
     federatedAccountRepository = new FederatedAccountRepository(db, dynamoConfiguration.getDynamoSchema());
     federatedAccountSessionService = new FederatedAccountSessionService(federatedAccountRepository);
-    datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
+    datafeedSessionPool = new DatafeedSessionPool(chatConfiguration, federatedAccountSessionService, symphonyAuthFactory, sessionManager);
 
     ContentKeyManager contentKeyManager = new ContentKeyManager(podConfiguration, datafeedSessionPool);
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager, objectMapper);
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
 
-    SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
 
     channelRepository = new ChannelRepository(db, dynamoConfiguration.getDynamoSchema());
 
     // services
     streamService = spy(new StreamService(sessionManager));
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, chatConfiguration, authenticationService, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, symphonyAuthFactory));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService));
     connectionsServices = new ConnectionsService(sessionManager);
-    connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, authenticationService, botConfiguration));
+    connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, datafeedSessionPool));
     empSchemaService = new EmpSchemaService(adminClient);
     channelService = new ChannelService(symphonyMessageSender, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, empSchemaService, channelRepository, messageSource);
     channelService.registerAsDatafeedListener();
     usersInfoService = mock(UsersInfoService.class);
-    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, authenticationService, usersInfoService, empClient, adminClient);
+    roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, datafeedSessionPool, usersInfoService, empClient, adminClient);
     roomService.registerAsDatafeedListener();
 
     tenantDetailRepository = new TenantDetailRepository(db, new SharedTableSchema(dynamoConfiguration.getDynamoSchema().getTableName()));

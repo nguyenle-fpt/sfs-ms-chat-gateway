@@ -61,14 +61,11 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
       datafeedSessionPool,
       federatedAccountRepository,
       new AdminUserManagementService(sessionManager),
-      authenticationService,
       podConfiguration,
-      botConfiguration,
       chatConfiguration,
       new UsersInfoService(sessionManager),
       empSchemaService,
       empClient,
-      symphonyAuthFactory,
       channelRepository);
     channelApi = new ChannelsApi(channelService);
 

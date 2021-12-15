@@ -33,11 +33,11 @@ import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.HttpRequestUtils;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
-import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
-import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
+import com.symphony.sfs.ms.starter.security.SessionManager;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonyRsaAuthFunction;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
@@ -51,6 +51,7 @@ import io.fabric8.mockwebserver.DefaultMockServer;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -70,6 +71,7 @@ import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.RETRIEVEMESSAG
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.SENDSYSTEMMESSAGE_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
+import static com.symphony.sfs.ms.starter.util.RsaUtils.parseRSAPrivateKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -86,8 +88,8 @@ class MessagingApiTest extends AbstractIntegrationTest {
   private SymphonyService symphonyService;
   private MessageStatusService messageStatusService;
 
-  private DatafeedSessionPool.DatafeedSession datafeedSession;
-  private SymphonySession symphonySession;
+  private SessionSupplier<SymphonySession> symphonySession;
+  private SessionSupplier<SymphonySession> botSession;
   private MessageDecryptor messageDecryptor;
 
   @BeforeEach
@@ -98,11 +100,6 @@ class MessagingApiTest extends AbstractIntegrationTest {
     StreamService streamService = mock(StreamService.class);
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(StreamAttributes.builder().members(Arrays.asList(1L)).build()).streamType(new StreamType(StreamTypes.ROOM)).build();
     when(streamService.getStreamInfo(anyString(), any(), anyString())).thenReturn(Optional.of(streamInfo));
-
-    BotConfiguration botConfiguration = new BotConfiguration();
-    botConfiguration.setUsername("username");
-    botConfiguration.setEmailAddress("emailAddress");
-    botConfiguration.setPrivateKey(new PemResource("-----botConfigurationPrivateKey"));
 
     PodConfiguration podConfiguration = new PodConfiguration();
     podConfiguration.setUrl("podUrl");
@@ -119,19 +116,15 @@ class MessagingApiTest extends AbstractIntegrationTest {
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.of(federatedAccount));
 
     AuthenticationService authenticationService = mock(AuthenticationService.class);
-    symphonySession = new SymphonySession();
-    symphonySession.setSessionToken("sessionToken");
-    symphonySession.setUsername("username");
-    symphonySession.setKmToken("kmToken");
-    datafeedSession = new DatafeedSessionPool.DatafeedSession(symphonySession, "fromSymphonyUserId");
-    when(authenticationService.authenticate(anyString(), anyString(), anyString(), anyString())).thenReturn(symphonySession);
-
+    symphonySession = new SessionSupplier<>(federatedAccount.getSymphonyUsername(), new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
+    botSession = symphonyAuthFactory.getBotAuth();
     AdminClient adminClient = mock(AdminClient.class);
     EmpClient empClient = mock(EmpClient.class);
     UsersInfoService usersInfoService = mock(UsersInfoService.class);
+    SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
 
     FederatedAccountSessionService federatedAccountSessionService = new FederatedAccountSessionService(federatedAccountRepository);
-    DatafeedSessionPool datafeedSessionPool = new DatafeedSessionPool(authenticationService, podConfiguration, chatConfiguration, federatedAccountSessionService, meterManager);
+    DatafeedSessionPool datafeedSessionPool = new DatafeedSessionPool(chatConfiguration, federatedAccountSessionService, symphonyAuthFactory, sessionManager);
 
     symphonyService = mock(SymphonyService.class);
     messageStatusService = mock(MessageStatusService.class);
@@ -225,7 +218,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_noFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text");
-    when(symphonyMessageSender.sendRawMessage(symphonySession, "streamId", "<messageML>text</messageML>")).thenReturn(Optional.of("symphonyMessageId"));
+    when(symphonyMessageSender.sendRawMessage(botSession, "streamId", "<messageML>text</messageML>")).thenReturn(Optional.of("symphonyMessageId"));
     SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
     SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
 
@@ -235,7 +228,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_simpleFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.SIMPLE);
-    when(symphonyMessageSender.sendSimpleMessage(symphonySession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
+    when(symphonyMessageSender.sendSimpleMessage(botSession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
     SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
     SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
 
@@ -245,7 +238,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_notificationFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.NOTIFICATION);
-    when(symphonyMessageSender.sendNotificationMessage(symphonySession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
+    when(symphonyMessageSender.sendNotificationMessage(botSession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
     SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
     SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
 
@@ -255,7 +248,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_alertFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").title("title").formatting(FormattingEnum.ALERT);
-    when(symphonyMessageSender.sendAlertMessage(symphonySession, "streamId", "text", "title", Collections.emptyList())).thenReturn(Optional.of("symphonyMessageId"));
+    when(symphonyMessageSender.sendAlertMessage(botSession, "streamId", "text", "title", Collections.emptyList())).thenReturn(Optional.of("symphonyMessageId"));
     SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
     SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
 
@@ -265,7 +258,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_infoFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.INFO);
-    when(symphonyMessageSender.sendInfoMessage(symphonySession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
+    when(symphonyMessageSender.sendInfoMessage(botSession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
     SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
     SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
 
@@ -280,7 +273,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     SendMessageStatusRequest sendMessageStatusRequest = new SendMessageStatusRequest(timestamp, messagesIds, true, "streamId");
     markMessagesAsRead(setMessagesAsReadRequest);
 
-    verify(messageStatusService, once()).markMessagesAsRead(eq("podUrl"), any(StaticSessionSupplier.class), eq(Collections.singletonList(sendMessageStatusRequest)));
+    verify(messageStatusService, once()).markMessagesAsRead(eq("podUrl"), ArgumentMatchers.<SessionSupplier<SymphonySession>>any(), eq(Collections.singletonList(sendMessageStatusRequest)));
   }
 
   @Test
@@ -296,7 +289,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
 
 
     SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("tAMLft+K2vyqWXnHFMeCh3///oQbTZrDdA==").disclaimer("disclaimer2").text("This is the message 2")
@@ -308,7 +301,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA", datafeedSession)).thenReturn(Optional.of(sbeEventMessage2));
+    when(symphonyService.getEncryptedMessage("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
 
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
@@ -354,7 +347,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
 
 
     SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("otherMsg").disclaimer("disclaimer2").text("123456This is the message 2")
@@ -376,7 +369,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         SBEMessageAttachment.builder().contentType("image/png").name("hello.png").build()
       )).build();
 
-    when(symphonyService.getEncryptedMessage("otherMsg", datafeedSession)).thenReturn(Optional.of(sbeEventMessage2));
+    when(symphonyService.getEncryptedMessage("otherMsg", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Arrays.asList(
@@ -415,7 +408,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
 
 
 
@@ -446,8 +439,8 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("messageId1", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
-    when(symphonyService.getEncryptedMessage("messageId2", datafeedSession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("messageId2", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
 
     HttpRequestUtils.getRequestFail(symphonyMessagingApi, retrieveMessagesRequest, RETRIEVEMESSAGES_ENDPOINT, Collections.emptyList(), objectMapper, tracer, RetrieveMessageFailedProblem.class.getName(), null, HttpStatus.BAD_REQUEST);
   }

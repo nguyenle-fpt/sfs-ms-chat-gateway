@@ -15,6 +15,7 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.util.BulkRemovalStatus;
 import lombok.RequiredArgsConstructor;
@@ -85,24 +86,20 @@ public class ChannelService implements DatafeedListener {
 
   @NewSpan
   public void refuseToJoinMIM(String streamId, Map<String, List<FederatedAccount>> toFederatedAccounts) {
-    try {
-      for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
-        List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
-        List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
-        for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
-          // TODO The process stops at first UnknownDatafeedUserException
-          //  Some EMPs may have been called, others may have not
-          //  Do we check first all sessions are ok?
-          userSessions.add(datafeedSessionPool.refreshSession(toFederatedAccount.getSymphonyUserId()));
-        }
-        // Send message to alert it is impossible to add EMP user into a MIM
-        String alertMessage = messageSource.getMessage("create.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
-        userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
+    for (Map.Entry<String, List<FederatedAccount>> entry : toFederatedAccounts.entrySet()) {
+      List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
+      List<SessionSupplier<SymphonySession>> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
+      for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
+        // TODO The process stops at first UnknownDatafeedUserException
+        //  Some EMPs may have been called, others may have not
+        //  Do we check first all sessions are ok?
+        userSessions.add(datafeedSessionPool.getSessionSupplier(toFederatedAccount));
       }
-    } catch (UnknownDatafeedUserException e) {
-      // should never happen, as we have a FederatedAccount
-      throw new IllegalStateException(e);
+      // Send message to alert it is impossible to add EMP user into a MIM
+      String alertMessage = messageSource.getMessage("create.mim.not.supported", new Object[]{empSchemaService.getEmpDisplayName(entry.getKey())}, Locale.getDefault());
+      userSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
     }
+
   }
 
   private void handleIMCreation(String streamId, List<String> members, IUser initiator) {
@@ -113,7 +110,7 @@ public class ChannelService implements DatafeedListener {
 
       try {
         String createChannelErrorMessage = messageSource.getMessage("cannot.create.im", null, Locale.getDefault());
-        symphonyMessageSender.sendAlertMessage(datafeedSessionPool.refreshSession(toFederatedAccountId), streamId, createChannelErrorMessage, Collections.emptyList());
+        symphonyMessageSender.sendAlertMessage(datafeedSessionPool.getSessionSupplierOrFail(toFederatedAccountId), streamId, createChannelErrorMessage, Collections.emptyList());
       } catch (UnknownDatafeedUserException e) {
         throw new IllegalStateException();
       }

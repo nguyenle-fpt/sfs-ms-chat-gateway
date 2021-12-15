@@ -35,6 +35,7 @@ import org.zalando.problem.DefaultProblem;
 import org.zalando.problem.Problem;
 
 import java.io.IOException;
+import java.security.PrivateKey;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -42,7 +43,6 @@ import java.util.regex.Pattern;
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
 import static clients.symphony.api.constants.PodConstants.ADMINUPDATEUSER;
 import static clients.symphony.api.constants.PodConstants.UPDATEUSERSTATUSADMIN;
-import static com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.DELETEFEDERATEDACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.UPDATEFEDERATEDACCOUNT_ENDPOINT;
@@ -71,6 +71,11 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
   private static String CLIENT_POD_ID = "1";
 
+  private static final Long DEFAULT_USER_ID =  1L;
+  private static final String DEFAULT_USER_ID_STRING =  "1";
+  private static final String DEFAULT_USERNAME = "username";
+
+
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
     super.setUp(db, mockServer, messageSource);
@@ -87,24 +92,30 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       datafeedSessionPool,
       federatedAccountRepository,
       adminUserManagementService,
-      authenticationService,
       podConfiguration,
-      botConfiguration,
       chatConfiguration,
       new UsersInfoService(sessionManager),
       empSchemaService,
       empClient,
-      symphonyAuthFactory,
       channelRepository);
     channelApi = new ChannelsApi(channelService);
 
     accountsApi = new AccountsApi(federatedAccountService);
+
+
+    when(authenticationService.authenticate(anyString(), anyString(), anyString(), any(PrivateKey.class))).thenAnswer(
+      args -> {
+        SymphonySession symphonySession = new SymphonySession();
+        symphonySession.setUsername(args.getArgument(2, String.class));
+        return symphonySession;
+      }
+    );
   }
 
   @Test
   public void createAccount() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
+    SymphonySession accountSession = getSession(DEFAULT_USERNAME);
 
     EmpEntity empEntity = new EmpEntity()
       .name("WHATSAPP")
@@ -114,8 +125,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
     SymphonyUser symphonyUser = new SymphonyUser();
-    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
-    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(DEFAULT_USER_ID).build());
+    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(DEFAULT_USERNAME).build());
 
     mockServer.expect()
       .post()
@@ -146,11 +157,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     }));
 
     assertEquals(new CreateAccountResponse()
-      .symphonyUserId(accountSession.getUserId())
-      .symphonyUsername(accountSession.getUsername()), response);
+      .symphonyUserId(DEFAULT_USER_ID_STRING)
+      .symphonyUsername(DEFAULT_USERNAME), response);
 
-    DatafeedSession session = datafeedSessionPool.getSession(accountSession.getUserId());
-    assertEquals(accountSession, session);
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
       .phoneNumber(createAccountRequest.getPhoneNumber())
@@ -159,10 +168,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .companyName(createAccountRequest.getCompanyName())
       .federatedUserId(createAccountRequest.getFederatedUserId())
       .emp(createAccountRequest.getEmp())
-      .symphonyUserId(accountSession.getUserId())
-      .symphonyUsername(accountSession.getUsername())
-      .kmToken(accountSession.getKmToken())
-      .sessionToken(accountSession.getSessionToken())
+      .symphonyUserId(DEFAULT_USER_ID_STRING)
+      .symphonyUsername(DEFAULT_USERNAME)
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
@@ -175,18 +182,16 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     podConfiguration.setUsernameSuffix("_des");
 
     SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
 
     EmpEntity empEntity = new EmpEntity()
       .name("WHATSAPP")
       .serviceAccountSuffix("WHATSAPP");
     when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
     SymphonyUser symphonyUser = new SymphonyUser();
-    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
-    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(1L).build());
+    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName("username").build());
 
     mockServer.expect()
       .post()
@@ -217,11 +222,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     }));
 
     assertEquals(new CreateAccountResponse()
-      .symphonyUserId(accountSession.getUserId())
-      .symphonyUsername(accountSession.getUsername()), response);
-
-    DatafeedSession session = datafeedSessionPool.getSession(accountSession.getUserId());
-    assertEquals(accountSession, session);
+      .symphonyUserId("1")
+      .symphonyUsername("username"), response);
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
       .phoneNumber(createAccountRequest.getPhoneNumber())
@@ -230,10 +232,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .companyName(createAccountRequest.getCompanyName())
       .federatedUserId(createAccountRequest.getFederatedUserId())
       .emp(createAccountRequest.getEmp())
-      .symphonyUserId(accountSession.getUserId())
-      .symphonyUsername(accountSession.getUsername())
-      .kmToken(accountSession.getKmToken())
-      .sessionToken(accountSession.getSessionToken())
+      .symphonyUserId("1")
+      .symphonyUsername("username")
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
@@ -243,7 +243,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   @Test
   public void createAccount_ThenDelete() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
+    SymphonySession accountSession = getSession(DEFAULT_USERNAME);
 
     EmpEntity empEntity = new EmpEntity()
       .name("WHATSAPP")
@@ -253,7 +253,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
     SymphonyUser symphonyUser = new SymphonyUser();
-    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(DEFAULT_USER_ID).build());
     symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
 
     mockServer.expect()
@@ -276,7 +276,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .as(CreateAccountResponse.class);
 
     assertEquals(new CreateAccountResponse()
-      .symphonyUserId(accountSession.getUserId())
+      .symphonyUserId(DEFAULT_USER_ID_STRING)
       .symphonyUsername(accountSession.getUsername()), response);
 
     assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
@@ -305,13 +305,13 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
     assertTrue(channelRepository.findByAdvisorSymphonyIdAndFederatedUserIdAndEmp("2", createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).isEmpty());
     assertTrue(federatedAccountRepository.findByFederatedUserId(createAccountRequest.getFederatedUserId()).isEmpty());
-    assertTrue(((MockEmpClient) empClient).getDeletedFederatedAccounts().contains(accountSession.getUserId()));
+    assertTrue(((MockEmpClient) empClient).getDeletedFederatedAccounts().contains(DEFAULT_USER_ID_STRING));
   }
 
   @Test
   public void createAccountWithAdvisor_ThenUpdate() {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
+    SymphonySession accountSession = getSession(DEFAULT_USERNAME);
 
     EmpEntity empEntity = new EmpEntity()
       .name("WHATSAPP")
@@ -321,7 +321,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
 
     SymphonyUser symphonyUser = new SymphonyUser();
-    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(DEFAULT_USER_ID).build());
     symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
 
     mockServer.expect()
@@ -377,10 +377,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .companyName(updateAccountRequest.getCompanyName())
       .federatedUserId(createAccountRequest.getFederatedUserId())
       .emp(createAccountRequest.getEmp())
-      .symphonyUserId(accountSession.getUserId())
+      .symphonyUserId(DEFAULT_USER_ID_STRING)
       .symphonyUsername(accountSession.getUsername())
-      .kmToken(accountSession.getKmToken())
-      .sessionToken(accountSession.getSessionToken())
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
@@ -390,8 +388,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   @Test
   public void createMuliEmpAccount_ThenUpdate() throws IOException {
     SymphonySession botSession = getSession(botConfiguration.getUsername());
-    DatafeedSession accountSession = new DatafeedSession(getSession("username"), "1");
-    DatafeedSession accountSession2 = new DatafeedSession(getSession("username2"), "2");
+    SymphonySession accountSession = getSession(DEFAULT_USERNAME);
+    SymphonySession accountSession2 = getSession("username2");
 
     EmpEntity empEntity = new EmpEntity()
       .name("WHATSAPP")
@@ -403,13 +401,13 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     when(empSchemaService.getEmpDefinition("SMS")).thenReturn(Optional.of(empEntity2));
     when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
     when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
-    when(authenticationService.authenticate(any(), any(), eq(accountSession2.getUsername()), anyString())).thenReturn(accountSession2);
+    when(authenticationService.authenticate(any(), any(), eq("username2"), anyString())).thenReturn(accountSession2);
 
     SymphonyUser symphonyUser = new SymphonyUser();
-    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession.getUserIdAsLong()).build());
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(DEFAULT_USER_ID).build());
     symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
     SymphonyUser symphonyUser2 = new SymphonyUser();
-    symphonyUser2.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(accountSession2.getUserIdAsLong()).build());
+    symphonyUser2.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(2L).build());
     symphonyUser2.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession2.getUsername()).build());
 
     mockServer.expect()
@@ -479,8 +477,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber(createAccountRequest.getPhoneNumber());
     assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
 
-    verify(empClient).updateAccountOrFail(empEntity.getName(), accountSession.getUserId(),  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
-    verify(empClient).updateAccountOrFail(empEntity2.getName(), accountSession.getUserId(),  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
+    verify(empClient).updateAccountOrFail(empEntity.getName(), DEFAULT_USER_ID_STRING,  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
+    verify(empClient).updateAccountOrFail(empEntity2.getName(), DEFAULT_USER_ID_STRING,  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
       .phoneNumber(createAccountRequest.getPhoneNumber())
@@ -489,10 +487,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .companyName(updateAccountRequest.getCompanyName())
       .federatedUserId(createAccountRequest.getFederatedUserId())
       .emp(createAccountRequest.getEmp())
-      .symphonyUserId(accountSession.getUserId())
+      .symphonyUserId(DEFAULT_USER_ID_STRING)
       .symphonyUsername(accountSession.getUsername())
-      .kmToken(accountSession.getKmToken())
-      .sessionToken(accountSession.getSessionToken())
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();

@@ -24,13 +24,14 @@ import com.symphony.oss.models.core.canon.facade.Envelope;
 import com.symphony.oss.models.core.canon.facade.IEnvelope;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.oss.models.crypto.canon.CryptoModel;
-import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool.DatafeedSession;
 import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.health.MeterManager;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import io.awspring.cloud.messaging.listener.SqsMessageDeletionPolicy;
 import io.awspring.cloud.messaging.listener.annotation.SqsListener;
 import io.micrometer.core.instrument.Counter;
@@ -49,14 +50,16 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.*;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.DECRYPTION_FAILED;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NO_GATEWAY_MANAGED_ACCOUNT;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.SOCIAL_MESSAGE_MALFORMED;
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.UNMANAGED_ACCOUNT;
 
 @Service
 @Slf4j
@@ -205,15 +208,15 @@ public class ForwarderQueueConsumer {
       .chatType(chatType)
       .build();
 
-    Optional<DatafeedSession> managedSession = getManagedSession(gatewaySocialMessage);
-    if (managedSession.isEmpty()) {
+    Optional<String> managedSessionId = getManagedSessionId(gatewaySocialMessage);
+    if (managedSessionId.isEmpty()) {
       messageIOMonitor.onMessageBlockFromSymphony(NO_GATEWAY_MANAGED_ACCOUNT, streamId);
       LOG.warn("IM message with no gateway-managed accounts | stream={} members={} initiator={}", streamId, members, fromUser.getId());
       return;
     }
 
     try {
-      messageDecryptor.decrypt(socialMessage, managedSession.get().getUserId(), gatewaySocialMessage);
+      messageDecryptor.decrypt(socialMessage, managedSessionId.get(), gatewaySocialMessage);
       //LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); //To uncomment for local execution
       datafeedListener.onIMMessage(gatewaySocialMessage);
 
@@ -230,17 +233,21 @@ public class ForwarderQueueConsumer {
     }
   }
 
-  private Optional<DatafeedSession> getManagedSession(GatewaySocialMessage gatewaySocialMessage) {
+  private Optional<String> getManagedSessionId(GatewaySocialMessage gatewaySocialMessage) {
     // at least one of the members must be part of the IM
-    DatafeedSession managedSession = datafeedSessionPool.getSession(gatewaySocialMessage.getFromUserId());
+    String id = gatewaySocialMessage.getFromUserId();
+    SessionSupplier<SymphonySession> managedSession = datafeedSessionPool.getSessionSupplier(id);
     if (managedSession == null) {
-      managedSession = gatewaySocialMessage.getMembers().stream()
-        .map(datafeedSessionPool::getSession)
-        .filter(Objects::nonNull)
-        .findAny()
-        .orElse(null);
+      for(String member: gatewaySocialMessage.getMembers()) {
+        managedSession = datafeedSessionPool.getSessionSupplier(member);
+        if (managedSession != null) {
+          return Optional.of(member);
+        }
+      }
+    } else {
+      return Optional.of(id);
     }
-    return Optional.ofNullable(managedSession);
+    return Optional.empty();
   }
 
   private void notifyMaestroMessage(IEnvelope envelope) {

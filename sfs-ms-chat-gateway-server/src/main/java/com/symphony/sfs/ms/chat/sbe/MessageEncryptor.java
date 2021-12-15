@@ -122,14 +122,16 @@ public class MessageEncryptor {
       .ingestionDate(repliedToMessage.getIngestionDate())
       .metadata(generateRepliedMessageMetaData(repliedToMessage))
       .attachments(Collections.emptyList())
-      .entities(objectMapper.readTree(repliedToMessage.getEncryptedEntities()))
+      .entities(repliedToMessage.getEncryptedEntities() != null ? objectMapper.readTree(repliedToMessage.getEncryptedEntities()) : objectMapper.createObjectNode())
       .customEntities(Collections.emptyList())
-      .entityJSON(objectMapper.readTree(repliedToMessage.getEntityJSON()))
+      .entityJSON(repliedToMessage.getEntityJSON() != null ? objectMapper.readTree(repliedToMessage.getEntityJSON()) : objectMapper.createObjectNode())
       .build();
   }
 
   private String generateRepliedMessageMetaData(SBEEventMessage repliedToMessage) {
-    String dateTime = new SimpleDateFormat("dd/MM/yy @ hh:mm").format(new Date(repliedToMessage.getIngestionDate()));
+    SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yy @ hh:mm");
+    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+    String dateTime = sdf.format(new Date(repliedToMessage.getIngestionDate()));
     return String.format("%s %s",
         repliedToMessage.getFrom().getPrettyName(),
         dateTime);
@@ -154,7 +156,9 @@ public class MessageEncryptor {
   private String generatePrefix(SBEEventMessage repliedToMessage) throws IOException {
     String text = getPureText(repliedToMessage);
     String dash = org.apache.commons.lang3.StringUtils.repeat('\u2014', 11);
-    String dateTime = new SimpleDateFormat("dd/MM/yy @ hh:mm").format(new Date(repliedToMessage.getIngestionDate()));
+    SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yy @ hh:mm");
+    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+    String dateTime = sdf.format(new Date(repliedToMessage.getIngestionDate()));
     return String.format("**In reply to:**%n**%s %s**%n_%s_%n%s%n",
         repliedToMessage.getFrom().getPrettyName(),
         dateTime,

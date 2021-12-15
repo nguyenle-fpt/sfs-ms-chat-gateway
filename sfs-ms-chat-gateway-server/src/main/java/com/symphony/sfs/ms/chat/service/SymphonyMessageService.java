@@ -40,7 +40,7 @@ import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest.TypeEnum
 import com.symphony.sfs.ms.emp.generated.model.SendmessagerequestInlineMessage;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
-import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
+import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
@@ -171,15 +171,13 @@ public class SymphonyMessageService implements DatafeedListener {
     try {
       //TODO in case of a room allUserSessions will have only the bot session, in case if IM it has only one federated account's session.
       //TODO maybe the code should be simplified accordingly
-      List<SymphonySession> allUserSessions;
+      List<SessionSupplier<SymphonySession>> allUserSessions;
       if (gatewaySocialMessage.isRoom()) {
-        //TODO caching for botSession ?
-        SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-        allUserSessions = Collections.singletonList(botSession);
+        allUserSessions = Collections.singletonList(datafeedSessionPool.getBotSessionSupplier());
       } else {
         allUserSessions = new ArrayList<>(gatewaySocialMessage.getToUserIds().size());
         for (FederatedAccount toFederatedAccount : federatedAccountsByEmp.values().stream().flatMap(Collection::stream).collect(Collectors.toList())) {
-          allUserSessions.add(datafeedSessionPool.listenDatafeed(toFederatedAccount.getSymphonyUserId()));
+          allUserSessions.add(datafeedSessionPool.getSessionSupplier(toFederatedAccount));
         }
       }
       SendmessagerequestInlineMessage inlineMessageRequest =   null;
@@ -208,10 +206,10 @@ public class SymphonyMessageService implements DatafeedListener {
       for (Map.Entry<String, List<FederatedAccount>> entry : federatedAccountsByEmp.entrySet()) {
         List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
         String emp = entry.getKey();
-        List<SymphonySession> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
+        List<SessionSupplier<SymphonySession>> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
 
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
-          userSessions.add(datafeedSessionPool.getSession(toFederatedAccount.getSymphonyUserId()));
+          userSessions.add(datafeedSessionPool.getSessionSupplier(toFederatedAccount));
         }
 
         // CES-3203 Prevent messages to be sent in MIMs
@@ -222,8 +220,7 @@ public class SymphonyMessageService implements DatafeedListener {
           return;
         }
 
-        // not optimal, we call the canChat everytime here.
-        Optional<CanChatResponse> canChat = adminClient.canChat(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), emp);
+        Optional<CanChatResponse> canChat = gatewaySocialMessage.isRoom() ? Optional.of(CanChatResponse.CAN_CHAT) : adminClient.canChat(gatewaySocialMessage.getFromUserId(), toFederatedAccountsForEmp.get(0).getFederatedUserId(), emp);
 
         if (manageCanChat(gatewaySocialMessage, emp, streamId, userSessions, canChat)) {
           List<Attachment> attachmentsContent = null;
@@ -287,7 +284,7 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
-  private SendmessagerequestInlineMessage getInlineQuote(GatewaySocialMessage gatewaySocialMessage, String streamId, List<FederatedAccount> federatedAccounts, List<SymphonySession> allUserSessions) throws UnknownDatafeedUserException {
+  private SendmessagerequestInlineMessage getInlineQuote(GatewaySocialMessage gatewaySocialMessage, String streamId, List<FederatedAccount> federatedAccounts, List<SessionSupplier<SymphonySession>> allUserSessions) throws UnknownDatafeedUserException {
     SendmessagerequestInlineMessage inlineMessageRequest = null;
     CustomEntity quote = gatewaySocialMessage.getCustomEntity(CustomEntity.QUOTE_TYPE).get();
     gatewaySocialMessage.setTextContent(gatewaySocialMessage.getTextContent().substring(quote.getEndIndex()));
@@ -331,7 +328,7 @@ public class SymphonyMessageService implements DatafeedListener {
     return inlineMessageRequest;
   }
 
-  private void dealWithMessageSentPartially(GatewaySocialMessage gatewaySocialMessage, SendMessageResponse sendMessageResponse, List<SymphonySession> allUserSessions) {
+  private void dealWithMessageSentPartially(GatewaySocialMessage gatewaySocialMessage, SendMessageResponse sendMessageResponse, List<SessionSupplier<SymphonySession>> allUserSessions) {
     List<OperationIdBySymId> empMessageIds = sendMessageResponse.getOperationIds();
     List<OperationIdBySymId> notDeliveredFor = empMessageIds
       .stream()
@@ -371,7 +368,7 @@ public class SymphonyMessageService implements DatafeedListener {
     return federatedAccount.getFirstName() + " " + federatedAccount.getLastName();
   }
 
-  private boolean manageCanChat(GatewaySocialMessage gatewaySocialMessage, String emp, String streamId, List<SymphonySession> userSessions, Optional<CanChatResponse> canChat) {
+  private boolean manageCanChat(GatewaySocialMessage gatewaySocialMessage, String emp, String streamId, List<SessionSupplier<SymphonySession>> userSessions, Optional<CanChatResponse> canChat) {
     if (gatewaySocialMessage.isRoom()) {
       return true;
     }
@@ -391,9 +388,9 @@ public class SymphonyMessageService implements DatafeedListener {
   @NewSpan
   public void markMessagesAsRead(SetMessagesAsReadRequest setMessagesAsReadRequest) {
     try {
-      SymphonySession userSession = datafeedSessionPool.refreshSession(setMessagesAsReadRequest.getSymphonyUserId());
+      SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplierOrFail(setMessagesAsReadRequest.getSymphonyUserId());
       SendMessageStatusRequest sendMessageStatusRequest = new SendMessageStatusRequest(setMessagesAsReadRequest.getTimestamp(), setMessagesAsReadRequest.getMessageIds(), true, setMessagesAsReadRequest.getStreamId());
-      messageStatusService.markMessagesAsRead(podConfiguration.getUrl(), new StaticSessionSupplier<>(userSession), Collections.singletonList(sendMessageStatusRequest));
+      messageStatusService.markMessagesAsRead(podConfiguration.getUrl(), userSession, Collections.singletonList(sendMessageStatusRequest));
     } catch (UnknownDatafeedUserException e) {
       LOG.error("Mark Messages as read | Session not found from symphony user {}", setMessagesAsReadRequest.getSymphonyUserId());
     }
@@ -404,7 +401,7 @@ public class SymphonyMessageService implements DatafeedListener {
     try {
       List<MessageInfo> messageInfos = new ArrayList<>();
 
-      SymphonySession userSession = datafeedSessionPool.listenDatafeed(symphonyUserId);
+      SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplierOrFail(symphonyUserId);
       for (MessageId id : messageIds) {
         SBEEventMessage sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
         messageDecryptor.decrypt(sbeEventMessage, symphonyUserId);
@@ -422,8 +419,7 @@ public class SymphonyMessageService implements DatafeedListener {
             if (inlineMessageOptional.isEmpty()) {
               // The message might not been retrieve with the federated account session
               // We try with the connect bot session
-              SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
-              inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, botSession);
+              inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, datafeedSessionPool.getBotSessionSupplier());
             }
           if (inlineMessageOptional.isEmpty()) {
             throw new RetrieveMessageFailedProblem();
@@ -516,11 +512,11 @@ public class SymphonyMessageService implements DatafeedListener {
 
           boolean isRoom = streamInfo.getStreamType().getType() == StreamTypes.ROOM;
 
-          SymphonySession session;
+          SessionSupplier<SymphonySession> session;
           if (isRoom) {
-            session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+            session = datafeedSessionPool.getBotSessionSupplier();
           } else {
-            session = datafeedSessionPool.refreshSession(fromSymphonyUserId);
+            session = datafeedSessionPool.getSessionSupplierOrFail(fromSymphonyUserId);
           }
           symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList());
         }
@@ -538,11 +534,11 @@ public class SymphonyMessageService implements DatafeedListener {
     boolean isRoom = getStreamInfo(streamId).getStreamType().getType() == StreamTypes.ROOM;
 
     try {
-      SymphonySession session;
+      SessionSupplier<SymphonySession> session;
       if (isRoom) {
-        session = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
+        session = datafeedSessionPool.getBotSessionSupplier();
       } else {
-        session = datafeedSessionPool.refreshSession(fromSymphonyUserId);
+        session = datafeedSessionPool.getSessionSupplierOrFail(fromSymphonyUserId);
       }
 
       Optional<String> symphonyMessageId;
@@ -618,12 +614,8 @@ public class SymphonyMessageService implements DatafeedListener {
 
   private StreamInfo getStreamInfo(String streamId) {
 
-    SymphonySession botSession = authenticationService.authenticate(
-      podConfiguration.getSessionAuth(),
-      podConfiguration.getKeyAuth(),
-      botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
-    return streamService.getStreamInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(botSession), streamId).orElseThrow(CannotRetrieveStreamIdProblem::new);
+    return streamService.getStreamInfo(podConfiguration.getUrl(), datafeedSessionPool.getBotSessionSupplier(), streamId).orElseThrow(CannotRetrieveStreamIdProblem::new);
   }
 
   /**

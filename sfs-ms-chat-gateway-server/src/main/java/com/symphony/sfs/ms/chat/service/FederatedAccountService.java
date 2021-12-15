@@ -14,12 +14,8 @@ import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
-import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
-import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
-import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.user.AdminUserManagementService;
 import com.symphony.sfs.ms.starter.symphony.user.FeatureEntitlement;
@@ -59,14 +55,11 @@ public class FederatedAccountService {
   private final DatafeedSessionPool datafeedSessionPool;
   private final FederatedAccountRepository federatedAccountRepository;
   private final AdminUserManagementService adminUserManagementService;
-  private final AuthenticationService authenticationService;
   private final PodConfiguration podConfiguration;
-  private final BotConfiguration botConfiguration;
   private final ChatConfiguration chatConfiguration;
   private final UsersInfoService usersInfoService;
   private final EmpSchemaService empSchemaService;
   private final EmpClient empClient;
-  private final SymphonyAuthFactory symphonyAuthFactory;
   private final ChannelRepository channelRepository;
 
   @NewSpan
@@ -76,14 +69,13 @@ public class FederatedAccountService {
       throw new FederatedAccountAlreadyExistsProblem();
     }
 
-    SymphonySession botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
     try {
-      SymphonyUser symphonyUser = createSymphonyUser(new StaticSessionSupplier<>(botSession), request.getFirstName(), request.getLastName(), request.getPhoneNumber(), request.getEmp());
+      SymphonyUser symphonyUser = createSymphonyUser(datafeedSessionPool.getBotSessionSupplier(), request.getFirstName(), request.getLastName(), request.getPhoneNumber(), request.getEmp());
       LOG.info("created symphony user | federatedUser={} symphonyId={}", request.getFederatedUserId(), symphonyUser.getUserSystemInfo().getId());
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
-      datafeedSessionPool.listenDatafeed(federatedAccount);
+      datafeedSessionPool.openSession(federatedAccount);
 
       return federatedAccount;
     } catch (ConditionalCheckFailedException e) {
@@ -107,8 +99,8 @@ public class FederatedAccountService {
     attributes.setDisplayName("DEACTIVATED");
     attributes.setUserName(UUID.randomUUID().toString() + "[DEACTIVATED]");
     attributes.setEmailAddress(UUID.randomUUID().toString() + "@deactivated.ces.symphony.com");
-    adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), attributes);
-    adminUserManagementService.updateUserStatus(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), existingAccount.getSymphonyUserId(), UserStatus.DISABLED);
+    adminUserManagementService.updateUser(podConfiguration.getUrl(), datafeedSessionPool.getBotSessionSupplier(), existingAccount.getSymphonyUserId(), attributes);
+    adminUserManagementService.updateUserStatus(podConfiguration.getUrl(), datafeedSessionPool.getBotSessionSupplier(), existingAccount.getSymphonyUserId(), UserStatus.DISABLED);
     federatedAccountRepository.delete(existingAccount);
     channelRepository.findAllByFederatedUserId(federatedUserId).forEach(channelRepository::delete);
 
@@ -147,7 +139,7 @@ public class FederatedAccountService {
 
     // All checks OK, update
     empClient.updateAccountOrFail(federatedAccount.getEmp(), federatedAccount.getSymphonyUserId(), federatedAccount.getPhoneNumber(), tenantId, firstName, lastName, companyName);
-    adminUserManagementService.updateUser(podConfiguration.getUrl(), symphonyAuthFactory.getBotAuth(), federatedAccount.getSymphonyUserId(), attributes);
+    adminUserManagementService.updateUser(podConfiguration.getUrl(), datafeedSessionPool.getBotSessionSupplier(), federatedAccount.getSymphonyUserId(), attributes);
 
 
     federatedAccountRepository.save(federatedAccount);
