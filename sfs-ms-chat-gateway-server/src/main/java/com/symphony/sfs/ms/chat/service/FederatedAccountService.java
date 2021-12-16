@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
+import com.google.common.hash.Hashing;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
@@ -32,6 +33,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -162,7 +164,7 @@ public class FederatedAccountService {
     SymphonyUserAttributes userAttributes = SymphonyUserAttributes.builder()
       .displayName(displayName(firstName, lastName, emp))
       .userName(userName(emp, phoneNumber))
-      .emailAddress(emailAddress(session))
+      .emailAddress(emailAddress(emp, phoneNumber, session))
       .currentKey(userKey)
       .accountType(ACCOUNT_TYPE_SYSTEM)
       .build();
@@ -195,16 +197,22 @@ public class FederatedAccountService {
    * a suffix is added for avoid conflicts with DES environment
    */
   private String userName(String emp, String phoneNumber) {
-    return emp + '_' + formatPhoneNumber(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164) + ((StringUtils.isNotBlank(podConfiguration.getUsernameSuffix()))? podConfiguration.getUsernameSuffix() : "");
+    return emp.toUpperCase() + '_' + formatPhoneNumber(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164) + ((StringUtils.isNotBlank(podConfiguration.getUsernameSuffix()))? podConfiguration.getUsernameSuffix() : "");
   }
 
   /**
-   * Returns an email address with pattern: {uuid}@symphony.com
+   * Returns an email address with pattern: {emp}_{phoneNumber}@symphony.com
    */
-  private String emailAddress(SessionSupplier<SymphonySession> session) {
+  private String emailAddress(String emp, String phoneNumber, SessionSupplier<SymphonySession> session) {
+
+    String emailAddress = userName(emp, phoneNumber) + "@symphony.com";
+
     List<String> candidates = IntStream.range(0, 5)
-      .mapToObj(i -> UUID.randomUUID().toString() + "@symphony.com")
+      .mapToObj(i -> Hashing.murmur3_32().hashString(UUID.randomUUID().toString() + emailAddress, StandardCharsets.UTF_8).toString() + '|' + emailAddress)
       .collect(Collectors.toList());
+
+    // we also test if the unprefixed address is free, and we will use it if available
+    candidates.add(0, emailAddress);
 
     List<UserInfo> userInfos = usersInfoService.getUsersFromEmails(podConfiguration.getUrl(), session, candidates);
     userInfos.forEach(info -> candidates.remove(info.getEmailAddress()));

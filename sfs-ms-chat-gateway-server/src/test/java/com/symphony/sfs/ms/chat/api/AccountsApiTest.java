@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.security.PrivateKey;
 import java.util.Collections;
 import java.util.Optional;
-import java.util.regex.Pattern;
 
 import static clients.symphony.api.constants.PodConstants.ADMINCREATEUSER;
 import static clients.symphony.api.constants.PodConstants.ADMINUPDATEUSER;
@@ -147,13 +146,11 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .extract().response().body()
       .as(CreateAccountResponse.class);
 
-    Pattern pattern = Pattern.compile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}@symphony\\.com$");
-
     verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
       SymphonyUserAttributes userAttributes = args.getUserAttributes();
       return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
         userAttributes.getUserName().equals("WHATSAPP_+33601020304") &&
-        pattern.matcher(userAttributes.getEmailAddress()).matches());
+        userAttributes.getEmailAddress().equals("WHATSAPP_+33601020304@symphony.com"));
     }));
 
     assertEquals(new CreateAccountResponse()
@@ -212,13 +209,11 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .extract().response().body()
       .as(CreateAccountResponse.class);
 
-    Pattern pattern = Pattern.compile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}@symphony\\.com$");
-
     verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
       SymphonyUserAttributes userAttributes = args.getUserAttributes();
       return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
         userAttributes.getUserName().equals("WHATSAPP_+33601020304_des") &&
-        pattern.matcher(userAttributes.getEmailAddress()).matches());
+        userAttributes.getEmailAddress().equals("WHATSAPP_+33601020304_des@symphony.com"));
     }));
 
     assertEquals(new CreateAccountResponse()
