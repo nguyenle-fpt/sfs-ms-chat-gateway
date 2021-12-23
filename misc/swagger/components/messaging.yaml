@@ -11,6 +11,10 @@ send-message-request:
       type: string
     replyToMessageId:
       type: string
+    replyToAttachmentMessageIds:
+      type: array
+      items:
+        type: string
     text:
       type: string
     appendTags:
@@ -20,6 +24,9 @@ send-message-request:
       type: array
       items:
         $ref: '#/symphony-attachment'
+    attachmentReplySupported:
+      type: boolean
+      default: false
     formatting:
       $ref: '#/formatting-enum'
 

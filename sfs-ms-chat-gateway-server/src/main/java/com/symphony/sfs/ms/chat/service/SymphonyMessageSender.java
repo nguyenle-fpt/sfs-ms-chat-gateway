@@ -4,6 +4,7 @@ import com.amazonaws.util.Base64;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
+import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
@@ -27,8 +28,13 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ENCRYPTION_FAILED;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.UNKNOWN_SENDER;
@@ -141,7 +147,7 @@ public class SymphonyMessageSender {
     return response.map(SymphonyInboundMessage::getMessageId);
   }
 
-  public Optional<String> sendReplyMessage(String streamId, String fromSymphonyUserId, String messageContent, String parentMessageId) {
+  public Optional<String> sendReplyMessage(String streamId, String fromSymphonyUserId, String messageContent, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
       messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
@@ -154,10 +160,30 @@ public class SymphonyMessageSender {
 
     try {
       SBEEventMessage replyToMessage = getReplyMessage(fromSymphonyUserId, userSession, parentMessageId);
-      if (replyToMessage.getAttachments() != null && replyToMessage.getAttachments().size() > 0) {
+      if (!attachmentReplySupported &&
+          (replyToMessage.getAttachments() != null && replyToMessage.getAttachments().size() > 0
+            || attachmentMessageIds.isPresent() && attachmentMessageIds.get().size() > 0)) {
         throw new InlineReplyMessageException();
       }
-      SBEEventMessage sbeMessageToBeSent = messageEncryptor.encrypt(fromSymphonyUserId, streamId, messageContent, replyToMessage);
+
+      List<SBEMessageAttachment> attachmentsFromMessageIds = attachmentMessageIds.orElse(Collections.emptyList())
+        .stream().flatMap(id -> {
+        try {
+          return getReplyMessage(fromSymphonyUserId, userSession, id).getAttachments().stream();
+        } catch (DecryptionException e) {
+          LOG.error("Unable to decrypt message {} from WhatsApp: stream={} initiator={}", id, streamId, fromSymphonyUserId, e);
+          return Stream.empty();
+        }
+      }).collect(Collectors.toList());
+
+      List<SBEMessageAttachment> allAttachments = Stream.of(
+        replyToMessage.getAttachments(),
+        attachmentsFromMessageIds
+      ).filter(Objects::nonNull)
+        .flatMap(List::stream)
+        .collect(Collectors.toList());
+
+      SBEEventMessage sbeMessageToBeSent = messageEncryptor.encrypt(fromSymphonyUserId, streamId, messageContent, replyToMessage, allAttachments);
       SBEEventMessage sentMessage = symphonyService.sendReplyMessage(sbeMessageToBeSent, userSession);
       return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
     } catch (IOException e) {

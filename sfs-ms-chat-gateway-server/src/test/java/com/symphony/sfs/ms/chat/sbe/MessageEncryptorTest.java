@@ -8,6 +8,7 @@ import com.symphony.security.helper.KeyIdentifier;
 import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
+import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
@@ -15,6 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.stubbing.Answer;
+
+import java.util.Collections;
+import java.util.List;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,12 +35,21 @@ import static org.mockito.Mockito.when;
 public class MessageEncryptorTest {
   private MessageEncryptor messageEncryptor;
   private SBEEventMessage parentMessage;
+  private List<SBEMessageAttachment> msgAttachments;
   private ContentKeyManager contentKeyManager;
   @BeforeEach
   public void setup() throws SymphonyInputException, CiphertextTransportVersionException, SymphonyEncryptionException {
     contentKeyManager = mock(ContentKeyManager.class);
     messageEncryptor = spy(new MessageEncryptor(contentKeyManager));
 
+    msgAttachments = Collections.singletonList(SBEMessageAttachment.builder()
+      .fileId("attachment_id")
+      .name("attachment_name")
+      .contentType("attachment_type")
+      .sizeInBytes(1024L)
+      .encrypted(false)
+      .images(Collections.emptyMap())
+      .build());
     parentMessage = SBEEventMessage.builder()
       .messageId("uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==")
       .from(SBEEventUser.builder()
@@ -51,7 +64,7 @@ public class MessageEncryptorTest {
   public void encrypt_shouldThrowEncryptionException() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException {
     when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
     assertThrows( EncryptionException.class,
-      () -> messageEncryptor.encrypt("123456789", "streamId", "new message text", parentMessage));
+      () -> messageEncryptor.encrypt("123456789", "streamId", "new message text", parentMessage, Collections.emptyList()));
   }
 
   @Test
@@ -62,7 +75,7 @@ public class MessageEncryptorTest {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.encrypt("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", parentMessage);
+    SBEEventMessage encryptedMessage = messageEncryptor.encrypt("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", parentMessage, Collections.emptyList());
 
     assertEquals(encryptedMessage.getText(), "encrypted****In reply to:**\n" +
       "**User 1 13/10/21 @ 09:42**\n" +
@@ -82,14 +95,34 @@ public class MessageEncryptorTest {
     assertEquals(encryptedMessage.getCustomEntities(), "encrypted**[" +
       "{\"type\":\"com.symphony.sharing.quote\"," +
       "\"beginIndex\":0,\"endIndex\":79," +
-      "\"data\":{\"text\":\"parent message text\",\"ingestionDate\":1634118131913,\"metadata\":\"User 1 13/10/21 @ 09:42\",\"attachments\":[],\"streamId\":null,\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"presentationML\":null,\"entities\":{},\"customEntities\":[],\"entityJSON\":{}}," +
+      "\"data\":{\"text\":\"parent message text\",\"ingestionDate\":1634118131913,\"metadata\":\"User 1 13/10/21 @ 09:42\",\"attachments\":[],\"streamId\":null,\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"presentationML\":null,\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]},\"customEntities\":[],\"entityJSON\":{}}," +
       "\"version\":\"0.0.1\"}]" +
       "**");
     assertEquals(encryptedMessage.getFormat(), "com.symphony.markdown");
-
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage));
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage), eq(Collections.emptyList()));
 
+  }
+
+  @Test
+  public void encrypt_shouldPutEncryptedInfoIntoMessage_attachments() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+    KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    doAnswer((Answer<String>) invocation -> {
+      String content = invocation.getArgument(2);
+      return String.format("encrypted**%s**", content);
+    }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
+    SBEEventMessage encryptedMessage = messageEncryptor.encrypt("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", parentMessage, msgAttachments);
+
+    assertEquals(encryptedMessage.getAttachments(), msgAttachments);
+    assertEquals(encryptedMessage.getCustomEntities(), "encrypted**[" +
+      "{\"type\":\"com.symphony.sharing.quote\"," +
+      "\"beginIndex\":0,\"endIndex\":79," +
+      "\"data\":{\"text\":\"parent message text\",\"ingestionDate\":1634118131913,\"metadata\":\"User 1 13/10/21 @ 09:42\",\"attachments\":[{\"fileId\":\"attachment_id\",\"name\":\"attachment_name\",\"encrypted\":false,\"sizeInBytes\":1024,\"images\":{},\"contentType\":\"attachment_type\"}],\"streamId\":null,\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"presentationML\":null,\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]},\"customEntities\":[],\"entityJSON\":{}}," +
+      "\"version\":\"0.0.1\"}]" +
+      "**");
+    verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage), eq(msgAttachments));
   }
 
   @Test
@@ -100,7 +133,7 @@ public class MessageEncryptorTest {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.encrypt("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", parentMessage);
+    SBEEventMessage encryptedMessage = messageEncryptor.encrypt("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", parentMessage, Collections.emptyList());
 
     assertEquals(encryptedMessage.getText(), "encrypted****In reply to:**\n" +
       "**User 1 13/10/21 @ 09:42**\n" +
@@ -109,7 +142,7 @@ public class MessageEncryptorTest {
       ":grinning:**");
 
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\n:grinning:"), eq(null), anyString(), eq(parentMessage));
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\n:grinning:"), eq(null), anyString(), eq(parentMessage), eq(Collections.emptyList()));
 
   }
 }

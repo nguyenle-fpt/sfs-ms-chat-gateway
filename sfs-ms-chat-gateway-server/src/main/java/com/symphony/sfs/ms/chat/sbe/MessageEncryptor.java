@@ -15,6 +15,7 @@ import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.MessageEntityData;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
+import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.starter.emojis.EmojiService;
@@ -41,7 +42,7 @@ public class MessageEncryptor {
     this.cryptoHandler = new ClientCryptoHandler();
   }
 
-  public SBEEventMessage encrypt(String userId, String streamId, String messageText, SBEEventMessage repliedToMessage) throws EncryptionException {
+  public SBEEventMessage encrypt(String userId, String streamId, String messageText, SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws EncryptionException {
     try {
       String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
       KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId);
@@ -51,9 +52,9 @@ public class MessageEncryptor {
 
       String presentationML = repliedToMessage == null ? String.format("<div data-format=\"PresentationML\" data-version=\"2.0\" class=\"wysiwyg\"><p>%s</p></div>", emojiService.convertEmojisFromUtf8ToMessageML(messageText)) : null;
 
-      String customEntitiesText = repliedToMessage == null ? null : generateCustomEntitiesText(repliedToMessage);
+      String customEntitiesText = repliedToMessage == null ? null : generateCustomEntitiesText(repliedToMessage, attachments);
 
-      return generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationML, customEntitiesText, repliedToMessage);
+      return generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationML, customEntitiesText, repliedToMessage, attachments);
 
     } catch (UnknownDatafeedUserException | IOException e) {
       throw new EncryptionException(e);
@@ -64,7 +65,8 @@ public class MessageEncryptor {
   public SBEEventMessage generateSBEEventMessage(KeyIdentifier keyId, byte[] contentKey,
                                                  String userId, String threadId, String text,
                                                  String presentationML, String customEntitiesText,
-                                                 SBEEventMessage repliedToMessage) throws JsonProcessingException, EncryptionException {
+                                                 SBEEventMessage repliedToMessage,
+                                                 List<SBEMessageAttachment> attachments) throws JsonProcessingException, EncryptionException {
     return SBEEventMessage.builder()
       .threadId(threadId)
       .parentMessageId(repliedToMessage != null ? repliedToMessage.getMessageId() : null)
@@ -76,7 +78,7 @@ public class MessageEncryptor {
       .entityJSON(encrypt(contentKey, keyId, "{}"))
       .customEntities(customEntitiesText == null ? null : encrypt(contentKey, keyId, customEntitiesText))
       .entities(objectMapper.readValue("{}", Object.class))
-      .attachments(Collections.emptyList())
+      .attachments(attachments)
       .msgFeatures(repliedToMessage == null ? 7 : 3)
       .version(SBEEventMessage.Versions.SOCIALMESSAGE.toString())
       .format(repliedToMessage == null ? "com.symphony.messageml.v2" : "com.symphony.markdown")
@@ -100,20 +102,20 @@ public class MessageEncryptor {
     }
   }
 
-  private String generateCustomEntitiesText(SBEEventMessage repliedToMessage) throws IOException {
+  private String generateCustomEntitiesText(SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws IOException {
     String prefix = generatePrefix(repliedToMessage);
     CustomEntity customEntity = new CustomEntity();
     customEntity.setType(CustomEntity.QUOTE_TYPE);
     customEntity.setBeginIndex(0);
     customEntity.setEndIndex(prefix.length());
     customEntity.setVersion("0.0.1");
-    MessageEntityData customEntityData = getQuotingEntityData(repliedToMessage);
+    MessageEntityData customEntityData = getQuotingEntityData(repliedToMessage, attachments);
     customEntity.setData(objectMapper.convertValue(customEntityData, Map.class));
 
     return objectMapper.writeValueAsString(Collections.singletonList(customEntity));
   }
 
-  private MessageEntityData getQuotingEntityData(SBEEventMessage repliedToMessage) throws IOException {
+  private MessageEntityData getQuotingEntityData(SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws IOException {
     return MessageEntityData.builder()
       .id(repliedToMessage.getMessageId())
       .streamId(repliedToMessage.getStreamId())
@@ -121,10 +123,10 @@ public class MessageEncryptor {
       .text(getPureText(repliedToMessage))
       .ingestionDate(repliedToMessage.getIngestionDate())
       .metadata(generateRepliedMessageMetaData(repliedToMessage))
-      .attachments(Collections.emptyList())
-      .entities(repliedToMessage.getEncryptedEntities() != null ? objectMapper.readTree(repliedToMessage.getEncryptedEntities()) : objectMapper.createObjectNode())
+      .attachments(attachments)
+      .entities(objectMapper.readTree(Optional.ofNullable(repliedToMessage.getEncryptedEntities()).orElse("{ \"hashtags\": [], \"userMentions\": [], \"urls\": [] }")))
       .customEntities(Collections.emptyList())
-      .entityJSON(repliedToMessage.getEntityJSON() != null ? objectMapper.readTree(repliedToMessage.getEntityJSON()) : objectMapper.createObjectNode())
+      .entityJSON(objectMapper.readTree(Optional.ofNullable(repliedToMessage.getEntityJSON()).orElse("{}")))
       .build();
   }
 

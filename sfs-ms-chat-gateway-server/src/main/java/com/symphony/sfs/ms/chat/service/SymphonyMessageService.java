@@ -72,6 +72,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
@@ -478,7 +479,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId) {
+  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
@@ -503,7 +504,7 @@ public class SymphonyMessageService implements DatafeedListener {
         messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
         int maxTextLength = empConfig.getMaxTextLength().getOrDefault(federatedAccount.getEmp(), MAX_TEXT_LENGTH);
         boolean textTooLong = (text.length() > maxTextLength);
-        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, textTooLong, maxTextLength)
+        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, textTooLong, maxTextLength, attachmentReplySupported, attachmentMessageIds)
           .orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
         if (textTooLong) {
@@ -572,7 +573,8 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
 
-  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean truncate, int maxTextLength) {
+  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId,
+                                                            boolean truncate, int maxTextLength, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     // TODO: remove this parameter for all call using it
     String toSymphonyUserId = null;
     LOG.info("incoming message");
@@ -584,7 +586,7 @@ public class SymphonyMessageService implements DatafeedListener {
     String messageML = "<messageML>" + text + "</messageML>";
     if (parentMessageId != null) {
       // we need pure text in case of relied message
-      return symphonyMessageSender.sendReplyMessage(streamId, fromSymphonyUserId, text, parentMessageId);
+      return symphonyMessageSender.sendReplyMessage(streamId, fromSymphonyUserId, text, parentMessageId, attachmentReplySupported, attachmentMessageIds);
     } else if (attachments != null && attachments.size() > 0) {
       return symphonyMessageSender.sendRawMessageWithAttachments(streamId, fromSymphonyUserId, messageML, toSymphonyUserId, attachments);
     } else {
