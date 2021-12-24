@@ -187,7 +187,7 @@ class MessageServiceTest implements I18nTest {
 
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
     // really instantiate SymphonyMessageSender to test Handlebars templates.
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService,  templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService,  templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource));
     messageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
   }
   @Test
@@ -601,8 +601,7 @@ class MessageServiceTest implements I18nTest {
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
     when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of("msgId"));
-
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null, false, Optional.empty());
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, false, null, false, Optional.empty());
     verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, "<messageML>text</messageML>", null);
   }
 
@@ -619,8 +618,7 @@ class MessageServiceTest implements I18nTest {
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
     when(symphonyMessageSender.sendReplyMessage(anyString(), anyString(), anyString(), anyString(), any(Boolean.class), any(Optional.class))).thenReturn(Optional.of("msgId"));
-
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, "parent_message_id", false, Optional.empty());
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, false, "parent_message_id", false, Optional.empty());
     verify(symphonyMessageSender, once()).sendReplyMessage("streamId", FROM_SYMPHONY_USER_ID, "text", "parent_message_id", false, Optional.empty());
   }
 
@@ -640,8 +638,7 @@ class MessageServiceTest implements I18nTest {
     UserInfo userInfo = new UserInfo();
     userInfo.setDisplayName("display name");
     when(usersInfoService.getUsersFromIds(eq("podUrl"), any(SessionSupplier.class), eq(Collections.singletonList(TO_SYMPHONY_USER_ID)))).thenReturn(Collections.singletonList(userInfo));
-
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null, false, Optional.empty());
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, false, null, false, Optional.empty());
     verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
   }
 
@@ -659,8 +656,7 @@ class MessageServiceTest implements I18nTest {
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
     botSession = new SymphonySession();
     when(usersInfoService.getUsersFromIds("podUrl", new StaticSessionSupplier<>(botSession), Collections.singletonList(TO_SYMPHONY_USER_ID))).thenReturn(Collections.emptyList());
-
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null, false, Optional.empty());
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, false, null, false, Optional.empty());
     verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
   }
 
@@ -680,8 +676,7 @@ class MessageServiceTest implements I18nTest {
     when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of("msgId"));
     when(empClient.sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), anyString(), eq(TypeEnum.INFO))).thenReturn(Optional.of("leaseId"));
     when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
-
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null, null, false, Optional.empty());
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null, false, null, false, Optional.empty());
     String expectedTruncatedMsgML = "<messageML>" + tooLongMsg.substring(0, 1000) + "</messageML>";
     String warningMessage = "The message was too long and was truncated. Only the first 1,000 characters were delivered";
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", warningMessage, Collections.emptyList());
@@ -701,9 +696,7 @@ class MessageServiceTest implements I18nTest {
     StreamAttributes streamAttributes = StreamAttributes.builder().members(Collections.emptyList()).build();
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
-
-    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, null, false, Optional.empty());
-
+    messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, false, null, false, Optional.empty());
     verify(empClient).sendSystemMessage(eq("emp"), eq("streamId"), eq(FROM_SYMPHONY_USER_ID), any(), eq("Sorry, this conversation is no longer available."), eq(TypeEnum.ALERT));
   }
 

@@ -20,6 +20,9 @@ send-message-request:
     appendTags:
       type: boolean
       default: false
+    forwarded:
+      type: boolean
+      default: false
     attachments:
       type: array
       items:

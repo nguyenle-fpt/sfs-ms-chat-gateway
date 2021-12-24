@@ -36,13 +36,15 @@ public class MessageEncryptor {
   private final ContentKeyManager contentKeyManager;
   private final EmojiService emojiService = new EmojiService();
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private static final String FORWARDED_HEADER = "\n\n**Forwarded Message:**\n";
 
   public MessageEncryptor(ContentKeyManager contentKeyManager) {
     this.contentKeyManager = contentKeyManager;
     this.cryptoHandler = new ClientCryptoHandler();
   }
 
-  public SBEEventMessage encrypt(String userId, String streamId, String messageText, SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws EncryptionException {
+
+  public SBEEventMessage buildReplyMessage(String userId, String streamId, String messageText, SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws EncryptionException {
     try {
       String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
       KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId);
@@ -52,7 +54,7 @@ public class MessageEncryptor {
 
       String presentationML = repliedToMessage == null ? String.format("<div data-format=\"PresentationML\" data-version=\"2.0\" class=\"wysiwyg\"><p>%s</p></div>", emojiService.convertEmojisFromUtf8ToMessageML(messageText)) : null;
 
-      String customEntitiesText = repliedToMessage == null ? null : generateCustomEntitiesText(repliedToMessage, attachments);
+      String customEntitiesText = repliedToMessage == null ? null : generateReplyCustomEntities(repliedToMessage, attachments);
 
       return generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationML, customEntitiesText, repliedToMessage, attachments);
 
@@ -60,6 +62,33 @@ public class MessageEncryptor {
       throw new EncryptionException(e);
     }
   }
+
+  public SBEEventMessage buildForwardedMessage(String userId, String streamId, String messageText, String forwardedPrefix) throws EncryptionException {
+    try {
+      String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
+      KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId);
+      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(threadId), userId, keyId.getRotationId());
+      String convertedMessageText = emojiService.convertEmojisFromUtf8ToMarkdown(messageText);
+      String text = FORWARDED_HEADER + forwardedPrefix + convertedMessageText;
+
+      String customEntitiesText = generateForwardedCustomEntities(forwardedPrefix, convertedMessageText);
+
+
+      SBEEventMessage sbeEventMessage = generateSBEEventMessage(keyId, contentKey, userId, threadId, text, null, customEntitiesText, null, Collections.emptyList());
+      sbeEventMessage.setFormat("com.symphony.markdown");
+      sbeEventMessage.setChatType("CHATROOM");
+      sbeEventMessage.setMsgFeatures(7);
+
+
+
+      return sbeEventMessage;
+
+    } catch (UnknownDatafeedUserException | IOException e) {
+      throw new EncryptionException(e);
+    }
+  }
+
+
 
 
   public SBEEventMessage generateSBEEventMessage(KeyIdentifier keyId, byte[] contentKey,
@@ -102,7 +131,8 @@ public class MessageEncryptor {
     }
   }
 
-  private String generateCustomEntitiesText(SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws IOException {
+
+  private String generateReplyCustomEntities(SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws IOException {
     String prefix = generatePrefix(repliedToMessage);
     CustomEntity customEntity = new CustomEntity();
     customEntity.setType(CustomEntity.QUOTE_TYPE);
@@ -113,6 +143,25 @@ public class MessageEncryptor {
     customEntity.setData(objectMapper.convertValue(customEntityData, Map.class));
 
     return objectMapper.writeValueAsString(Collections.singletonList(customEntity));
+  }
+  private String generateForwardedCustomEntities(String forwardedPrefix, String text) throws IOException {
+    CustomEntity customEntity = new CustomEntity();
+    customEntity.setType(CustomEntity.FORWARDED_TYPE);
+    customEntity.setBeginIndex(0);
+    customEntity.setEndIndex(text.length() + forwardedPrefix.length() + FORWARDED_HEADER.length());
+    customEntity.setVersion("0.0.1");
+
+    MessageEntityData customEntityData = buildForwardedMessageEntityData(forwardedPrefix, text);
+    customEntity.setData(objectMapper.convertValue(customEntityData, Map.class));
+
+    return objectMapper.writeValueAsString(Collections.singletonList(customEntity));
+  }
+
+  private MessageEntityData buildForwardedMessageEntityData(String forwardedPrefix, String text) {
+    return MessageEntityData.builder()
+      .text(text)
+      .metadata(forwardedPrefix)
+      .build();
   }
 
   private MessageEntityData getQuotingEntityData(SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws IOException {

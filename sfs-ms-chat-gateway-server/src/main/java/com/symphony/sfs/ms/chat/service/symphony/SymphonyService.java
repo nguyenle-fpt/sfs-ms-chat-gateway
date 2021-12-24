@@ -35,6 +35,7 @@ public class SymphonyService {
   public static final String GETMESSAGEENCRYPTED = "/webcontroller/dataquery/retrieveMessagePayload?{messageId}";
   public static final String GETATTACHMENT = "/agent/v1/stream/{streamId}/attachment?messageId={messageId}&fileId={fileId}";
   public static final String REPLYTOMESSAGE = "/webcontroller/ingestor/MessageService/reply?replyMessage=true";
+  public static final String BULKMESSAGE = "/webcontroller/ingestor/MessageService/bulk";
 
 
 
@@ -98,5 +99,24 @@ public class SymphonyService {
     JsonNode messageNode = jsonNode.get(firstNode).get("message");
     return objectMapper.treeToValue(messageNode, SBEEventMessage.class);
   }
+  public SBEEventMessage sendBulkMessage(SBEEventMessage message, SessionSupplier<SymphonySession> session) throws JsonProcessingException {
+    ObjectMapper objectMapper = new ObjectMapper();
+    objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
+    String payload = objectMapper.writeValueAsString(Collections.singletonList(message));
+    Object response = sessionManager.getWebClient(session).post()
+      .uri(podConfiguration.getUrl() + BULKMESSAGE)
+      .contentType(MediaType.APPLICATION_JSON)
+      .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE, MediaType.APPLICATION_JSON_VALUE)
+      .body(BodyInserters.fromFormData("messages", payload))
+      .attribute(BASE_URI, podConfiguration.getUrl())
+      .attribute(BASE_PATH, BULKMESSAGE)
+      .retrieve().bodyToMono(Object.class)
+      .block();
+
+    JsonNode jsonNode = objectMapper.valueToTree(response);
+    String firstNode = jsonNode.fieldNames().next();
+    JsonNode messageNode = jsonNode.get(firstNode).get("message");
+    return objectMapper.treeToValue(messageNode, SBEEventMessage.class);
+  }
 }

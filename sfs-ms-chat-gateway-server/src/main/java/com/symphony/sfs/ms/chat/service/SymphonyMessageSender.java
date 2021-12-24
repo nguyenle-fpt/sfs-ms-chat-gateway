@@ -24,6 +24,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -69,6 +71,9 @@ public class SymphonyMessageSender {
   private final MessageEncryptor messageEncryptor;
   private final MessageDecryptor messageDecryptor;
   private final SymphonyService symphonyService;
+  private final EmpSchemaService empSchemaService;
+  private final MessageSource messageSource;
+
 
   public Optional<String> sendRawMessage(SessionSupplier<SymphonySession> session, String streamId, String messageContent) {
     LOG.debug("Send message to symphony");
@@ -147,6 +152,32 @@ public class SymphonyMessageSender {
     return response.map(SymphonyInboundMessage::getMessageId);
   }
 
+
+  public Optional<String> sendForwardedMessage(String streamId, String fromSymphonyUserId, String messageContent) {
+    FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
+      LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
+      messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
+      return new SendMessageFailedProblem();
+    });
+
+    messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
+
+    SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplier(federatedAccount);
+
+    try {
+
+      String messageHeader = messageSource.getMessage("forwarded.message.header", new Object[] {empSchemaService.getEmpDisplayName(federatedAccount.getEmp())}, Locale.getDefault());
+      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildForwardedMessage(fromSymphonyUserId, streamId, messageContent, messageHeader);
+      SBEEventMessage sentMessage = symphonyService.sendBulkMessage(sbeMessageToBeSent, userSession);
+      return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
+    } catch (IOException e) {
+      LOG.error("Unable to send relied message from WhatsApp: stream={} initiator={}", streamId, fromSymphonyUserId, e);
+      messageMetrics.onMessageBlockToSymphony(ENCRYPTION_FAILED, streamId);
+    }
+    return Optional.empty();
+  }
+
+
   public Optional<String> sendReplyMessage(String streamId, String fromSymphonyUserId, String messageContent, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
@@ -166,6 +197,7 @@ public class SymphonyMessageSender {
         throw new InlineReplyMessageException();
       }
 
+
       List<SBEMessageAttachment> attachmentsFromMessageIds = attachmentMessageIds.orElse(Collections.emptyList())
         .stream().flatMap(id -> {
         try {
@@ -183,7 +215,7 @@ public class SymphonyMessageSender {
         .flatMap(List::stream)
         .collect(Collectors.toList());
 
-      SBEEventMessage sbeMessageToBeSent = messageEncryptor.encrypt(fromSymphonyUserId, streamId, messageContent, replyToMessage, allAttachments);
+      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildReplyMessage(fromSymphonyUserId, streamId, messageContent, replyToMessage, allAttachments);
       SBEEventMessage sentMessage = symphonyService.sendReplyMessage(sbeMessageToBeSent, userSession);
       return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
     } catch (IOException e) {

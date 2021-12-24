@@ -155,6 +155,17 @@ class MessagingApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void sendMessage_forwarded() {
+    SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null);
+    sendMessageRequest.setForwarded(true);
+    when(symphonyMessageSender.sendForwardedMessage("streamId", "fromSymphonyUserId", "text")).thenReturn(Optional.of("symphonyMessageId"));
+    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
+    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    assertEquals(expectedResponse, sendMessageResponse);
+
+  }
+
+  @Test
   void sendMessageToRoom_noAttachments_noFormatting() {
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text");
     when(symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null)).thenReturn(Optional.of("symphonyMessageId"));

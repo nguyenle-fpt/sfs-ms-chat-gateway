@@ -24,6 +24,7 @@ import java.util.Map;
 public class CustomEntity {
 
   public static final String QUOTE_TYPE = "com.symphony.sharing.quote";
+  public static final String FORWARDED_TYPE = "com.symphony.sharing.message";
 
   private String type;
   private Integer beginIndex;
