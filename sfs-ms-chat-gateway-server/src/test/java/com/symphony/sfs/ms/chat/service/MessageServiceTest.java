@@ -677,7 +677,7 @@ class MessageServiceTest implements I18nTest {
     when(empClient.sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), anyString(), eq(TypeEnum.INFO))).thenReturn(Optional.of("leaseId"));
     when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null, false, null, false, Optional.empty());
-    String expectedTruncatedMsgML = "<messageML>" + tooLongMsg.substring(0, 1000) + "</messageML>";
+    String expectedTruncatedMsgML = "<messageML>" + tooLongMsg.substring(0, 1000) + "...</messageML>";
     String warningMessage = "The message was too long and was truncated. Only the first 1,000 characters were delivered";
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", warningMessage, Collections.emptyList());
     verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, expectedTruncatedMsgML, null);

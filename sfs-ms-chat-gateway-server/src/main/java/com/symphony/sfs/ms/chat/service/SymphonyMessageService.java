@@ -72,7 +72,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
@@ -581,7 +580,7 @@ public class SymphonyMessageService implements DatafeedListener {
     if (StringUtils.isEmpty(text)) {
       text = " "; // this is the minimum message for symphony
     } else if (truncate) {
-      text = text.substring(0, maxTextLength);
+      text = text.substring(0, maxTextLength) + "...";
     }
     String messageML = "<messageML>" + text + "</messageML>";
     if(forwarded) {
