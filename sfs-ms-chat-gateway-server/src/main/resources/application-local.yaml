@@ -7,8 +7,8 @@ aws:
   paramstore:
     enabled: false
   sqs:
-#    endpoint: https://sqs.us-east-1.amazonaws.com
-#    ingestion: sfs-dev-federation-events
+    # endpoint: https://sqs.us-east-1.amazonaws.com
+    # ingestion: sfs-dev-federation-events
     signinRegion: us-east-1
 
 tds:
@@ -33,7 +33,7 @@ agent:
   url: https://ces3-dev.symphony.com
 
 microservices:
-  WHATSAPP: 'http://localhost:9601'
+  WHATSAPP: 'https://localhost:9601'
 
 microservice:
   chat:
