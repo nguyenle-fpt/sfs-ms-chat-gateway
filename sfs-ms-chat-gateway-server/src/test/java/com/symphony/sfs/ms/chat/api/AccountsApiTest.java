@@ -149,8 +149,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
       SymphonyUserAttributes userAttributes = args.getUserAttributes();
       return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
-        userAttributes.getUserName().equals("WHATSAPP_+33601020304") &&
-        userAttributes.getEmailAddress().equals("WHATSAPP_+33601020304@symphony.com"));
+        userAttributes.getUserName().equals("WHATSAPP.33601020304") &&
+        userAttributes.getEmailAddress().equals("WHATSAPP.33601020304@symphony.com"));
     }));
 
     assertEquals(new CreateAccountResponse()
@@ -176,7 +176,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
   @Test
   public void createAccount_DES_environment() {
 
-    podConfiguration.setUsernameSuffix("_des");
+    podConfiguration.setUsernameSuffix(".des");
 
     SymphonySession botSession = getSession(botConfiguration.getUsername());
 
@@ -212,8 +212,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
       SymphonyUserAttributes userAttributes = args.getUserAttributes();
       return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
-        userAttributes.getUserName().equals("WHATSAPP_+33601020304_des") &&
-        userAttributes.getEmailAddress().equals("WHATSAPP_+33601020304_des@symphony.com"));
+        userAttributes.getUserName().equals("WHATSAPP.33601020304.des") &&
+        userAttributes.getEmailAddress().equals("WHATSAPP.33601020304.des@symphony.com"));
     }));
 
     assertEquals(new CreateAccountResponse()

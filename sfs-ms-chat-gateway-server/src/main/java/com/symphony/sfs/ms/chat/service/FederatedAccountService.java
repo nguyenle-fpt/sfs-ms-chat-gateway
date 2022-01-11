@@ -193,15 +193,16 @@ public class FederatedAccountService {
   }
 
   /**
-   * Returns a username with pattern: {emp}_{phoneNumber}
+   * Returns a username with pattern: {emp}.{phoneNumber}
+   * {phoneNumber} doesn't contain the '+' sign
    * a suffix is added for avoid conflicts with DES environment
    */
   private String userName(String emp, String phoneNumber) {
-    return emp.toUpperCase() + '_' + formatPhoneNumber(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164) + ((StringUtils.isNotBlank(podConfiguration.getUsernameSuffix()))? podConfiguration.getUsernameSuffix() : "");
+    return emp.toUpperCase() + '.' + formatPhoneNumber(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164).replace("+", "") + ((StringUtils.isNotBlank(podConfiguration.getUsernameSuffix()))? podConfiguration.getUsernameSuffix() : "");
   }
 
   /**
-   * Returns an email address with pattern: {emp}_{phoneNumber}@symphony.com
+   * Returns an email address with pattern: {emp}.{phoneNumber}@symphony.com
    */
   private String emailAddress(String emp, String phoneNumber, SessionSupplier<SymphonySession> session) {
 
