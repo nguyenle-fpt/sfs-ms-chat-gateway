@@ -197,8 +197,11 @@ public class MessageEncryptor {
     if (!org.springframework.util.StringUtils.isEmpty(repliedToMessage.getCustomEntities())) {
       List<CustomEntity> customEntities = objectMapper.readValue(repliedToMessage.getCustomEntities(), objectMapper.getTypeFactory().constructCollectionType(List.class, CustomEntity.class));
       Optional<CustomEntity> replyEntity = customEntities.stream().filter(c -> c.getType().equals(CustomEntity.QUOTE_TYPE)).findFirst();
+      Optional<CustomEntity> forwardEntity = customEntities.stream().filter(c -> c.getType().equals(CustomEntity.FORWARDED_TYPE)).findFirst();
       if (replyEntity.isPresent()) {
         return text.substring(replyEntity.get().getEndIndex());
+      } else if (forwardEntity.isPresent() && forwardEntity.get().getBeginIndex() > 0) {
+        return text.substring(0, forwardEntity.get().getBeginIndex() - 1);
       }
     }
     return text;

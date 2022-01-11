@@ -149,6 +149,37 @@ public class MessageEncryptorTest {
   }
 
   @Test
+  public void encrypt_shouldPutEncryptedInfoIntoMessage_replyToForwardedMessage() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+    KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    doAnswer((Answer<String>) invocation -> {
+      String content = invocation.getArgument(2);
+      return String.format("encrypted**%s**", content);
+    }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
+
+    String customEntities = "[\n" +
+      "  {\n" +
+      "    \"type\": \"com.symphony.sharing.message\",\n" +
+      "    \"beginIndex\": 17,\n" +
+      "    \"endIndex\": 140,\n" +
+      "    \"data\": {}\n" +
+      "  }\n" +
+      "]";
+    SBEEventMessage repliedMessage = parentMessage.toBuilder().text("New message text↵↵↵**Forwarded Message:**↵Posted by van in a private room, 11:13:24 am 11 Jan 2022:↵This is message used for forwarding test").customEntities(customEntities).build();
+    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "Test reply to forwarded message", repliedMessage, Collections.emptyList());
+
+    assertEquals(encryptedMessage.getText(), "encrypted****In reply to:**\n" +
+      "**User 1 13/10/21 @ 09:42**\n" +
+      "_New message text_\n" +
+      "———————————\n" +
+      "Test reply to forwarded message**");
+
+    verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_New message text_\n———————————\nTest reply to forwarded message"), eq(null), anyString(), eq(repliedMessage), eq(Collections.emptyList()));
+
+  }
+
+  @Test
   public void buildForwardedMessage_shouldThrowEncryptionException() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException {
     when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
     assertThrows( EncryptionException.class,
