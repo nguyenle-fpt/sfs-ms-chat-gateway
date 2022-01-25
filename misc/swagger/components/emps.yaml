@@ -1,0 +1,4 @@
+file-extension-list:
+  type: array
+  items:
+    type: string

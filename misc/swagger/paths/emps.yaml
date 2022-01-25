@@ -11,3 +11,20 @@ internal-reload-emps:
     responses:
       '204':
         description: Reloaded properly
+allowed-file-extensions:
+  get:
+    tags:
+      - EMP
+    summary: get allowed file extensions for all EMPs
+    operationId: getAllowedFileExtensions
+    description: >
+      => get allowed file extensions for all EMPs
+    security:
+      - sfsAuthentication: []
+    responses:
+      '200':
+        description: emp file extensions retrieved succesfully
+        content:
+          application/json:
+            schema:
+              $ref: '../components/emps.yaml#/file-extension-list'

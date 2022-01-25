@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.symphony.sfs.ms.chat.datafeed.FileExtensionsResponse;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.ISessionManager;
@@ -18,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.BodyInserters;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.starter.logging.WebRequestLoggingFilter.BASE_PATH;
 import static com.symphony.sfs.ms.starter.logging.WebRequestLoggingFilter.BASE_URI;
@@ -36,6 +39,7 @@ public class SymphonyService {
   public static final String GETATTACHMENT = "/agent/v1/stream/{streamId}/attachment?messageId={messageId}&fileId={fileId}";
   public static final String REPLYTOMESSAGE = "/webcontroller/ingestor/MessageService/reply?replyMessage=true";
   public static final String BULKMESSAGE = "/webcontroller/ingestor/MessageService/bulk";
+  public static final String ALLOWED_FILE_EXTENSIONS = "/pod/file_ext/v1/allowed_extensions";
 
 
 
@@ -118,5 +122,25 @@ public class SymphonyService {
     String firstNode = jsonNode.fieldNames().next();
     JsonNode messageNode = jsonNode.get(firstNode).get("message");
     return objectMapper.treeToValue(messageNode, SBEEventMessage.class);
+  }
+
+  public List<String> getAllowedFileTypes(SessionSupplier<SymphonySession> session) {
+    // Please note that this API support pagination as parameters
+    // but in reality in SBE is not implemented. If in the future pagination
+    // will be implemented, some modifications will be needed to ensure to retrieve
+    // all results
+    FileExtensionsResponse response = sessionManager.getWebClient(session)
+      .get()
+      .uri(podConfiguration.getUrl() + ALLOWED_FILE_EXTENSIONS)
+      .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .attribute(BASE_URI, podConfiguration.getUrl())
+      .attribute(BASE_PATH, ALLOWED_FILE_EXTENSIONS)
+      .retrieve()
+      .bodyToMono(FileExtensionsResponse.class)
+      .block();
+    return response.getData().stream()
+      .filter(FileExtensionsResponse.FileExtension::getScopeExternal)
+      .map(FileExtensionsResponse.FileExtension::getExtension)
+      .collect(Collectors.toList());
   }
 }

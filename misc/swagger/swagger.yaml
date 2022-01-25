@@ -45,6 +45,8 @@ paths:
     $ref: './paths/room.yaml#/send-room-members-list'
   /api/v1/internal/connection-requests/{symphonyId}:
     $ref: './paths/connection-requests.yaml#/connection-requests'
+  /api/v1/internal/emp/allowed-file-extensions:
+    $ref: './paths/emps.yaml#/allowed-file-extensions'
 
   /model:
     $ref: './paths/utils.yaml#/model'
