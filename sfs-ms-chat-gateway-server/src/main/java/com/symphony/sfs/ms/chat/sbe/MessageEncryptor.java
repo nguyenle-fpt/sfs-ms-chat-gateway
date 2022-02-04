@@ -10,7 +10,6 @@ import com.symphony.security.exceptions.SymphonyInputException;
 import com.symphony.security.helper.ClientCryptoHandler;
 import com.symphony.security.helper.IClientCryptoHandler;
 import com.symphony.security.helper.KeyIdentifier;
-import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
 import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.MessageEntityData;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
@@ -19,6 +18,8 @@ import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.starter.emojis.EmojiService;
+import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.codec.binary.Base64;
@@ -44,11 +45,11 @@ public class MessageEncryptor {
   }
 
 
-  public SBEEventMessage buildReplyMessage(String userId, String streamId, String messageText, SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws EncryptionException {
+  public SBEEventMessage buildReplyMessage(String userId, String userName, String streamId, String messageText, SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws EncryptionException {
     try {
       String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
-      KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId);
-      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(threadId), userId, keyId.getRotationId());
+      KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId, userName);
+      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(threadId), userId, userName, keyId.getRotationId());
 
       String text = emojiService.convertEmojisFromUtf8ToMarkdown(repliedToMessage == null ? messageText : generateRepliedMessageText(messageText, repliedToMessage));
 
@@ -58,16 +59,16 @@ public class MessageEncryptor {
 
       return generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationML, customEntitiesText, repliedToMessage, attachments);
 
-    } catch (UnknownDatafeedUserException | IOException e) {
+    } catch (IOException | UnknownUserException e) {
       throw new EncryptionException(e);
     }
   }
 
-  public SBEEventMessage buildForwardedMessage(String userId, String streamId, String messageText, String forwardedPrefix) throws EncryptionException {
+  public SBEEventMessage buildForwardedMessage(String userId, String userName, String streamId, String messageText, String forwardedPrefix) throws EncryptionException {
     try {
       String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
-      KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId);
-      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(threadId), userId, keyId.getRotationId());
+      KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId, userName);
+      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(threadId), userId, userName, keyId.getRotationId());
       String convertedMessageText = emojiService.convertEmojisFromUtf8ToMarkdown(messageText);
       String text = FORWARDED_HEADER + forwardedPrefix + convertedMessageText;
 
@@ -83,7 +84,7 @@ public class MessageEncryptor {
 
       return sbeEventMessage;
 
-    } catch (UnknownDatafeedUserException | IOException e) {
+    } catch (IOException | UnknownUserException e) {
       throw new EncryptionException(e);
     }
   }

@@ -9,9 +9,10 @@ import com.symphony.security.clientsdk.transport.ICiphertextTransport;
 import com.symphony.security.exceptions.*;
 import com.symphony.security.helper.ClientCryptoHandler;
 import com.symphony.security.helper.IClientCryptoHandler;
-import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
-import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.ContentKeyRetrievalException;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -28,12 +29,12 @@ public class MessageDecryptor {
     this.objectMapper = objectMapper;
   }
 
-  public void decrypt(ISocialMessage socialMessage, String userId, GatewaySocialMessage gatewaySocialMessage) throws UnknownDatafeedUserException, ContentKeyRetrievalException, DecryptionException {
+  public void decrypt(ISocialMessage socialMessage, String userId, String userName, GatewaySocialMessage gatewaySocialMessage) throws DecryptionException, ContentKeyRetrievalException, UnknownUserException {
     try {
       // Get message ciphertext transport to extract rotation Id of key that was used to cipher the text.
       ICiphertextTransport msgCipherTransport = CiphertextFactory.getTransport(socialMessage.getText());
 
-      byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), userId, msgCipherTransport.getRotationId());
+      byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), userId,  userName, msgCipherTransport.getRotationId());
       if (socialMessage.getText() != null) {
         gatewaySocialMessage.setTextContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getText()));
 
@@ -53,14 +54,14 @@ public class MessageDecryptor {
     }
   }
 
-  public void decrypt(SBEEventMessage message, String userId) throws DecryptionException {
+  public void decrypt(SBEEventMessage message, String userId, String userName) throws DecryptionException {
     try {
       message.setId(message.getMessageId());
       message.setStreamId(message.getThreadId());
       // Get message ciphertext transport to extract rotation Id of key that was used to cipher the text.
       ICiphertextTransport msgCipherTransport = CiphertextFactory.getTransport(message.getText());
 
-      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(message.getThreadId()), userId, msgCipherTransport.getRotationId());
+      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(message.getThreadId()), userId, userName, msgCipherTransport.getRotationId());
       if (message.getPresentationML() != null) {
         String decryptedPresentationML = cryptoHandler.decryptMsg(contentKey, message.getPresentationML());
         message.setPresentationML(decryptedPresentationML);
@@ -96,7 +97,7 @@ public class MessageDecryptor {
         String decryptedData = cryptoHandler.decryptMsg(contentKey, message.getJsonMedia());
         message.setJsonMedia(decryptedData);
       }
-    } catch (UnknownDatafeedUserException | ContentKeyRetrievalException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException | SymphonyInputException | JsonProcessingException e) {
+    } catch (ContentKeyRetrievalException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException | SymphonyInputException | JsonProcessingException | UnknownUserException e) {
       throw new DecryptionException(e);
     }
   }

@@ -24,7 +24,6 @@ import com.symphony.oss.models.core.canon.facade.Envelope;
 import com.symphony.oss.models.core.canon.facade.IEnvelope;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.oss.models.crypto.canon.CryptoModel;
-import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
@@ -32,6 +31,8 @@ import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.ContentKeyRetrievalException;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
 import io.awspring.cloud.messaging.listener.SqsMessageDeletionPolicy;
 import io.awspring.cloud.messaging.listener.annotation.SqsListener;
 import io.micrometer.core.instrument.Counter;
@@ -39,6 +40,7 @@ import io.micrometer.core.instrument.Timer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.MDC;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
@@ -208,7 +210,7 @@ public class ForwarderQueueConsumer {
       .chatType(chatType)
       .build();
 
-    Optional<String> managedSessionId = getManagedSessionId(gatewaySocialMessage);
+    Optional<Pair<String, String>> managedSessionId = getManagedSessionId(gatewaySocialMessage);
     if (managedSessionId.isEmpty()) {
       messageIOMonitor.onMessageBlockFromSymphony(NO_GATEWAY_MANAGED_ACCOUNT, streamId);
       LOG.warn("IM message with no gateway-managed accounts | stream={} members={} initiator={}", streamId, members, fromUser.getId());
@@ -216,14 +218,14 @@ public class ForwarderQueueConsumer {
     }
 
     try {
-      messageDecryptor.decrypt(socialMessage, managedSessionId.get(), gatewaySocialMessage);
+      messageDecryptor.decrypt(socialMessage, managedSessionId.get().getLeft(), managedSessionId.get().getRight(), gatewaySocialMessage);
       //LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); //To uncomment for local execution
       datafeedListener.onIMMessage(gatewaySocialMessage);
 
       // time in milliseconds between now (the message is sent to WhatsApp) and the ingestion date
       forwarderQueueMetrics.socialMessageProcessingTime.record(Duration.ofMillis(OffsetDateTime.now().toEpochSecond() * 1000 - timestamp));
 
-    } catch (UnknownDatafeedUserException e) {
+    } catch (UnknownUserException e) {
       messageIOMonitor.onMessageBlockFromSymphony(UNMANAGED_ACCOUNT, streamId);
       LOG.debug("Unmanaged user | message={}", e.getMessage());
     } catch (ContentKeyRetrievalException | DecryptionException e) {
@@ -233,7 +235,7 @@ public class ForwarderQueueConsumer {
     }
   }
 
-  private Optional<String> getManagedSessionId(GatewaySocialMessage gatewaySocialMessage) {
+  private Optional<Pair<String, String>> getManagedSessionId(GatewaySocialMessage gatewaySocialMessage) {
     // at least one of the members must be part of the IM
     String id = gatewaySocialMessage.getFromUserId();
     SessionSupplier<SymphonySession> managedSession = datafeedSessionPool.getSessionSupplier(id);
@@ -241,11 +243,11 @@ public class ForwarderQueueConsumer {
       for(String member: gatewaySocialMessage.getMembers()) {
         managedSession = datafeedSessionPool.getSessionSupplier(member);
         if (managedSession != null) {
-          return Optional.of(member);
+          return Optional.of(Pair.of(member, managedSession.getPrincipal()));
         }
       }
     } else {
-      return Optional.of(id);
+      return Optional.of(Pair.of(id, managedSession.getPrincipal()));
     }
     return Optional.empty();
   }

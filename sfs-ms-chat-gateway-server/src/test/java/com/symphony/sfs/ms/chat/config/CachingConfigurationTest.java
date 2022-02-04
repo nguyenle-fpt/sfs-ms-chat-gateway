@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.config;
 
 import com.symphony.sfs.ms.starter.i18n.MessageSourceChain;
+import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 
@@ -16,7 +17,7 @@ class CachingConfigurationTest {
     ConcurrentMapCacheManager cacheManager = new ConcurrentMapCacheManager();
     new CachingConfiguration().customize(cacheManager);
 
-    assertEquals(new HashSet<>(Arrays.asList(CachingConfiguration.CONTENT_KEY_CACHE, MessageSourceChain.CACHE_NAME)), new HashSet<>(cacheManager.getCacheNames()));
+    assertEquals(new HashSet<>(Arrays.asList(ContentKeyManager.CONTENT_KEY_CACHE, MessageSourceChain.CACHE_NAME)), new HashSet<>(cacheManager.getCacheNames()));
   }
 
   @Test

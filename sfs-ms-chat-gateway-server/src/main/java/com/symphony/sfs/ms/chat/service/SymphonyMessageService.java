@@ -294,7 +294,7 @@ public class SymphonyMessageService implements DatafeedListener {
       SBEEventMessage inlineMessage = messageSearch.get();
       try {
         // federatedAccounts is never empty
-        messageDecryptor.decrypt(inlineMessage, federatedAccounts.get(0).getSymphonyUserId());
+        messageDecryptor.decrypt(inlineMessage, federatedAccounts.get(0).getSymphonyUserId(), federatedAccounts.get(0).getSymphonyUsername());
       } catch (DecryptionException e) {
         LOG.error("Unable to decrypt social message: stream={} members={}", streamId, id, e);
         return null;
@@ -404,7 +404,7 @@ public class SymphonyMessageService implements DatafeedListener {
       SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplierOrFail(symphonyUserId);
       for (MessageId id : messageIds) {
         SBEEventMessage sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
-        messageDecryptor.decrypt(sbeEventMessage, symphonyUserId);
+        messageDecryptor.decrypt(sbeEventMessage, symphonyUserId, userSession.getPrincipal());
 
         // TODO handle inline replies
 
@@ -427,7 +427,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
           SBEEventMessage inlineMessage = inlineMessageOptional.get();
 
-          messageDecryptor.decrypt(inlineMessage, symphonyUserId);
+          messageDecryptor.decrypt(inlineMessage, symphonyUserId, userSession.getPrincipal());
           MessageInfo inlineMessageInfo = buildMessageInfo(inlineMessage);
           Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
 

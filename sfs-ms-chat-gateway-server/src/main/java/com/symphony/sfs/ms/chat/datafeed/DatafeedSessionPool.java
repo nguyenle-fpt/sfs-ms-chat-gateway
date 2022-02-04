@@ -8,6 +8,8 @@ import com.symphony.sfs.ms.starter.security.ISessionManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.crypto.CachingSessionRetriever;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.stereotype.Service;
@@ -15,7 +17,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class DatafeedSessionPool {
+public class DatafeedSessionPool implements CachingSessionRetriever {
 
   private final ChatConfiguration chatConfiguration;
   private final FederatedAccountSessionService federatedAccountSessionService;
@@ -23,10 +25,18 @@ public class DatafeedSessionPool {
   private final ISessionManager sessionManager;
 
 
+  @Override
+  public SymphonySession getSession(String userName) {
+    SymphonySession symphonySession = sessionManager.getSession(userName);
+    if (symphonySession != null) {
+      return symphonySession;
+    }
+    return sessionManager.openSession(getSessionSupplierForUser(userName));
+  }
 
   @NewSpan
-  public SymphonySession openSession(String symphonyId) throws UnknownDatafeedUserException {
-    FederatedAccount account = federatedAccountSessionService.findBySymphonyIdOrFail(symphonyId);
+  public SymphonySession openSession(String symphonyId) throws UnknownUserException {
+    FederatedAccount account = federatedAccountSessionService.findBySymphonyId(symphonyId).orElseThrow(() -> new UnknownUserException(symphonyId));
     return openSession(account);
   }
 
@@ -34,9 +44,6 @@ public class DatafeedSessionPool {
   public SymphonySession openSession(FederatedAccount account) {
     return sessionManager.openSession(getSessionSupplier(account));
 
-  }
-  public SymphonySession getSession(String symphonyId) throws UnknownDatafeedUserException {
-    return sessionManager.openSession(getSessionSupplierOrFail(symphonyId));
   }
 
   @NewSpan
@@ -54,7 +61,10 @@ public class DatafeedSessionPool {
   }
 
   public SessionSupplier<SymphonySession> getSessionSupplier(FederatedAccount account) {
-    return symphonyAuthFactory.getRsaAuth(account.getSymphonyUsername(), chatConfiguration.getSharedPrivateKey().getData());
+    return getSessionSupplierForUser(account.getSymphonyUsername());
+  }
+  public SessionSupplier<SymphonySession> getSessionSupplierForUser(String userName) {
+    return symphonyAuthFactory.getRsaAuth(userName, chatConfiguration.getSharedPrivateKey().getData());
   }
 
   public SessionSupplier<SymphonySession> getBotSessionSupplier() {

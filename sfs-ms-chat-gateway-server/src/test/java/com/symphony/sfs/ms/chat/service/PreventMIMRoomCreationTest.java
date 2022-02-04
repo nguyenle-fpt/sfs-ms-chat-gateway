@@ -247,7 +247,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       whatsAppUser,
       sender
     )));
-    doNothing().when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
+    doNothing().when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any(), any());
     forwarderQueueConsumer.consume(notification, "1");
 
     verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not permitted to send messages to WHATSAPP users."), eq(Collections.emptyList()));
@@ -280,10 +280,10 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     )));
 
     doAnswer(answer -> {
-      GatewaySocialMessage message = answer.getArgument(2);
+      GatewaySocialMessage message = answer.getArgument(3);
       message.setTextContent("message decrypted");
       return answer;
-    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
+    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any(), any());
     when(adminClient.canChat("1", "federatedUserId", "WHATSAPP")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SessionSupplier.class))).thenAnswer(ans -> ans.getArgument(2));
@@ -332,10 +332,10 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     )));
     // this method is annoying to mock
     doAnswer(answer -> {
-      GatewaySocialMessage message = answer.getArgument(2);
+      GatewaySocialMessage message = answer.getArgument(3);
       message.setTextContent("message decrypted");
       return answer;
-    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
+    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any(), any());
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SessionSupplier.class))).thenAnswer(ans -> ans.getArgument(2));
     long messageNumber = empClient.getMessages().size();
@@ -383,10 +383,10 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     )));
     // this method is annoying to mock
     doAnswer(answer -> {
-      GatewaySocialMessage message = answer.getArgument(2);
+      GatewaySocialMessage message = answer.getArgument(3);
       message.setTextContent("message decrypted");
       return answer;
-    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any());
+    }).when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any(), any());
     when(authenticationService.getUserInfo(podConfiguration.getUrl(), new StaticSessionSupplier<>(session), true)).thenReturn(Optional.of(receipter));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any(SessionSupplier.class))).thenAnswer(ans -> ans.getArgument(2));
     long messageNumber = empClient.getMessages().size();

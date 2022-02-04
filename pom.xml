@@ -47,6 +47,11 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.symphony</groupId>
+      <artifactId>crypto</artifactId>
+      <version>1.64.24</version>
+    </dependency>
   </dependencies>
 
 </project>

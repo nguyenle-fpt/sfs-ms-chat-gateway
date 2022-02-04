@@ -167,7 +167,7 @@ public class SymphonyMessageSender {
     try {
 
       String messageHeader = messageSource.getMessage("forwarded.message.header", new Object[] {empSchemaService.getEmpDisplayName(federatedAccount.getEmp())}, Locale.getDefault());
-      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildForwardedMessage(fromSymphonyUserId, streamId, messageContent, messageHeader);
+      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildForwardedMessage(fromSymphonyUserId, federatedAccount.getSymphonyUsername(), streamId, messageContent, messageHeader);
       SBEEventMessage sentMessage = symphonyService.sendBulkMessage(sbeMessageToBeSent, userSession);
       return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
     } catch (IOException e) {
@@ -215,7 +215,7 @@ public class SymphonyMessageSender {
         .flatMap(List::stream)
         .collect(Collectors.toList());
 
-      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildReplyMessage(fromSymphonyUserId, streamId, messageContent, replyToMessage, allAttachments);
+      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildReplyMessage(fromSymphonyUserId, federatedAccount.getSymphonyUsername(), streamId, messageContent, replyToMessage, allAttachments);
       SBEEventMessage sentMessage = symphonyService.sendReplyMessage(sbeMessageToBeSent, userSession);
       return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
     } catch (IOException e) {
@@ -236,7 +236,7 @@ public class SymphonyMessageSender {
       // In this  case, the whatsapp service account could not retrieve historic message, only the whatsapp room bot could
       eventMessage = symphonyService.getEncryptedMessage(messageId, datafeedSessionPool.getBotSessionSupplier()).get();
     }
-    messageDecryptor.decrypt(eventMessage, userId);
+    messageDecryptor.decrypt(eventMessage, userId, session.getPrincipal());
 
     return eventMessage;
   }

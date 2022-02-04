@@ -5,13 +5,14 @@ import com.symphony.security.exceptions.CiphertextTransportVersionException;
 import com.symphony.security.exceptions.SymphonyEncryptionException;
 import com.symphony.security.exceptions.SymphonyInputException;
 import com.symphony.security.helper.KeyIdentifier;
-import com.symphony.sfs.ms.chat.datafeed.ContentKeyManager;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
-import com.symphony.sfs.ms.chat.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.ContentKeyRetrievalException;
+import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -62,21 +63,21 @@ public class MessageEncryptorTest {
       .build();
   }
   @Test
-  public void encrypt_shouldThrowEncryptionException() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException {
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
+  public void encrypt_shouldThrowEncryptionException() throws ContentKeyRetrievalException, UnknownUserException {
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
     assertThrows( EncryptionException.class,
-      () -> messageEncryptor.buildReplyMessage("123456789", "streamId", "new message text", parentMessage, Collections.emptyList()));
+      () -> messageEncryptor.buildReplyMessage("123456789",  "userName", "streamId", "new message text", parentMessage, Collections.emptyList()));
   }
 
   @Test
-  public void encrypt_shouldPutEncryptedInfoIntoMessage() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+  public void encrypt_shouldPutEncryptedInfoIntoMessage() throws EncryptionException, JsonProcessingException, com.symphony.sfs.ms.starter.symphony.crypto.exception.ContentKeyRetrievalException, UnknownUserException {
     KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenReturn(keyIdentifier);
     doAnswer((Answer<String>) invocation -> {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", parentMessage, Collections.emptyList());
+    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "userName", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", parentMessage, Collections.emptyList());
 
     assertEquals(encryptedMessage.getText(), "encrypted****In reply to:**\n" +
       "**User 1 13/10/21 @ 09:42**\n" +
@@ -107,14 +108,14 @@ public class MessageEncryptorTest {
   }
 
   @Test
-  public void encrypt_shouldPutEncryptedInfoIntoMessage_attachments() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+  public void encrypt_shouldPutEncryptedInfoIntoMessage_attachments() throws EncryptionException, ContentKeyRetrievalException, JsonProcessingException, UnknownUserException {
     KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenReturn(keyIdentifier);
     doAnswer((Answer<String>) invocation -> {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", parentMessage, msgAttachments);
+    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "userName", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", parentMessage, msgAttachments);
 
     assertEquals(encryptedMessage.getAttachments(), msgAttachments);
     assertEquals(encryptedMessage.getCustomEntities(), "encrypted**[" +
@@ -128,14 +129,14 @@ public class MessageEncryptorTest {
   }
 
   @Test
-  public void encrypt_shouldPutEncryptedInfoIntoMessage_emoji() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+  public void encrypt_shouldPutEncryptedInfoIntoMessage_emoji() throws EncryptionException, ContentKeyRetrievalException, JsonProcessingException, UnknownUserException {
     KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenReturn(keyIdentifier);
     doAnswer((Answer<String>) invocation -> {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", parentMessage, Collections.emptyList());
+    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", parentMessage, Collections.emptyList());
 
     assertEquals(encryptedMessage.getText(), "encrypted****In reply to:**\n" +
       "**User 1 13/10/21 @ 09:42**\n" +
@@ -149,9 +150,9 @@ public class MessageEncryptorTest {
   }
 
   @Test
-  public void encrypt_shouldPutEncryptedInfoIntoMessage_replyToForwardedMessage() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+  public void encrypt_shouldPutEncryptedInfoIntoMessage_replyToForwardedMessage() throws EncryptionException, ContentKeyRetrievalException, JsonProcessingException, UnknownUserException {
     KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenReturn(keyIdentifier);
     doAnswer((Answer<String>) invocation -> {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
@@ -166,7 +167,7 @@ public class MessageEncryptorTest {
       "  }\n" +
       "]";
     SBEEventMessage repliedMessage = parentMessage.toBuilder().text("New message text↵↵↵**Forwarded Message:**↵Posted by van in a private room, 11:13:24 am 11 Jan 2022:↵This is message used for forwarding test").customEntities(customEntities).build();
-    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "Test reply to forwarded message", repliedMessage, Collections.emptyList());
+    SBEEventMessage encryptedMessage = messageEncryptor.buildReplyMessage("123456789", "", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "Test reply to forwarded message", repliedMessage, Collections.emptyList());
 
     assertEquals(encryptedMessage.getText(), "encrypted****In reply to:**\n" +
       "**User 1 13/10/21 @ 09:42**\n" +
@@ -180,21 +181,21 @@ public class MessageEncryptorTest {
   }
 
   @Test
-  public void buildForwardedMessage_shouldThrowEncryptionException() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException {
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
+  public void buildForwardedMessage_shouldThrowEncryptionException() throws ContentKeyRetrievalException, UnknownUserException {
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
     assertThrows( EncryptionException.class,
-      () -> messageEncryptor.buildForwardedMessage("123456789", "streamId", "new message text", "Prefix"));
+      () -> messageEncryptor.buildForwardedMessage("123456789", "","streamId", "new message text", "Prefix"));
   }
 
   @Test
-  public void buildForwardedMessage_shouldBuildCorrectMessage() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+  public void buildForwardedMessage_shouldBuildCorrectMessage() throws EncryptionException, ContentKeyRetrievalException, JsonProcessingException, UnknownUserException {
     KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenReturn(keyIdentifier);
     doAnswer((Answer<String>) invocation -> {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", "from a WhatsApp chat\n");
+    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "","FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", "from a WhatsApp chat\n");
 
     assertEquals("encrypted**\n\n**Forwarded Message:**\n" +
       "from a WhatsApp chat\n" +
@@ -231,14 +232,14 @@ public class MessageEncryptorTest {
 
   }
   @Test
-  public void buildForwardedMessage_shouldPutEncryptedInfoIntoMessage_emoji() throws EncryptionException, UnknownDatafeedUserException, ContentKeyRetrievalException, JsonProcessingException {
+  public void buildForwardedMessage_shouldPutEncryptedInfoIntoMessage_emoji() throws EncryptionException, ContentKeyRetrievalException, JsonProcessingException, UnknownUserException {
     KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
-    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class))).thenReturn(keyIdentifier);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenReturn(keyIdentifier);
     doAnswer((Answer<String>) invocation -> {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", "from a WhatsApp chat\n");
+    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", "from a WhatsApp chat\n");
 
     assertEquals("encrypted**\n\n**Forwarded Message:**\n" +
       "from a WhatsApp chat\n" +
