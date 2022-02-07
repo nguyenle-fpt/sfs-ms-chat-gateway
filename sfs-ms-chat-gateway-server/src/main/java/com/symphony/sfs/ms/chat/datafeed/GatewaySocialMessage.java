@@ -2,7 +2,6 @@ package com.symphony.sfs.ms.chat.datafeed;
 
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
-import com.symphony.sfs.ms.chat.util.SpecialCharactersUtils;
 import lombok.Builder;
 import lombok.Builder.Default;
 import lombok.Getter;
@@ -60,10 +59,6 @@ public class GatewaySocialMessage {
 
   public String getFromUserId() {
     return this.fromUser.getId().toString();
-  }
-
-  public String getMessageForEmp() {
-    return SpecialCharactersUtils.unescapeSpecialCharacters(this.textContent);
   }
 
   public String getDisclaimerForEmp() {

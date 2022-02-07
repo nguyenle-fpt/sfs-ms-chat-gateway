@@ -46,7 +46,6 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
-import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
@@ -120,7 +119,6 @@ class MessagingApiTest extends AbstractIntegrationTest {
     botSession = symphonyAuthFactory.getBotAuth();
     AdminClient adminClient = mock(AdminClient.class);
     EmpClient empClient = mock(EmpClient.class);
-    UsersInfoService usersInfoService = mock(UsersInfoService.class);
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
 
     FederatedAccountSessionService federatedAccountSessionService = new FederatedAccountSessionService(federatedAccountRepository);
@@ -130,7 +128,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     messageStatusService = mock(MessageStatusService.class);
 
     messageDecryptor = mock(MessageDecryptor.class);
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService,  streamService,  new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService,  new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
 
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }

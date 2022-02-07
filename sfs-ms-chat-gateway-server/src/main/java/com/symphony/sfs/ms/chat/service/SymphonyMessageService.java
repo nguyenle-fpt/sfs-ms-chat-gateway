@@ -29,7 +29,6 @@ import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
-import com.symphony.sfs.ms.chat.util.SpecialCharactersUtils;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.ChannelMember;
 import com.symphony.sfs.ms.emp.generated.model.EmpError;
@@ -41,13 +40,13 @@ import com.symphony.sfs.ms.emp.generated.model.SendmessagerequestInlineMessage;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
-import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
+import com.symphony.sfs.ms.starter.util.SpecialCharactersEscaper;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -106,7 +105,6 @@ public class SymphonyMessageService implements DatafeedListener {
   private final MessageStatusService messageStatusService;
   private final PodConfiguration podConfiguration;
   private final BotConfiguration botConfiguration;
-  private final AuthenticationService authenticationService;
   private final StreamService streamService;
   private final MessageIOMonitor messageMetrics;
   private final MessageSource messageSource;
@@ -180,8 +178,7 @@ public class SymphonyMessageService implements DatafeedListener {
           allUserSessions.add(datafeedSessionPool.getSessionSupplier(toFederatedAccount));
         }
       }
-      SendmessagerequestInlineMessage inlineMessageRequest =   null;
-
+      SendmessagerequestInlineMessage inlineMessageRequest = null;
 
       // Check if message contents can be sent
       if (gatewaySocialMessage.isChime()) {
@@ -267,7 +264,8 @@ public class SymphonyMessageService implements DatafeedListener {
             gatewaySocialMessage.getFromUser(),
             toFederatedAccountsForEmp,
             gatewaySocialMessage.getTimestamp(),
-            gatewaySocialMessage.getMessageForEmp(),
+            //we send raw message to whatsapp, so whatsapp api can format the message correctly
+            gatewaySocialMessage.getTextContent(),
             gatewaySocialMessage.getDisclaimerForEmp(),
             attachmentsContent,
             inlineMessageRequest);
@@ -307,7 +305,7 @@ public class SymphonyMessageService implements DatafeedListener {
       }
       inlineMessageRequest = new SendmessagerequestInlineMessage()
         .messageId(StreamUtil.toUrlSafeStreamId(inlineMessage.getMessageId()))
-        .text(SpecialCharactersUtils.unescapeSpecialCharacters(inlineMessage.getText()))
+        .text(inlineMessage.getText())
         .timestamp(inlineMessage.getIngestionDate())
         .fromMember(new ChannelMember()
           .symphonyId(String.valueOf(inlineMessage.getFrom().getId()))
@@ -413,7 +411,7 @@ public class SymphonyMessageService implements DatafeedListener {
         Optional<CustomEntity> quote = sbeEventMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
 
         if (quote.isPresent()) {
-          messageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(messageInfo.getMessage().substring(quote.get().getEndIndex())));
+          messageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(messageInfo.getMessage().substring(quote.get().getEndIndex())));
           String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
             Optional<SBEEventMessage> inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);
             if (inlineMessageOptional.isEmpty()) {
@@ -432,14 +430,14 @@ public class SymphonyMessageService implements DatafeedListener {
           Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
 
           if (quoteInline.isPresent()) {
-            inlineMessageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex())));
+            inlineMessageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex())));
           } else {
-            inlineMessageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(inlineMessageInfo.getMessage()));
+            inlineMessageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(inlineMessageInfo.getMessage()));
           }
 
           messageInfo.setParentMessage(inlineMessageInfo);
         } else {
-          messageInfo.setMessage(SpecialCharactersUtils.unescapeSpecialCharacters(messageInfo.getMessage()));
+          messageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(messageInfo.getMessage()));
         }
 
         messageInfos.add(messageInfo);

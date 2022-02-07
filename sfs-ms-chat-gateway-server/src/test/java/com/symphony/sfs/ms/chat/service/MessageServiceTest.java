@@ -39,7 +39,6 @@ import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
@@ -102,20 +101,14 @@ class MessageServiceTest implements I18nTest {
   private AdminClient adminClient;
   private EmpSchemaService empSchemaService;
   private SymphonyService symphonyService;
-  private ChannelService channelService;
   private StreamService streamService;
   private UsersInfoService usersInfoService;
   private MessageStatusService messageStatusService;
   private MessageEncryptor messageEncryptor;
   private MessageDecryptor messageDecryptor;
-  private MessageIOMonitor messageIOMonitor;
   private EmpConfig empConfig;
 
-  private SessionSupplier<SymphonySession> userSession;
-
   private SymphonySession botSession;
-
-  private SymphonyAuthFactory symphonyAuthFactory;
 
   private static final long NOW = OffsetDateTime.now().toEpochSecond();
   public static final String FROM_SYMPHONY_USER_ID = "123456789";
@@ -157,20 +150,17 @@ class MessageServiceTest implements I18nTest {
 
     empSchemaService = new EmpSchemaService(adminClient);
 
-    channelService = mock(ChannelService.class);
 
     usersInfoService = mock(UsersInfoService.class);
 
     messageStatusService = mock(MessageStatusService.class);
 
-    messageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, mock(MessageDecryptor.class));
+    messageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, mock(MessageDecryptor.class));
 
     botSession = authenticationService.authenticate(podConfiguration.getSessionAuth(), podConfiguration.getKeyAuth(), botConfiguration.getUsername(), botConfiguration.getPrivateKey().getData());
 
     messageEncryptor = mock(MessageEncryptor.class);
     messageDecryptor = mock(MessageDecryptor.class);
-    messageIOMonitor = mock(MessageIOMonitor.class);
-    symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
   }
 
   /**
@@ -188,7 +178,7 @@ class MessageServiceTest implements I18nTest {
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
     // really instantiate SymphonyMessageSender to test Handlebars templates.
     symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService,  templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource));
-    messageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, authenticationService, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+    messageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
   }
   @Test
   public void testMessageWithDisclaimer() {
