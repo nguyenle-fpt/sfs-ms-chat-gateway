@@ -13,11 +13,13 @@ import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
 import com.symphony.sfs.ms.starter.symphony.crypto.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
+import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.stubbing.Answer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 
@@ -184,7 +186,7 @@ public class MessageEncryptorTest {
   public void buildForwardedMessage_shouldThrowEncryptionException() throws ContentKeyRetrievalException, UnknownUserException {
     when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
     assertThrows( EncryptionException.class,
-      () -> messageEncryptor.buildForwardedMessage("123456789", "","streamId", "new message text", "Prefix"));
+      () -> messageEncryptor.buildForwardedMessage("123456789", "","streamId", "new message text", "Prefix", Collections.emptyList(), null));
   }
 
   @Test
@@ -195,7 +197,9 @@ public class MessageEncryptorTest {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "","FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", "from a WhatsApp chat\n");
+    var blastAttachments = Collections.singletonList(SBEMessageAttachment.builder().fileId("attachment_id").contentType("image/png").build());
+    var ephemeralKey = "ephemeral_key".getBytes(StandardCharsets.UTF_8);
+    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "","FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "new message text", "from a WhatsApp chat\n", blastAttachments, ephemeralKey);
 
     assertEquals("encrypted**\n\n**Forwarded Message:**\n" +
       "from a WhatsApp chat\n" +
@@ -226,6 +230,8 @@ public class MessageEncryptorTest {
         "}]**",
       encryptedMessage.getCustomEntities());
     assertEquals(encryptedMessage.getFormat(), "com.symphony.markdown");
+    assertEquals(blastAttachments, encryptedMessage.getFileKeyEncryptedAttachments());
+    assertEquals(String.format("encrypted**%s**", Base64.encodeBase64String(ephemeralKey)), encryptedMessage.getEncryptedFileKey());
 
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
       eq("\n\n**Forwarded Message:**\nfrom a WhatsApp chat\nnew message text"), eq(null), anyString(), eq(null), eq(Collections.emptyList()));
@@ -239,7 +245,7 @@ public class MessageEncryptorTest {
       String content = invocation.getArgument(2);
       return String.format("encrypted**%s**", content);
     }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
-    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", "from a WhatsApp chat\n");
+    SBEEventMessage encryptedMessage = messageEncryptor.buildForwardedMessage("123456789", "", "FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "\uD83D\uDE00", "from a WhatsApp chat\n", Collections.emptyList(), null);
 
     assertEquals("encrypted**\n\n**Forwarded Message:**\n" +
       "from a WhatsApp chat\n" +

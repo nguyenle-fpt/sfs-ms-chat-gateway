@@ -16,7 +16,6 @@ import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
-import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.starter.emojis.EmojiService;
 import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
 import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
@@ -28,7 +27,12 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TimeZone;
 
 @Component
 @Log4j2
@@ -64,7 +68,7 @@ public class MessageEncryptor {
     }
   }
 
-  public SBEEventMessage buildForwardedMessage(String userId, String userName, String streamId, String messageText, String forwardedPrefix) throws EncryptionException {
+  public SBEEventMessage buildForwardedMessage(String userId, String userName, String streamId, String messageText, String forwardedPrefix, List<SBEMessageAttachment> blastAttachments, byte[] ephemeralKey) throws EncryptionException {
     try {
       String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
       KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId, userName);
@@ -80,7 +84,11 @@ public class MessageEncryptor {
       sbeEventMessage.setChatType("CHATROOM");
       sbeEventMessage.setMsgFeatures(7);
 
-
+      if (blastAttachments != null && !blastAttachments.isEmpty()) {
+        String encryptedFileKey = encrypt(contentKey, keyId, Base64.encodeBase64String(ephemeralKey));
+        sbeEventMessage.setEncryptedFileKey(encryptedFileKey);
+        sbeEventMessage.setFileKeyEncryptedAttachments(blastAttachments);
+      }
 
       return sbeEventMessage;
 

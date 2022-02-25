@@ -70,7 +70,8 @@ public class MessageIOMonitor {
     FEDERATED_ACCOUNT_NOT_FOUND("federated account not found"),
     ADVISOR_NO_LONGER_AVAILABLE("advisor no longer available"),
     UNKNOWN_SENDER("unknown sender"),
-    ENCRYPTION_FAILED("encryption failed");
+    ENCRYPTION_FAILED("encryption failed"),
+    BLAST_ATTACHMENTS_UPLOAD_FAILED("blast attachments upload failed");
 
     private String blockingCause;
   }

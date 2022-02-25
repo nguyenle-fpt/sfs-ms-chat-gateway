@@ -1,11 +1,13 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.util.Base64;
+import com.symphony.security.helper.ClientCryptoHandler;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
+import com.symphony.sfs.ms.chat.exception.BlastAttachmentUploadException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
@@ -29,7 +31,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.Collection;
+import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -38,6 +41,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.BLAST_ATTACHMENTS_UPLOAD_FAILED;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ENCRYPTION_FAILED;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.UNKNOWN_SENDER;
 
@@ -152,8 +156,7 @@ public class SymphonyMessageSender {
     return response.map(SymphonyInboundMessage::getMessageId);
   }
 
-
-  public Optional<String> sendForwardedMessage(String streamId, String fromSymphonyUserId, String messageContent) {
+  public Optional<String> sendForwardedMessage(String streamId, String fromSymphonyUserId, String messageContent, List<SymphonyAttachment> attachments) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
       messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
@@ -165,13 +168,24 @@ public class SymphonyMessageSender {
     SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplier(federatedAccount);
 
     try {
+      byte[] ephemeralKey = this.generateEphemeralKey();
+      List<SBEMessageAttachment> blastAttachments = new ArrayList<>();
+      if (attachments != null && !attachments.isEmpty()) {
+        for (SymphonyAttachment attachment : attachments) {
+          SBEMessageAttachment blastAttachment = uploadBlastAttachment(userSession, attachment, ephemeralKey).orElseThrow(BlastAttachmentUploadException::new);
+          blastAttachments.add(blastAttachment);
+        }
+      }
 
       String messageHeader = messageSource.getMessage("forwarded.message.header", new Object[] {empSchemaService.getEmpDisplayName(federatedAccount.getEmp())}, Locale.getDefault());
-      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildForwardedMessage(fromSymphonyUserId, federatedAccount.getSymphonyUsername(), streamId, messageContent, messageHeader);
+      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildForwardedMessage(fromSymphonyUserId, federatedAccount.getSymphonyUsername(), streamId, messageContent, messageHeader, blastAttachments, ephemeralKey);
       SBEEventMessage sentMessage = symphonyService.sendBulkMessage(sbeMessageToBeSent, userSession);
       return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
+    } catch (BlastAttachmentUploadException e) {
+      LOG.error("Unable to forward attachment to Symphony: stream={} initiator={}", streamId, fromSymphonyUserId, e);
+      messageMetrics.onMessageBlockToSymphony(BLAST_ATTACHMENTS_UPLOAD_FAILED, streamId);
     } catch (IOException e) {
-      LOG.error("Unable to send relied message from WhatsApp: stream={} initiator={}", streamId, fromSymphonyUserId, e);
+      LOG.error("Unable to forward message to Symphony: stream={} initiator={}", streamId, fromSymphonyUserId, e);
       messageMetrics.onMessageBlockToSymphony(ENCRYPTION_FAILED, streamId);
     }
     return Optional.empty();
@@ -225,6 +239,24 @@ public class SymphonyMessageSender {
     return Optional.empty();
   }
 
+  private Optional<SBEMessageAttachment> uploadBlastAttachment(SessionSupplier<SymphonySession> session, SymphonyAttachment attachment, byte[] ephemeralKey) {
+    try {
+      byte[] encryptedBytes = new ClientCryptoHandler().encryptMsgWithRotationIdZero(ephemeralKey, Base64.decode(attachment.getData()));
+      SBEMessageAttachment[] attachments = symphonyService.uploadBlastAttachment(session, attachment.getContentType(), attachment.getFileName(), encryptedBytes);
+      return attachments != null && attachments.length > 0 ? Optional.of(attachments[0]) : Optional.empty();
+    } catch (Exception e) {
+      throw new BlastAttachmentUploadException();
+    }
+  }
+
+  private byte[] generateEphemeralKey() {
+    byte[] key = new byte[32];
+    // Pick some secure values.
+    SecureRandom SR = new SecureRandom();
+    SR.nextBytes(key);
+    return key;
+  }
+
   private SBEEventMessage getReplyMessage(String userId, SessionSupplier<SymphonySession> session, String messageId) throws DecryptionException {
     SBEEventMessage eventMessage;
     try {
@@ -232,8 +264,8 @@ public class SymphonyMessageSender {
     } catch (Exception e) {
       // See: https://perzoinc.atlassian.net/browse/CES-4690
       // Use gateway bot to retrieve message if the "messageId" belongs to a room and the bot is in the room
-      // This is required when an whatsapp user was in a room, then getting removed, and added again
-      // In this  case, the whatsapp service account could not retrieve historic message, only the whatsapp room bot could
+      // This is required when an Connect user was in a room, then getting removed, and added again
+      // In this  case, the Connect service account could not retrieve historic message, only the Connect room bot could
       eventMessage = symphonyService.getEncryptedMessage(messageId, datafeedSessionPool.getBotSessionSupplier()).get();
     }
     messageDecryptor.decrypt(eventMessage, userId, session.getPrincipal());

@@ -582,7 +582,7 @@ public class SymphonyMessageService implements DatafeedListener {
     }
     String messageML = "<messageML>" + text + "</messageML>";
     if(forwarded) {
-      return symphonyMessageSender.sendForwardedMessage(streamId, fromSymphonyUserId, text);
+      return symphonyMessageSender.sendForwardedMessage(streamId, fromSymphonyUserId, text, attachments);
     } else if (parentMessageId != null) {
       // we need pure text in case of relied message
       return symphonyMessageSender.sendReplyMessage(streamId, fromSymphonyUserId, text, parentMessageId, attachmentReplySupported, attachmentMessageIds);

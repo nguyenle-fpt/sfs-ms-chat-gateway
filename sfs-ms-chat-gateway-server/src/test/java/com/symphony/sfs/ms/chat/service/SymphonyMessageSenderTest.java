@@ -6,8 +6,10 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
+import com.symphony.sfs.ms.chat.exception.BlastAttachmentUploadException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
@@ -20,10 +22,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
 import org.springframework.context.MessageSource;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.BLAST_ATTACHMENTS_UPLOAD_FAILED;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ENCRYPTION_FAILED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -175,13 +179,13 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void sendForwardedMessage_works() throws EncryptionException, JsonProcessingException {
+  public void sendForwardedMessage_text_works() throws EncryptionException, JsonProcessingException {
     federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").emp("WHATSAPP").build());
     SBEEventMessage messageToBeSent = SBEEventMessage.builder().build();
-    when(messageEncryptor.buildForwardedMessage("123456789", "wa_bot_user_name","streamId", "message text", "from WHATSAPP\n")).thenReturn(messageToBeSent);
+    when(messageEncryptor.buildForwardedMessage(eq("123456789"), eq("wa_bot_user_name"),eq("streamId"), eq("message text"), eq("from WHATSAPP\n"), eq(Collections.emptyList()), any(byte[].class))).thenReturn(messageToBeSent);
     when(symphonyService.sendBulkMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
 
-    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text");
+    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.emptyList());
 
     verify(messageMetrics, times(1)).onSendMessageToSymphony("123456789", "streamId");
     assertEquals(newMessageId.get(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
@@ -189,9 +193,49 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
   }
 
   @Test
+  public void sendForwardedMessage_withAttachments_works() throws EncryptionException, JsonProcessingException {
+    federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").emp("WHATSAPP").build());
+    SBEEventMessage messageToBeSent = SBEEventMessage.builder().build();
+    SBEMessageAttachment[] uploadedAttachments = { SBEMessageAttachment.builder().fileId("new_attachment_id").build() };
+    when(messageEncryptor.buildForwardedMessage(eq("123456789"), eq("wa_bot_user_name"),eq("streamId"), eq("message text"), eq("from WHATSAPP\n"), eq(Arrays.asList(uploadedAttachments)), any(byte[].class))).thenReturn(messageToBeSent);
+    when(symphonyService.sendBulkMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
+    when(symphonyService.uploadBlastAttachment(any(SessionSupplier.class), any(String.class), any(String.class), any(byte[].class))).thenReturn(uploadedAttachments);
+
+    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name").contentType("image/png").data("data")));
+
+    verify(messageMetrics, times(1)).onSendMessageToSymphony("123456789", "streamId");
+    assertEquals(newMessageId.get(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
+
+  }
+
+  @Test
+  public void sendForwardedMessage_withAttachments_failedUploadBlastAttachment() throws EncryptionException, JsonProcessingException {
+    federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").emp("WHATSAPP").build());
+    when(symphonyService.uploadBlastAttachment(any(SessionSupplier.class), any(String.class), any(String.class), any(byte[].class))).thenReturn(null);
+
+
+    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name")));
+    assertTrue(newMessageId.isEmpty());
+    verify(messageMetrics, times(1)).onMessageBlockToSymphony(BLAST_ATTACHMENTS_UPLOAD_FAILED, "streamId");
+
+  }
+
+  @Test
+  public void sendForwardedMessage_withAttachments_failedEncryptAttachment() throws EncryptionException, JsonProcessingException {
+    federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").emp("WHATSAPP").build());
+
+    // attachment without data could make encryption failed
+    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name").contentType("image/png").data(null)));
+
+    assertTrue(newMessageId.isEmpty());
+    verify(messageMetrics, times(1)).onMessageBlockToSymphony(BLAST_ATTACHMENTS_UPLOAD_FAILED, "streamId");
+
+  }
+
+  @Test
   public void sendForwardedMessage_noFederatedAccount() throws EncryptionException, JsonProcessingException {
     assertThrows(SendMessageFailedProblem.class, () -> {
-      symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text");
+      symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.emptyList());
     });
   }
 
@@ -199,9 +243,9 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
   public void sendForward_DecryptionEncryptionProblem() throws EncryptionException {
     federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").emp("WHATSAPP").build());
 
-    when(messageEncryptor.buildForwardedMessage("123456789", "wa_bot_user_name", "streamId", "message text", "from WHATSAPP\n")).thenThrow(new EncryptionException(null));
+    when(messageEncryptor.buildForwardedMessage(eq("123456789"), eq("wa_bot_user_name"), eq("streamId"), eq("message text"), eq("from WHATSAPP\n"), eq(Collections.emptyList()), any(byte[].class))).thenThrow(new EncryptionException(null));
 
-    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text");
+    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.emptyList());
 
     verify(messageMetrics, times(1)).onMessageBlockToSymphony(ENCRYPTION_FAILED, "streamId");
     assertTrue(newMessageId.isEmpty());

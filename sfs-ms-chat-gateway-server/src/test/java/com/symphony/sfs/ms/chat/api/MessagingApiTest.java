@@ -67,6 +67,7 @@ import java.util.Optional;
 
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.MARKMESSAGESASREAD_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.RETRIEVEMESSAGES_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.SENDMESSAGE_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.SENDSYSTEMMESSAGE_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
@@ -156,7 +157,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   void sendMessage_forwarded() {
     SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null);
     sendMessageRequest.setForwarded(true);
-    when(symphonyMessageSender.sendForwardedMessage("streamId", "fromSymphonyUserId", "text")).thenReturn(Optional.of("symphonyMessageId"));
+    var attachments = Collections.singletonList(new SymphonyAttachment().contentType("image/png").fileName("attachment.png").data("data"));
+    sendMessageRequest.setAttachments(attachments);
+    when(symphonyMessageSender.sendForwardedMessage("streamId", "fromSymphonyUserId", "text", attachments)).thenReturn(Optional.of("symphonyMessageId"));
     SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
     SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
     assertEquals(expectedResponse, sendMessageResponse);
@@ -484,7 +487,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(sendMessageRequest)
       .when()
-      .post(RETRIEVEMESSAGES_ENDPOINT)
+      .post(SENDMESSAGE_ENDPOINT)
       .then()
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()

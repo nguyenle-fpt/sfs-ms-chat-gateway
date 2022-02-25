@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.datafeed.FileExtensionsResponse;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
+import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.ISessionManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
@@ -13,8 +14,10 @@ import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.BodyInserters;
 
@@ -40,6 +43,7 @@ public class SymphonyService {
   public static final String REPLYTOMESSAGE = "/webcontroller/ingestor/MessageService/reply?replyMessage=true";
   public static final String BULKMESSAGE = "/webcontroller/ingestor/MessageService/bulk";
   public static final String ALLOWED_FILE_EXTENSIONS = "/pod/file_ext/v1/allowed_extensions";
+  public static final String BLAST_ATTACHMENT_UPLOAD = "/maestro/api/v1/attachments?blast=true";
 
 
 
@@ -142,5 +146,25 @@ public class SymphonyService {
       .filter(FileExtensionsResponse.FileExtension::getScopeExternal)
       .map(FileExtensionsResponse.FileExtension::getExtension)
       .collect(Collectors.toList());
+  }
+  public SBEMessageAttachment[] uploadBlastAttachment(SessionSupplier<SymphonySession> session, String contentType, String fileName, byte[] fileEncrypted) {
+
+    ObjectMapper objectMapper = new ObjectMapper();
+    objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+
+    MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+    bodyBuilder.part("body", new ByteArrayResource(fileEncrypted), MediaType.parseMediaType(contentType)).filename(fileName);
+
+
+    return sessionManager.getWebClient(session).post()
+      .uri(podConfiguration.getUrl() + BLAST_ATTACHMENT_UPLOAD)
+      .contentType(MediaType.MULTIPART_FORM_DATA)
+      .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .header("Is-Encrypted", "true")
+      .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
+      .attribute(BASE_URI, podConfiguration.getUrl())
+      .attribute(BASE_PATH, BLAST_ATTACHMENT_UPLOAD)
+      .retrieve().bodyToMono(SBEMessageAttachment[].class)
+      .block();
   }
 }
