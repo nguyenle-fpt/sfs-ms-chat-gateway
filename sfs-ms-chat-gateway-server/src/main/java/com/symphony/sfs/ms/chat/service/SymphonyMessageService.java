@@ -411,7 +411,7 @@ public class SymphonyMessageService implements DatafeedListener {
         Optional<CustomEntity> quote = sbeEventMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
 
         if (quote.isPresent()) {
-          messageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(messageInfo.getMessage().substring(quote.get().getEndIndex())));
+          messageInfo.setMessage(messageInfo.getMessage().substring(quote.get().getEndIndex()));
           String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
             Optional<SBEEventMessage> inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);
             if (inlineMessageOptional.isEmpty()) {
@@ -430,14 +430,14 @@ public class SymphonyMessageService implements DatafeedListener {
           Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
 
           if (quoteInline.isPresent()) {
-            inlineMessageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex())));
+            inlineMessageInfo.setMessage(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex()));
           } else {
-            inlineMessageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(inlineMessageInfo.getMessage()));
+            inlineMessageInfo.setMessage(inlineMessageInfo.getMessage());
           }
 
           messageInfo.setParentMessage(inlineMessageInfo);
         } else {
-          messageInfo.setMessage(SpecialCharactersEscaper.unescapeSpecialCharacters(messageInfo.getMessage()));
+          messageInfo.setMessage(messageInfo.getMessage());
         }
 
         messageInfos.add(messageInfo);

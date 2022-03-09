@@ -410,29 +410,50 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void retrieveMessages_ok_specialCharacters() {
     RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Collections.singletonList(new MessageId().messageId("messageId1"))).symphonyUserId("fromSymphonyUserId");
-
+    CustomEntity ce = CustomEntity.builder().type(CustomEntity.QUOTE_TYPE).endIndex(0).data(Collections.singletonMap("id", "messageId2")).build();
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This \\+ is \\_the\\_message \\*1")
       .ingestionDate(123L)
+      .parsedCustomEntities(Collections.singletonList(ce))
       .from(SBEEventUser.builder()
         .firstName("first")
         .surName("last")
         .id(12345L)
         .company("company")
         .build()).build();
-
+    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2").disclaimer("disclaimer1").text("This \\+ is \\_the\\_inlinemessage \\*1")
+        .ingestionDate(123L)
+        .from(SBEEventUser.builder()
+          .firstName("first")
+          .surName("last")
+          .id(12345L)
+          .company("company")
+          .build()).build();
+    
     when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
+    when(symphonyService.getEncryptedMessage("messageIdw", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
 
 
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
-    RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Collections.singletonList(new MessageInfo()
-      .messageId("messageIdw")
-      .disclaimer("disclaimer1")
-      .message("This + is _the_message *1")
-      .firstName("first")
-      .lastName("last")
-      .symphonyId("12345")
-      .timestamp(123L)));
+    MessageInfo msg = new MessageInfo()
+    .messageId("messageIdw")
+    .disclaimer("disclaimer1")
+    .message("This \\+ is \\_the\\_message \\*1")
+    .firstName("first")
+    .lastName("last")
+    .symphonyId("12345")
+    .timestamp(123L);
+
+    MessageInfo parentMsg = new MessageInfo()
+    .messageId("messageIdw")
+    .disclaimer("disclaimer1")
+    .message("This \\+ is \\_the\\_inlinemessage \\*1")
+    .firstName("first")
+    .lastName("last")
+    .symphonyId("12345")
+    .timestamp(123L);
+    msg.setParentMessage(parentMsg);
+    RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Collections.singletonList(msg));
 
     assertEquals(expectedResponse, response);
   }
