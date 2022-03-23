@@ -1,5 +1,7 @@
 package com.symphony.sfs.ms.chat.api;
 
+import com.symphony.sfs.ms.chat.generated.model.RenameRoomRequest;
+import com.symphony.sfs.ms.chat.generated.model.RenameRoomResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
@@ -32,6 +34,12 @@ public class RoomApi implements com.symphony.sfs.ms.chat.generated.api.RoomApi {
   public ResponseEntity<UpdateRoomActivityResponse> updateRoomActivity(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest) {
     LOG.info("Update Room Activity | streamId={} setActive={}", streamId, updateRoomActivityRequest.isSetActive());
     return ResponseEntity.ok(roomService.updateRoomActivity(streamId, updateRoomActivityRequest));
+  }
+
+  @Override
+  public ResponseEntity<RenameRoomResponse> renameRoom(String streamId, RenameRoomRequest request) {
+    LOG.info("Rename Room | streamId={} newName={}", streamId, request.getNewRoomName());
+    return ResponseEntity.ok(roomService.renameRoom(streamId, request.getNewRoomName()));
   }
 
   @Override

@@ -70,6 +70,46 @@ room-set-activity:
             schema:
               $ref: '../errors/room.yaml#/reactivate-room-not-implemented'
 
+rename-room:
+  post:
+    tags:
+      - Room
+    summary: Rename Room
+    operationId: renameRoom
+    description: '=> Rename Room'
+    security:
+      - sfsAuthentication: [ ]
+    consumes:
+      - application/json
+    produces:
+      - application/json
+    parameters:
+      - in: path
+        name: streamId
+        schema:
+          type: string
+        required: true
+        description: StreamId
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/room.yaml#/rename-room-request'
+    responses:
+      '200':
+        description: Room Activity successfully updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/room.yaml#/rename-room-response'
+      '500':
+        description: Server Error
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/room.yaml#/rename-room-failed'
+
 room-members:
   post:
     tags:

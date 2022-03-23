@@ -5,6 +5,9 @@ import com.symphony.sfs.ms.admin.generated.model.RoomMemberIdentifier;
 import com.symphony.sfs.ms.admin.generated.model.RoomMembersIdentifiersResponse;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
+import com.symphony.sfs.ms.chat.generated.model.RenameRoomFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.RenameRoomRequest;
+import com.symphony.sfs.ms.chat.generated.model.RenameRoomResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
@@ -55,6 +58,7 @@ import static com.symphony.sfs.ms.chat.generated.api.RoomApi.ADDROOMMEMBER_ENDPO
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.CREATEROOM_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.DELETEROOM_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.REMOVEMEMBER_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.RoomApi.RENAMEROOM_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.SENDROOMMEMBERSLISTTOEMPUSER_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.RoomApi.UPDATEROOMACTIVITY_ENDPOINT;
 import static com.symphony.sfs.ms.chat.util.HttpRequestUtils.postRequestFail;
@@ -158,6 +162,72 @@ class RoomApiTest extends AbstractIntegrationTest {
     assertEquals(ROOM_STREAM_ID, roomResponse.getStreamId());
     assertEquals(ROOM_NAME, roomResponse.getRoomName());
 
+  }
+
+  ////////////////
+  // renameRoom //
+  ////////////////
+
+  @Test
+  public void renameRoom_failedGetRoom() {
+    String podUrl = podConfiguration.getUrl();
+    doReturn(Optional.empty()).when(streamService).roomInfo(eq(podUrl), any(SessionSupplier.class), eq("streamId"));
+
+    RenameRoomRequest request = new RenameRoomRequest().newRoomName("newRoomName");
+
+    renameRoomFail("streamId", request, RenameRoomFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR);
+
+    verify(streamService, once()).roomInfo(eq(podUrl), any(SessionSupplier.class), eq("streamId"));
+    verify(streamService, never()).updateRoom(eq(podUrl), any(SessionSupplier.class), anyString(), any(SymphonyRoomAttributes.class));
+  }
+
+  @Test
+  public void renameRoom_failedUpdateRoom() {
+    String podUrl = podConfiguration.getUrl();
+    SymphonyRoomAttributes oldRoomAttributes = SymphonyRoomAttributes.builder()
+      .name("roomName")
+      .description("roomName")
+      .build();
+    SymphonyRoom oldSymphonyRoom = SymphonyRoom.builder().roomAttributes(oldRoomAttributes).build();
+    SymphonyRoomAttributes newRoomAttributes = SymphonyRoomAttributes.builder()
+      .name("newRoomName")
+      .description("newRoomName")
+      .build();
+    doReturn(Optional.of(oldSymphonyRoom)).when(streamService).roomInfo(eq(podUrl), any(SessionSupplier.class), eq("streamId"));
+    doReturn(Optional.empty()).when(streamService).updateRoom(eq(podUrl), any(SessionSupplier.class), eq("streamId"), eq(newRoomAttributes));
+
+    RenameRoomRequest request = new RenameRoomRequest().newRoomName("newRoomName");
+
+    renameRoomFail("streamId", request, RenameRoomFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR);
+
+    verify(streamService, once()).roomInfo(eq(podUrl), any(SessionSupplier.class), eq("streamId"));
+    verify(streamService, once()).updateRoom(eq(podUrl), any(SessionSupplier.class), anyString(), any(SymphonyRoomAttributes.class));
+  }
+
+  @Test
+  public void renameRoom_Ok() {
+    String podUrl = podConfiguration.getUrl();
+    SymphonyRoomAttributes oldRoomAttributes = SymphonyRoomAttributes.builder()
+      .name("roomName")
+      .description("roomName")
+      .build();
+    SymphonyRoom oldSymphonyRoom = SymphonyRoom.builder().roomAttributes(oldRoomAttributes).build();
+    SymphonyRoomAttributes newRoomAttributes = SymphonyRoomAttributes.builder()
+      .name("newRoomName")
+      .description("newRoomName")
+      .build();
+    SymphonyRoom newSymphonyRoom = SymphonyRoom.builder().roomAttributes(newRoomAttributes).build();
+    doReturn(Optional.of(oldSymphonyRoom)).when(streamService).roomInfo(eq(podUrl), any(SessionSupplier.class), eq("streamId"));
+    doReturn(Optional.of(newSymphonyRoom)).when(streamService).updateRoom(eq(podUrl), any(SessionSupplier.class), eq("streamId"), eq(newRoomAttributes));
+
+    RenameRoomRequest request = new RenameRoomRequest().newRoomName("newRoomName");
+
+    RenameRoomResponse response = this.renameRoom("streamId", request);
+
+    RenameRoomResponse expectedResponse = new RenameRoomResponse().newRoomName("newRoomName");
+    assertEquals(expectedResponse, response);
+    verify(streamService, once()).roomInfo(eq(podUrl), any(SessionSupplier.class), eq("streamId"));
+    verify(streamService, once()).updateRoom(eq(podUrl), any(SessionSupplier.class), eq("streamId"), eq(newRoomAttributes));
   }
 
   //////////////////////////
@@ -530,7 +600,6 @@ class RoomApiTest extends AbstractIntegrationTest {
 
 
   private RoomResponse createRoom(RoomRequest roomRequest) {
-
     return configuredGiven(objectMapper, new ExceptionHandling(null), roomApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(roomRequest)
@@ -540,6 +609,18 @@ class RoomApiTest extends AbstractIntegrationTest {
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
       .as(RoomResponse.class);
+  }
+
+  private RenameRoomResponse renameRoom(String streamId, RenameRoomRequest request) {
+    return configuredGiven(objectMapper, new ExceptionHandling(null), roomApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(request)
+      .when()
+      .post(RENAMEROOM_ENDPOINT, streamId)
+      .then()
+      .statusCode(HttpStatus.OK.value())
+      .extract().response().body()
+      .as(RenameRoomResponse.class);
   }
 
   private UpdateRoomActivityResponse updateRoomActivity(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest) {
@@ -556,6 +637,10 @@ class RoomApiTest extends AbstractIntegrationTest {
 
   private void createRoomFail(RoomRequest roomRequest, String problemClassName, HttpStatus httpStatus) {
     postRequestFail(roomRequest, roomApi, CREATEROOM_ENDPOINT, objectMapper, tracer, problemClassName, httpStatus);
+  }
+
+  private void renameRoomFail(String streamId, RenameRoomRequest updateRoomActivityRequest, String problemClassName, HttpStatus httpStatus) {
+    postRequestFail(updateRoomActivityRequest, roomApi, RENAMEROOM_ENDPOINT, Collections.singletonList(streamId), objectMapper, tracer, problemClassName, httpStatus);
   }
 
   private void updateRoomActivityFail(String streamId, UpdateRoomActivityRequest updateRoomActivityRequest, String problemClassName, HttpStatus httpStatus) {

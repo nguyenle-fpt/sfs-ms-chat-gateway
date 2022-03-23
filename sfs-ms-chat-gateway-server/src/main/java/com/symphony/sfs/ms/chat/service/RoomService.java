@@ -8,6 +8,8 @@ import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateRoomFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
+import com.symphony.sfs.ms.chat.generated.model.RenameRoomFailedProblem;
+import com.symphony.sfs.ms.chat.generated.model.RenameRoomResponse;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRemoveRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberRequest;
 import com.symphony.sfs.ms.chat.generated.model.RoomMemberResponse;
@@ -161,6 +163,17 @@ public class RoomService implements DatafeedListener {
     );
 
     return new UpdateRoomActivityResponse().members(memberResponses);
+  }
+
+  public RenameRoomResponse renameRoom(String streamId, String newRoomName) {
+
+    SymphonyRoomAttributes attributes = streamService.roomInfo(podConfiguration.getUrl(), datafeedSessionPool.getBotSessionSupplier(), streamId).orElseThrow(RenameRoomFailedProblem::new).getRoomAttributes();
+    attributes.setName(newRoomName);
+    attributes.setDescription(newRoomName);
+
+    streamService.updateRoom(podConfiguration.getUrl(), datafeedSessionPool.getBotSessionSupplier(), streamId, attributes).orElseThrow(RenameRoomFailedProblem::new);
+
+    return new RenameRoomResponse().newRoomName(newRoomName);
   }
 
   public RoomMemberResponse addRoomMember(String streamId, RoomMemberRequest roomMemberRequest) {

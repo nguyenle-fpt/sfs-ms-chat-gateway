@@ -12,6 +12,20 @@ create-room-failed:
       type: integer
       format: 500
 
+rename-room-failed:
+  type: object
+  description: 'Unable to rename the room'
+  properties:
+    type:
+      type: string
+      format: 'rename.room.failed'
+    title:
+      type: string
+      format: 'Unable to rename room'
+    status:
+      type: integer
+      format: 500
+
 add-room-member-failed:
   type: object
   description: 'Unable to add the member in the room.'

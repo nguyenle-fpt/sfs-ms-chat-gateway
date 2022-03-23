@@ -34,6 +34,15 @@ update-room-activity-request:
       items:
         $ref: '#/update-room-activity-member-request'
 
+rename-room-request:
+  type: object
+  required:
+    - newRoomName
+  properties:
+    newRoomName:
+      type: string
+      maxLength: 50
+
 room-member-remove-request:
   type: object
   required:
@@ -124,6 +133,12 @@ update-room-activity-response:
       type: array
       items:
         $ref: '#/update-room-activity-member-response'
+
+rename-room-response:
+  type: object
+  properties:
+    newRoomName:
+      type: string
 
 rooms-response:
   type: object
