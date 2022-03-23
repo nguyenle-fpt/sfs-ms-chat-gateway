@@ -73,7 +73,7 @@ public class FederatedAccountService {
 
 
     try {
-      SymphonyUser symphonyUser = createSymphonyUser(datafeedSessionPool.getBotSessionSupplier(), request.getFirstName(), request.getLastName(), request.getPhoneNumber(), request.getEmp());
+      SymphonyUser symphonyUser = createSymphonyUser(datafeedSessionPool.getBotSessionSupplier(), request.getFirstName(), request.getLastName(), request.getPhoneNumber(), request.getEmp(), request.getCompanyName());
       LOG.info("created symphony user | federatedUser={} symphonyId={}", request.getFederatedUserId(), symphonyUser.getUserSystemInfo().getId());
       FederatedAccount federatedAccount = federatedAccountRepository.saveIfNotExists(newFederatedServiceAccount(request, symphonyUser));
 
@@ -137,7 +137,9 @@ public class FederatedAccountService {
 
     // Check EMP against admin
     String userDisplayName = displayName(federatedAccount.getFirstName(), federatedAccount.getLastName(), federatedAccount.getEmp());
-    SymphonyUserAttributes attributes = SymphonyUserAttributes.builder().displayName(userDisplayName).build();
+    SymphonyUserAttributes attributes = SymphonyUserAttributes.builder()
+      .companyName(companyName) // https://perzoinc.atlassian.net/browse/CES-7627
+      .displayName(userDisplayName).build();
 
     // All checks OK, update
     empClient.updateAccountOrFail(federatedAccount.getEmp(), federatedAccount.getSymphonyUserId(), federatedAccount.getPhoneNumber(), tenantId, firstName, lastName, companyName);
@@ -148,7 +150,7 @@ public class FederatedAccountService {
   }
 
   @NewSpan
-  public SymphonyUser createSymphonyUser(SessionSupplier<SymphonySession> session, String firstName, String lastName, String phoneNumber, String emp) {
+  private SymphonyUser createSymphonyUser(SessionSupplier<SymphonySession> session, String firstName, String lastName, String phoneNumber, String emp, String companyName) {
     String publicKey = null;
     try {
       publicKey = RsaUtils.encodeRSAKey(RsaUtils.parseRSAPublicKey(chatConfiguration.getSharedPublicKey().getData()));
@@ -165,6 +167,7 @@ public class FederatedAccountService {
       .displayName(displayName(firstName, lastName, emp))
       .userName(userName(emp, phoneNumber))
       .emailAddress(emailAddress(emp, phoneNumber, session))
+      .companyName(companyName) // https://perzoinc.atlassian.net/browse/CES-7627
       .currentKey(userKey)
       .accountType(ACCOUNT_TYPE_SYSTEM)
       .build();

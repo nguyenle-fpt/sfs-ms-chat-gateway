@@ -150,7 +150,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       SymphonyUserAttributes userAttributes = args.getUserAttributes();
       return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
         userAttributes.getUserName().equals("WHATSAPP.33601020304") &&
-        userAttributes.getEmailAddress().equals("WHATSAPP.33601020304@symphony.com"));
+        userAttributes.getEmailAddress().equals("WHATSAPP.33601020304@symphony.com")) &&
+        userAttributes.getCompanyName().equals("companyName");
     }));
 
     assertEquals(new CreateAccountResponse()
@@ -364,6 +365,9 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .companyName(updateAccountRequest.getCompanyName())
       .phoneNumber(createAccountRequest.getPhoneNumber());
     assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
+    verify(adminUserManagementService, once()).updateUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), any(String.class), argThat(userAttributes ->
+      userAttributes.getDisplayName().equals("firstName2 lastName2 [WHATSAPP]") &&
+      userAttributes.getCompanyName().equals("companyName2")));
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
       .phoneNumber(createAccountRequest.getPhoneNumber())
