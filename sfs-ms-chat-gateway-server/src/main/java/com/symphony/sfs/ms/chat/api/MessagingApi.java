@@ -1,9 +1,9 @@
 package com.symphony.sfs.ms.chat.api;
 
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesRequest;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
-import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SetMessagesAsReadRequest;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
@@ -25,17 +25,17 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
 
   @Override
   @ContinueSpan
-  public ResponseEntity<SendMessageResponse> sendMessage(SendMessageRequest request) {
-    String symphonyMessageId = symphonyMessageService.sendMessage(request.getStreamId(), request.getFromSymphonyUserId(), request.getFormatting(), request.getText(), request.getAttachments(), Boolean.TRUE.equals(request.isForwarded()),
+  public ResponseEntity<MessageInfoWithCustomEntities> sendMessage(SendMessageRequest request) {
+    MessageInfoWithCustomEntities messageInfo = symphonyMessageService.sendMessage(request.getStreamId(), request.getFromSymphonyUserId(), request.getFormatting(), request.getText(), request.getAttachments(), Boolean.TRUE.equals(request.isForwarded()),
       request.getReplyToMessageId(), request.isAttachmentReplySupported(), Optional.ofNullable(request.getReplyToAttachmentMessageIds()));
-    return ResponseEntity.ok(new SendMessageResponse().id(symphonyMessageId));
+    return ResponseEntity.ok(messageInfo);
   }
 
   @Override
-  public ResponseEntity<SendMessageResponse> sendSystemMessage(SendSystemMessageRequest request) {
+  public ResponseEntity<MessageInfoWithCustomEntities> sendSystemMessage(SendSystemMessageRequest request) {
     LOG.info("Send system message | streamId={}", request.getStreamId());
-    String symphonyMessageId = symphonyMessageService.sendSystemMessage(request.getStreamId(), request.getFormatting(), request.getText(), request.getTitle(), request.getFromSymphonyUserId());
-    return ResponseEntity.ok(new SendMessageResponse().id(symphonyMessageId));
+    MessageInfoWithCustomEntities messageInfo = symphonyMessageService.sendSystemMessage(request.getStreamId(), request.getFormatting(), request.getText(), request.getTitle(), request.getFromSymphonyUserId());
+    return ResponseEntity.ok(messageInfo);
   }
 
   @Override

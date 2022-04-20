@@ -102,12 +102,6 @@ set-messages-as-read-request:
       format: int64
 
 #Responses
-send-message-response:
-  type: object
-  properties:
-    id:
-      type: string
-
 retrieve-messages-response:
   type: object
   properties:
@@ -141,6 +135,16 @@ message-info:
         $ref: "#/attachment-info"
     parentMessage:
       $ref: "#/message-info"
+
+message-info-with-custom-entities:
+  allOf:
+    - $ref: '#/message-info'
+    - type: object
+      properties:
+        custom-entities:
+          type: string
+        presentation-ml:
+          type: string
 
 attachment-info:
   type: object

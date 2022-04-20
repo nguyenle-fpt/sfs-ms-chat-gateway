@@ -6,9 +6,12 @@ import com.symphony.sfs.ms.chat.generated.model.DeleteChannelRequest;
 import com.symphony.sfs.ms.chat.generated.model.DeleteChannelResponse;
 import com.symphony.sfs.ms.chat.generated.model.DeleteChannelsRequest;
 import com.symphony.sfs.ms.chat.generated.model.DeleteChannelsResponse;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.FederatedAccountService;
+import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
@@ -37,6 +40,7 @@ import static com.symphony.sfs.ms.chat.generated.api.ChannelsApi.RETRIEVECHANNEL
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -67,6 +71,9 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
       empSchemaService,
       empClient,
       channelRepository);
+    symphonyMessageSender = mock(SymphonyMessageSender.class);
+    channelService = new ChannelService(symphonyMessageSender, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository,
+      empSchemaService, channelRepository, messageSource);
     channelApi = new ChannelsApi(channelService);
 
     botSession = new SymphonySession("username", "kmToken", "sessionToken");
@@ -88,7 +95,7 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void deleteChannelsTest(){
+  public void deleteChannelsTest() {
     List<String> emp1Suffixes = Arrays.asList("31", "32", "33", "34");
     List<String> emp2Suffixes = Arrays.asList("41", "42");
     List<String> emp3Suffixes = Collections.singletonList("51");
@@ -96,7 +103,7 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
     createFederatedAccounts("emp2", emp2Suffixes);
     createFederatedAccounts("emp3", emp3Suffixes);
     String streamId = "streamId";
-    DeleteChannelsRequest request = generateDeleteChannelsRequest(streamId, "emp1", "emp2","emp3", emp1Suffixes, emp2Suffixes, emp3Suffixes);
+    DeleteChannelsRequest request = generateDeleteChannelsRequest(streamId, "emp1", "emp2", "emp3", emp1Suffixes, emp2Suffixes, emp3Suffixes);
 
     com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse responseEmp1 = new com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse().report(Arrays.asList(
       new com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse().symphonyId("symphonyUserId31").streamId(streamId).status(BulkRemovalStatus.SUCCESS),
@@ -113,6 +120,7 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
     when(empClient.deleteChannels(emp2Suffixes.stream().map(s -> new ChannelIdentifier().streamId(streamId).symphonyId("symphonyUserId" + s)).collect(Collectors.toList()), "emp2")).thenReturn(Optional.empty());
     when(empClient.deleteChannels(emp3Suffixes.stream().map(s -> new ChannelIdentifier().streamId(streamId).symphonyId("symphonyUserId" + s)).collect(Collectors.toList()), "emp3")).thenReturn(Optional.of(responseEmp3));
 
+    when(symphonyMessageSender.sendInfoMessage(any(), any(), any(), any())).thenReturn(Optional.of(new MessageInfoWithCustomEntities()));
     DeleteChannelsResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), channelApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(request)
@@ -137,7 +145,7 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
     assertTrue(response.getReport().contains(new DeleteChannelResponse().channel(request.getChannels().get(6)).status(BulkRemovalStatus.SUCCESS)));
   }
 
-  private void createFederatedAccounts(String emp, List<String> suffixes){
+  private void createFederatedAccounts(String emp, List<String> suffixes) {
     for (String suffix : suffixes) {
       FederatedAccount account = FederatedAccount.builder()
         .phoneNumber("+336010203" + suffix)
@@ -153,7 +161,7 @@ public class ChannelsApiTest extends AbstractIntegrationTest {
     }
   }
 
-  private DeleteChannelsRequest generateDeleteChannelsRequest(String streamId, String emp1, String emp2, String emp3, List<String> emp1Suffixes, List<String> emp2Suffixes, List<String> emp3Suffixes){
+  private DeleteChannelsRequest generateDeleteChannelsRequest(String streamId, String emp1, String emp2, String emp3, List<String> emp1Suffixes, List<String> emp2Suffixes, List<String> emp3Suffixes) {
     List<DeleteChannelRequest> channels = new ArrayList<>();
     emp1Suffixes.forEach(suffix -> channels.add(new DeleteChannelRequest().entitlementType(emp1).federatedSymphonyId("symphonyUserId" + suffix).streamId(streamId)));
     emp2Suffixes.forEach(suffix -> channels.add(new DeleteChannelRequest().entitlementType(emp2).federatedSymphonyId("symphonyUserId" + suffix).streamId(streamId)));

@@ -8,6 +8,8 @@ import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapper;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapperImpl;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
@@ -109,6 +111,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     dynamoConfiguration = provisionTestTable(db);
     objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
+    MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
 
     meterManager = new MeterManager(new SimpleMeterRegistry(), Optional.empty());
 
@@ -158,7 +161,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // services
     streamService = spy(new StreamService(sessionManager));
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper));
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, datafeedSessionPool));
     empSchemaService = new EmpSchemaService(adminClient);

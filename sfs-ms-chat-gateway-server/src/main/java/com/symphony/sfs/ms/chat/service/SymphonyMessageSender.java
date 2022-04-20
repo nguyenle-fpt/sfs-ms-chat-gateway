@@ -2,15 +2,21 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.util.Base64;
 import com.symphony.security.helper.ClientCryptoHandler;
+import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
-import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.BlastAttachmentUploadException;
+import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
+import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
+import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
@@ -77,14 +83,15 @@ public class SymphonyMessageSender {
   private final SymphonyService symphonyService;
   private final EmpSchemaService empSchemaService;
   private final MessageSource messageSource;
+  private final MessageInfoMapper messageInfoMapper;
 
 
-  public Optional<String> sendRawMessage(SessionSupplier<SymphonySession> session, String streamId, String messageContent) {
+  public Optional<MessageInfoWithCustomEntities> sendRawMessage(SessionSupplier<SymphonySession> session, String streamId, String messageContent) {
     LOG.debug("Send message to symphony");
-    return streamService.sendMessage(podConfiguration.getUrl(), session, streamId, messageContent);
+    return Optional.of(messageInfoMapper.inboundMessageToMessageInfo(streamService.sendMessage(podConfiguration.getUrl(), session, streamId, messageContent).orElseThrow(SendMessageFailedProblem::new)));
   }
 
-  public Optional<String> sendRawMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
+  public Optional<MessageInfoWithCustomEntities> sendRawMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
       messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
@@ -96,45 +103,45 @@ public class SymphonyMessageSender {
     return sendRawMessage(datafeedSessionPool.getSessionSupplier(federatedAccount), streamId, messageContent);
   }
 
-  public Optional<String> sendSimpleMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
+  public Optional<MessageInfoWithCustomEntities> sendSimpleMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
     String detemplatized = templateProcessor.process(messageContent, SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE);
     return sendRawMessage(streamId, fromSymphonyUserId, detemplatized, toSymphonyUserId);
   }
 
-  public Optional<String> sendSimpleMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
+  public Optional<MessageInfoWithCustomEntities> sendSimpleMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
     String detemplatized = templateProcessor.process(messageContent, SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE);
     return sendRawMessage(userSession, streamId, detemplatized);
   }
 
-  public Optional<String> sendNotificationMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
+  public Optional<MessageInfoWithCustomEntities> sendNotificationMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
     return sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE), toSymphonyUserId);
   }
 
-  public Optional<String> sendNotificationMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
+  public Optional<MessageInfoWithCustomEntities> sendNotificationMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_NOTIFICATION_HANDLEBARS_TEMPLATE));
   }
 
-  public Optional<String> sendInfoMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
+  public Optional<MessageInfoWithCustomEntities> sendInfoMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
     return sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE), toSymphonyUserId);
   }
 
-  public Optional<String> sendInfoMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
+  public Optional<MessageInfoWithCustomEntities> sendInfoMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent) {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_INFORMATION_HANDLEBARS_TEMPLATE));
   }
 
-  public Optional<String> sendAlertMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent, String title, List<String> errors) {
+  public Optional<MessageInfoWithCustomEntities> sendAlertMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent, String title, List<String> errors) {
     return sendRawMessage(userSession, streamId, templateProcessor.process(messageContent, title, errors, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE));
   }
 
-  public Optional<String> sendAlertMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent, List<String> errors) {
+  public Optional<MessageInfoWithCustomEntities> sendAlertMessage(SessionSupplier<SymphonySession> userSession, String streamId, String messageContent, List<String> errors) {
     return sendAlertMessage(userSession, streamId, messageContent, null, errors);
   }
 
-  public Optional<String> sendAlertMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
+  public Optional<MessageInfoWithCustomEntities> sendAlertMessage(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId) {
     return sendRawMessage(streamId, fromSymphonyUserId, templateProcessor.process(messageContent, SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE), toSymphonyUserId);
   }
 
-  public Optional<String> sendRawMessageWithAttachments(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId, List<SymphonyAttachment> attachments) {
+  public Optional<MessageInfoWithCustomEntities> sendRawMessageWithAttachments(String streamId, String fromSymphonyUserId, String messageContent, String toSymphonyUserId, List<SymphonyAttachment> attachments) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
       messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
@@ -153,10 +160,10 @@ public class SymphonyMessageSender {
           .build()
       ).toArray(SymphonyOutboundAttachment[]::new)).build();
     Optional<SymphonyInboundMessage> response =  streamService.sendMessageMultiPart(podConfiguration.getUrl(), datafeedSessionPool.getSessionSupplier(federatedAccount), streamId, symphonyOutboundMessage, false);
-    return response.map(SymphonyInboundMessage::getMessageId);
+    return Optional.of(messageInfoMapper.symphonyInboundMessageToMessageInfo(response.orElseThrow(SendMessageFailedProblem::new)));
   }
 
-  public Optional<String> sendForwardedMessage(String streamId, String fromSymphonyUserId, String messageContent, List<SymphonyAttachment> attachments) {
+  public Optional<MessageInfoWithCustomEntities> sendForwardedMessage(String streamId, String fromSymphonyUserId, String messageContent, List<SymphonyAttachment> attachments) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
       messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
@@ -180,7 +187,8 @@ public class SymphonyMessageSender {
       String messageHeader = messageSource.getMessage("forwarded.message.header", new Object[] {empSchemaService.getEmpDisplayName(federatedAccount.getEmp())}, Locale.getDefault());
       SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildForwardedMessage(fromSymphonyUserId, federatedAccount.getSymphonyUsername(), streamId, messageContent, messageHeader, blastAttachments, ephemeralKey);
       SBEEventMessage sentMessage = symphonyService.sendBulkMessage(sbeMessageToBeSent, userSession);
-      return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
+
+      return Optional.of(decryptAndBuildMessageInfo(sentMessage, fromSymphonyUserId, userSession));
     } catch (BlastAttachmentUploadException e) {
       LOG.error("Unable to forward attachment to Symphony: stream={} initiator={}", streamId, fromSymphonyUserId, e);
       messageMetrics.onMessageBlockToSymphony(BLAST_ATTACHMENTS_UPLOAD_FAILED, streamId);
@@ -192,7 +200,7 @@ public class SymphonyMessageSender {
   }
 
 
-  public Optional<String> sendReplyMessage(String streamId, String fromSymphonyUserId, String messageContent, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
+  public Optional<MessageInfoWithCustomEntities> sendReplyMessage(String streamId, String fromSymphonyUserId, String messageContent, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
       messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
@@ -231,7 +239,8 @@ public class SymphonyMessageSender {
 
       SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildReplyMessage(fromSymphonyUserId, federatedAccount.getSymphonyUsername(), streamId, messageContent, replyToMessage, allAttachments);
       SBEEventMessage sentMessage = symphonyService.sendReplyMessage(sbeMessageToBeSent, userSession);
-      return Optional.ofNullable(StreamUtil.toUrlSafeStreamId(sentMessage.getMessageId()));
+
+      return Optional.of(decryptAndBuildMessageInfo(sentMessage, fromSymphonyUserId, userSession));
     } catch (IOException e) {
       LOG.error("Unable to send relied message from WhatsApp: stream={} initiator={}", streamId, fromSymphonyUserId, e);
       messageMetrics.onMessageBlockToSymphony(ENCRYPTION_FAILED, streamId);
@@ -271,6 +280,65 @@ public class SymphonyMessageSender {
     messageDecryptor.decrypt(eventMessage, userId, session.getPrincipal());
 
     return eventMessage;
+  }
+
+
+  public MessageInfoWithCustomEntities decryptAndBuildMessageInfo(SBEEventMessage sbeEventMessage, String symphonyUserId, SessionSupplier<SymphonySession> userSession) throws DecryptionException {
+    messageDecryptor.decrypt(sbeEventMessage, symphonyUserId, userSession.getPrincipal());
+
+    // TODO handle inline replies
+
+    MessageInfoWithCustomEntities messageInfo = buildMessageInfo(sbeEventMessage);
+
+    Optional<CustomEntity> quote = sbeEventMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
+
+    if (quote.isPresent()) {
+      messageInfo.setMessage(messageInfo.getMessage().substring(quote.get().getEndIndex()));
+      String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
+      Optional<SBEEventMessage> inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);
+      if (inlineMessageOptional.isEmpty()) {
+        // The message might not been retrieve with the federated account session
+        // We try with the connect bot session
+        inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, datafeedSessionPool.getBotSessionSupplier());
+      }
+      if (inlineMessageOptional.isEmpty()) {
+        throw new RetrieveMessageFailedProblem();
+      }
+
+      SBEEventMessage inlineMessage = inlineMessageOptional.get();
+
+      messageDecryptor.decrypt(inlineMessage, symphonyUserId, userSession.getPrincipal());
+      MessageInfo inlineMessageInfo = buildMessageInfo(inlineMessage);
+      Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
+
+      if (quoteInline.isPresent()) {
+        inlineMessageInfo.setMessage(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex()));
+      } else {
+        inlineMessageInfo.setMessage(inlineMessageInfo.getMessage());
+      }
+
+      messageInfo.setParentMessage(inlineMessageInfo);
+    } else {
+      messageInfo.setMessage(messageInfo.getMessage());
+    }
+
+    return messageInfo;
+  }
+
+  private MessageInfoWithCustomEntities buildMessageInfo(SBEEventMessage sbeEventMessage) {
+    MessageInfoWithCustomEntities messageInfo = messageInfoMapper.sbeEventMessageToMessageInfo(sbeEventMessage);
+    messageInfo.setMessageId(StreamUtil.toUrlSafeStreamId(sbeEventMessage.getMessageId()));
+
+    if(sbeEventMessage.getAttachments() != null) {
+      List<AttachmentInfo> attachmentInfos = sbeEventMessage.getAttachments()
+        .stream()
+        .map(sbeMessageAttachment -> new AttachmentInfo().contentType(sbeMessageAttachment.getContentType()).fileName(sbeMessageAttachment.getName()))
+        .collect(Collectors.toList());
+
+      messageInfo.setAttachments(attachmentInfos);
+    }
+
+    return messageInfo;
   }
 
     // TODO i18n?

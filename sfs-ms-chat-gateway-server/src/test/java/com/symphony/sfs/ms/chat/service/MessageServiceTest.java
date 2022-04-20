@@ -18,6 +18,9 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapper;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapperImpl;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
@@ -49,6 +52,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.user.UsersInfoService;
 import com.symphony.sfs.ms.starter.testing.I18nTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import model.InboundMessage;
 import model.UserInfo;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Assertions;
@@ -174,12 +178,14 @@ class MessageServiceTest implements I18nTest {
     loader.setSuffix(".hbs");
 
     SymphonySystemMessageTemplateProcessor templateProcessor = new SymphonySystemMessageTemplateProcessor(new Handlebars(loader));
-
     MessageIOMonitor messageMetrics = new MessageIOMonitor(meterManager);
+    MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
+
     // really instantiate SymphonyMessageSender to test Handlebars templates.
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService,  templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper));
     messageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
   }
+
   @Test
   public void testMessageWithDisclaimer() {
     IUser fromSymphonyUser = newIUser("1");
@@ -229,8 +235,8 @@ class MessageServiceTest implements I18nTest {
       .messageId("messageId")
       .fromUser(fromSymphonyUser)
       .members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID))
-        .attachments(attachments)
-        .timestamp(NOW)
+      .attachments(attachments)
+      .timestamp(NOW)
       .textContent("12345ThisIsAMessage")
       .customEntities(Collections.singletonList(
         CustomEntity.builder()
@@ -244,19 +250,19 @@ class MessageServiceTest implements I18nTest {
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("Rp6N+cRznOWTwnD80vg7OX///oOAgiSfbQ==").disclaimer("disclaimer1").text("123This is the inline message")
       .ingestionDate(123L)
       .parsedCustomEntities(Collections.singletonList(
-          CustomEntity.builder()
-            .type(CustomEntity.QUOTE_TYPE)
-            .endIndex(3)
-            .data(Map.of("id", "otherMsg"))
-            .build()
-        ))
+        CustomEntity.builder()
+          .type(CustomEntity.QUOTE_TYPE)
+          .endIndex(3)
+          .data(Map.of("id", "otherMsg"))
+          .build()
+      ))
       .from(
         SBEEventUser.builder()
-        .firstName("first")
-        .surName("last")
-        .id(12345L)
-        .company("company")
-        .build())
+          .firstName("first")
+          .surName("last")
+          .id(12345L)
+          .company("company")
+          .build())
       .attachments(Collections.singletonList(
         SBEMessageAttachment.builder().contentType("image/png").name("hello.png").build()
       ))
@@ -273,13 +279,13 @@ class MessageServiceTest implements I18nTest {
       .addAttachmentsItem(new AttachmentInfo().contentType("image/png").fileName("hello.png"));
 
 
-
     messageService.onIMMessage(message);
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
     verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "ThisIsAMessage", "", null, sendmessagerequestInlineMessage);
   }
+
   @Test
   void onMessageReplyToBot() {
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
@@ -297,8 +303,8 @@ class MessageServiceTest implements I18nTest {
       .messageId("messageId")
       .fromUser(fromSymphonyUser)
       .members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID))
-        .attachments(attachments)
-        .timestamp(NOW)
+      .attachments(attachments)
+      .timestamp(NOW)
       .textContent("12345ThisIsAMessage")
       .customEntities(Collections.singletonList(
         CustomEntity.builder()
@@ -312,19 +318,19 @@ class MessageServiceTest implements I18nTest {
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("Rp6N+cRznOWTwnD80vg7OX///oOAgiSfbQ==").disclaimer("disclaimer1").text("123This is the inline message")
       .ingestionDate(123L)
       .parsedCustomEntities(Collections.singletonList(
-          CustomEntity.builder()
-            .type(CustomEntity.QUOTE_TYPE)
-            .endIndex(3)
-            .data(Map.of("id", "otherMsg"))
-            .build()
-        ))
+        CustomEntity.builder()
+          .type(CustomEntity.QUOTE_TYPE)
+          .endIndex(3)
+          .data(Map.of("id", "otherMsg"))
+          .build()
+      ))
       .from(
         SBEEventUser.builder()
-        .firstName("first")
-        .surName("last")
-        .id(Long.valueOf(botConfiguration.getSymphonyId()))
-        .company("company")
-        .build())
+          .firstName("first")
+          .surName("last")
+          .id(Long.valueOf(botConfiguration.getSymphonyId()))
+          .company("company")
+          .build())
       .build();
 
 
@@ -336,7 +342,6 @@ class MessageServiceTest implements I18nTest {
       .timestamp(123L)
       .fromMember(new ChannelMember().firstName("first").lastName("last").symphonyId("12345").companyName("company"))
       .addAttachmentsItem(new AttachmentInfo().contentType("image/png").fileName("hello.png"));
-
 
 
     messageService.onIMMessage(message);
@@ -479,6 +484,7 @@ class MessageServiceTest implements I18nTest {
 
     SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult).errors(empErrors);
     when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null, null)).thenReturn(Optional.of(sendMessageResponse));
+    when(streamService.sendMessage(eq("podUrl"), eq(null), eq("streamId"), any())).thenReturn(Optional.of(new InboundMessage()));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(id1, id2, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chatType("CHATROOM").build();
 
     messageService.onIMMessage(message);
@@ -566,7 +572,8 @@ class MessageServiceTest implements I18nTest {
 
     verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", expectedAlertMessage, Collections.emptyList());   }
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", expectedAlertMessage, Collections.emptyList());
+  }
 
   @Test
   void onIMMessage_FederatedServiceAccountNotFound() {
@@ -590,7 +597,7 @@ class MessageServiceTest implements I18nTest {
     StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
-    when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of("msgId"));
+    when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("msgId")));
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, false, null, false, Optional.empty());
     verify(symphonyMessageSender, once()).sendRawMessage("streamId", FROM_SYMPHONY_USER_ID, "<messageML>text</messageML>", null);
   }
@@ -607,7 +614,7 @@ class MessageServiceTest implements I18nTest {
     StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
-    when(symphonyMessageSender.sendReplyMessage(anyString(), anyString(), anyString(), anyString(), any(Boolean.class), any(Optional.class))).thenReturn(Optional.of("msgId"));
+    when(symphonyMessageSender.sendReplyMessage(anyString(), anyString(), anyString(), anyString(), any(Boolean.class), any(Optional.class))).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("msgId")));
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, "text", null, false, "parent_message_id", false, Optional.empty());
     verify(symphonyMessageSender, once()).sendReplyMessage("streamId", FROM_SYMPHONY_USER_ID, "text", "parent_message_id", false, Optional.empty());
   }
@@ -663,9 +670,9 @@ class MessageServiceTest implements I18nTest {
     StreamAttributes streamAttributes = StreamAttributes.builder().members(Arrays.asList(Long.valueOf(FROM_SYMPHONY_USER_ID), Long.valueOf(TO_SYMPHONY_USER_ID))).build();
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(streamAttributes).streamType(new StreamType(StreamTypes.IM)).build();
     when(streamService.getStreamInfo(anyString(), any(), eq("streamId"))).thenReturn(Optional.of(streamInfo));
-    when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of("msgId"));
+    when(symphonyMessageSender.sendRawMessage(anyString(), anyString(), anyString(), any())).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("msgId")));
     when(empClient.sendSystemMessage(eq("emp"), eq("streamId"), any(), any(), anyString(), eq(TypeEnum.INFO))).thenReturn(Optional.of("leaseId"));
-    when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of("msgId"));
+    when(symphonyMessageSender.sendInfoMessage(anyString(), anyString(), anyString(), anyString())).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("msgId")));
     messageService.sendMessage("streamId", FROM_SYMPHONY_USER_ID, null, tooLongMsg, null, false, null, false, Optional.empty());
     String expectedTruncatedMsgML = "<messageML>" + tooLongMsg.substring(0, 1000) + "...</messageML>";
     String warningMessage = "The message was too long and was truncated. Only the first 1,000 characters were delivered";

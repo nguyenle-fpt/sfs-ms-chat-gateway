@@ -6,10 +6,12 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
-import com.symphony.sfs.ms.chat.exception.BlastAttachmentUploadException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapper;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapperImpl;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
@@ -57,7 +59,8 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     messageEncryptor = mock(MessageEncryptor.class);
     messageDecryptor = mock(MessageDecryptor.class);
     symphonyService = mock(SymphonyService.class);
-    symphonyMessageSender = new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource);
+    MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
+    symphonyMessageSender = new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper);
   }
 
   @Test
@@ -74,10 +77,10 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     SBEEventMessage parentMessage = SBEEventMessage.builder().build();
     when(symphonyService.getEncryptedMessage(eq("message_id"), any(SessionSupplier.class))).thenReturn(Optional.of(parentMessage));
     when(messageEncryptor.buildReplyMessage("123456789", "wa_bot_user_name", "streamId", "message text", parentMessage, Collections.emptyList())).thenThrow(new EncryptionException(null));
-    Optional<String> newMessageId = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", false, Optional.empty());
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", false, Optional.empty());
 
     verify(messageMetrics, times(1)).onMessageBlockToSymphony(ENCRYPTION_FAILED, "streamId");
-    assertTrue(newMessageId.isEmpty());
+    assertTrue(newMessage.isEmpty());
   }
 
   @Test
@@ -111,10 +114,10 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     when(messageEncryptor.buildReplyMessage("123456789", "wa_bot_user_name", "streamId", "message text", parentMessage, Collections.emptyList())).thenReturn(messageToBeSent);
     when(symphonyService.sendReplyMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
 
-    Optional<String> newMessageId = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", false, Optional.empty());
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", false, Optional.empty());
 
     verify(messageMetrics, times(1)).onSendMessageToSymphony("123456789", "streamId");
-    assertEquals(newMessageId.get(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
+    assertEquals(newMessage.get().getMessageId(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
 
   }
 
@@ -143,14 +146,14 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
 
     when(symphonyService.sendReplyMessage(any(SBEEventMessage.class), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
 
-    Optional<String> newMessageId = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", true,
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", true,
       Optional.of(Collections.singletonList("attachment_message_id")));
 
     verify(symphonyService, times(1)).getEncryptedMessage(eq("message_id"), any(SessionSupplier.class));
     verify(symphonyService, times(1)).getEncryptedMessage(eq("attachment_message_id"), any(SessionSupplier.class));
     verify(messageEncryptor, times(1)).buildReplyMessage("123456789", "wa_bot_user_name", "streamId", "message text", parentMessage, List.of(parentMessageAttachment, addedAttachment));
     verify(messageMetrics, times(1)).onSendMessageToSymphony("123456789", "streamId");
-    assertEquals(newMessageId.get(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
+    assertEquals(newMessage.get().getMessageId(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
 
   }
 
@@ -171,10 +174,10 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     when(messageEncryptor.buildReplyMessage("123456789", "wa_bot_user_name", "streamId", "message text", parentMessage, Collections.emptyList())).thenReturn(messageToBeSent);
     when(symphonyService.sendReplyMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
 
-    Optional<String> newMessageId = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", false, Optional.empty());
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendReplyMessage("streamId", "123456789", "message text", "message_id", false, Optional.empty());
 
     verify(symphonyService, times(2)).getEncryptedMessage(any(String.class), any(SessionSupplier.class));
-    assertEquals(newMessageId.get(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
+    assertEquals(newMessage.get().getMessageId(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
 
   }
 
@@ -185,10 +188,10 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     when(messageEncryptor.buildForwardedMessage(eq("123456789"), eq("wa_bot_user_name"),eq("streamId"), eq("message text"), eq("from WHATSAPP\n"), eq(Collections.emptyList()), any(byte[].class))).thenReturn(messageToBeSent);
     when(symphonyService.sendBulkMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
 
-    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.emptyList());
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.emptyList());
 
     verify(messageMetrics, times(1)).onSendMessageToSymphony("123456789", "streamId");
-    assertEquals(newMessageId.get(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
+    assertEquals(newMessage.get().getMessageId(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
 
   }
 
@@ -201,10 +204,10 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     when(symphonyService.sendBulkMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
     when(symphonyService.uploadBlastAttachment(any(SessionSupplier.class), any(String.class), any(String.class), any(byte[].class))).thenReturn(uploadedAttachments);
 
-    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name").contentType("image/png").data("data")));
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name").contentType("image/png").data("data")));
 
     verify(messageMetrics, times(1)).onSendMessageToSymphony("123456789", "streamId");
-    assertEquals(newMessageId.get(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
+    assertEquals(newMessage.get().getMessageId(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
 
   }
 
@@ -214,8 +217,8 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     when(symphonyService.uploadBlastAttachment(any(SessionSupplier.class), any(String.class), any(String.class), any(byte[].class))).thenReturn(null);
 
 
-    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name")));
-    assertTrue(newMessageId.isEmpty());
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name")));
+    assertTrue(newMessage.isEmpty());
     verify(messageMetrics, times(1)).onMessageBlockToSymphony(BLAST_ATTACHMENTS_UPLOAD_FAILED, "streamId");
 
   }
@@ -225,9 +228,9 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").emp("WHATSAPP").build());
 
     // attachment without data could make encryption failed
-    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name").contentType("image/png").data(null)));
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.singletonList(new SymphonyAttachment().fileName("file_name").contentType("image/png").data(null)));
 
-    assertTrue(newMessageId.isEmpty());
+    assertTrue(newMessage.isEmpty());
     verify(messageMetrics, times(1)).onMessageBlockToSymphony(BLAST_ATTACHMENTS_UPLOAD_FAILED, "streamId");
 
   }
@@ -245,9 +248,9 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
 
     when(messageEncryptor.buildForwardedMessage(eq("123456789"), eq("wa_bot_user_name"), eq("streamId"), eq("message text"), eq("from WHATSAPP\n"), eq(Collections.emptyList()), any(byte[].class))).thenThrow(new EncryptionException(null));
 
-    Optional<String> newMessageId = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.emptyList());
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendForwardedMessage("streamId", "123456789", "message text", Collections.emptyList());
 
     verify(messageMetrics, times(1)).onMessageBlockToSymphony(ENCRYPTION_FAILED, "streamId");
-    assertTrue(newMessageId.isEmpty());
+    assertTrue(newMessage.isEmpty());
   }
 }

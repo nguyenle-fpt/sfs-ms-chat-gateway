@@ -25,7 +25,6 @@ import com.symphony.oss.models.core.canon.facade.IEnvelope;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.oss.models.crypto.canon.CryptoModel;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
-import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.health.MeterManager;

@@ -13,12 +13,12 @@ import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesRequest;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageRequest;
-import com.symphony.sfs.ms.chat.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.chat.generated.model.SetMessagesAsReadRequest;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
@@ -73,6 +73,7 @@ import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static com.symphony.sfs.ms.starter.util.RsaUtils.parseRSAPrivateKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -129,7 +130,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     messageStatusService = mock(MessageStatusService.class);
 
     messageDecryptor = mock(MessageDecryptor.class);
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService,  new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
 
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
@@ -159,9 +160,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
     sendMessageRequest.setForwarded(true);
     var attachments = Collections.singletonList(new SymphonyAttachment().contentType("image/png").fileName("attachment.png").data("data"));
     sendMessageRequest.setAttachments(attachments);
-    when(symphonyMessageSender.sendForwardedMessage("streamId", "fromSymphonyUserId", "text", attachments)).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendForwardedMessage("streamId", "fromSymphonyUserId", "text", attachments)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
     assertEquals(expectedResponse, sendMessageResponse);
 
   }
@@ -169,9 +170,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendMessageToRoom_noAttachments_noFormatting() {
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text");
-    when(symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null)).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendMessageResponse);
   }
@@ -179,9 +180,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendMessageToRoom_noAttachments_simpleFormatting() {
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.SIMPLE);
-    when(symphonyMessageSender.sendSimpleMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendSimpleMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendMessageResponse);
   }
@@ -189,9 +190,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendMessageToRoom_noAttachments_notificationFormatting() {
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.NOTIFICATION);
-    when(symphonyMessageSender.sendNotificationMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendNotificationMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendMessageResponse);
   }
@@ -199,9 +200,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendMessageToRoom_noAttachments_alertFormatting() {
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.ALERT);
-    when(symphonyMessageSender.sendAlertMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendAlertMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendMessageResponse);
   }
@@ -209,9 +210,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendMessageToRoom_noAttachments_infoFormatting() {
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.INFO);
-    when(symphonyMessageSender.sendInfoMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendInfoMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendMessageResponse);
   }
@@ -220,9 +221,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   void sendMessageToRoom_withAttachments() {
     SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").addAttachmentsItem(attachment);
-    when(symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null, Collections.singletonList(attachment))).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendMessageResponse = sendMessage(sendMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null, Collections.singletonList(attachment))).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendMessageResponse);
   }
@@ -230,9 +231,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_noFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text");
-    when(symphonyMessageSender.sendRawMessage(botSession, "streamId", "<messageML>text</messageML>")).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendRawMessage(botSession, "streamId", "<messageML>text</messageML>")).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendSystemMessageResponse);
   }
@@ -240,9 +241,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_simpleFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.SIMPLE);
-    when(symphonyMessageSender.sendSimpleMessage(botSession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendSimpleMessage(botSession, "streamId", "text")).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendSystemMessageResponse);
   }
@@ -250,9 +251,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_notificationFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.NOTIFICATION);
-    when(symphonyMessageSender.sendNotificationMessage(botSession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendNotificationMessage(botSession, "streamId", "text")).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendSystemMessageResponse);
   }
@@ -260,9 +261,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_alertFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").title("title").formatting(FormattingEnum.ALERT);
-    when(symphonyMessageSender.sendAlertMessage(botSession, "streamId", "text", "title", Collections.emptyList())).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendAlertMessage(botSession, "streamId", "text", "title", Collections.emptyList())).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendSystemMessageResponse);
   }
@@ -270,9 +271,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendSystemMessageToRoom_infoFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").formatting(FormattingEnum.INFO);
-    when(symphonyMessageSender.sendInfoMessage(botSession, "streamId", "text")).thenReturn(Optional.of("symphonyMessageId"));
-    SendMessageResponse sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
-    SendMessageResponse expectedResponse = new SendMessageResponse().id("symphonyMessageId");
+    when(symphonyMessageSender.sendInfoMessage(botSession, "streamId", "text")).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendSystemMessageResponse = sendSystemMessage(sendsystemMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendSystemMessageResponse);
   }
@@ -315,6 +316,29 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     when(symphonyService.getEncryptedMessage("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
 
+    MessageInfoWithCustomEntities messageInfo1 = new MessageInfoWithCustomEntities()
+      .messageId("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ")
+      .disclaimer("disclaimer1")
+      .message("This is the message 1")
+      .firstName("first")
+      .lastName("last")
+      .symphonyId("12345")
+      .timestamp(123L);
+    MessageInfoWithCustomEntities messageInfo2 = new MessageInfoWithCustomEntities()
+      .messageId("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA")
+      .disclaimer("disclaimer2")
+      .message("This is the message 2")
+      .firstName("first")
+      .lastName("last")
+      .symphonyId("12345")
+      .timestamp(123L);
+
+    try {
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo1);
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage2), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo2);
+    } catch (Exception e) {
+      fail();
+    }
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Arrays.asList(
@@ -383,6 +407,30 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     when(symphonyService.getEncryptedMessage("otherMsg", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
 
+    MessageInfoWithCustomEntities messageInfo = new MessageInfoWithCustomEntities()
+      .messageId("messageIdw")
+      .disclaimer("disclaimer1")
+      .message("This is the message 1")
+      .firstName("first")
+      .lastName("last")
+      .symphonyId("12345")
+      .timestamp(123L)
+      .parentMessage(new MessageInfo()
+        .messageId("otherMsg")
+        .disclaimer("disclaimer2")
+        .message("This is the message 2")
+        .firstName("first")
+        .lastName("last")
+        .symphonyId("12345")
+        .timestamp(123L)
+        .addAttachmentsItem(new AttachmentInfo().contentType("image/png").fileName("hello.png")));
+
+    try {
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo);
+    } catch (Exception e) {
+      fail();
+    }
+
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Arrays.asList(
       new MessageInfo()
@@ -421,37 +469,58 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
     SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2").disclaimer("disclaimer1").text("This \\+ is \\_the\\_inlinemessage \\*1")
-        .ingestionDate(123L)
-        .from(SBEEventUser.builder()
-          .firstName("first")
-          .surName("last")
-          .id(12345L)
-          .company("company")
-          .build()).build();
-    
+      .ingestionDate(123L)
+      .from(SBEEventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build()).build();
+
     when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
     when(symphonyService.getEncryptedMessage("messageIdw", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
 
+    MessageInfoWithCustomEntities messageInfo = new MessageInfoWithCustomEntities()
+      .messageId("messageIdw")
+      .disclaimer("disclaimer1")
+      .message("This \\+ is \\_the\\_message \\*1")
+      .firstName("first")
+      .lastName("last")
+      .symphonyId("12345")
+      .timestamp(123L)
+      .parentMessage(new MessageInfoWithCustomEntities()
+        .messageId("messageIdw")
+        .disclaimer("disclaimer1")
+        .message("This \\+ is \\_the\\_inlinemessage \\*1")
+        .firstName("first")
+        .lastName("last")
+        .symphonyId("12345")
+        .timestamp(123L));
 
+    try {
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo);
+    } catch (Exception e) {
+      fail();
+    }
 
     RetrieveMessagesResponse response = retrieveMessages(retrieveMessagesRequest);
     MessageInfo msg = new MessageInfo()
-    .messageId("messageIdw")
-    .disclaimer("disclaimer1")
-    .message("This \\+ is \\_the\\_message \\*1")
-    .firstName("first")
-    .lastName("last")
-    .symphonyId("12345")
-    .timestamp(123L);
+      .messageId("messageIdw")
+      .disclaimer("disclaimer1")
+      .message("This \\+ is \\_the\\_message \\*1")
+      .firstName("first")
+      .lastName("last")
+      .symphonyId("12345")
+      .timestamp(123L);
 
     MessageInfo parentMsg = new MessageInfo()
-    .messageId("messageIdw")
-    .disclaimer("disclaimer1")
-    .message("This \\+ is \\_the\\_inlinemessage \\*1")
-    .firstName("first")
-    .lastName("last")
-    .symphonyId("12345")
-    .timestamp(123L);
+      .messageId("messageIdw")
+      .disclaimer("disclaimer1")
+      .message("This \\+ is \\_the\\_inlinemessage \\*1")
+      .firstName("first")
+      .lastName("last")
+      .symphonyId("12345")
+      .timestamp(123L);
     msg.setParentMessage(parentMsg);
     RetrieveMessagesResponse expectedResponse = new RetrieveMessagesResponse().messages(Collections.singletonList(msg));
 
@@ -503,7 +572,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
       .as(RetrieveMessagesResponse.class);
   }
 
-  private SendMessageResponse sendMessage(SendMessageRequest sendMessageRequest) {
+  private MessageInfo sendMessage(SendMessageRequest sendMessageRequest) {
     return configuredGiven(objectMapper, new ExceptionHandling(tracer), symphonyMessagingApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(sendMessageRequest)
@@ -512,10 +581,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
       .then()
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
-      .as(SendMessageResponse.class);
+      .as(MessageInfo.class);
   }
 
-  private SendMessageResponse sendSystemMessage(SendSystemMessageRequest sendSystemMessageRequest) {
+  private MessageInfo sendSystemMessage(SendSystemMessageRequest sendSystemMessageRequest) {
     return configuredGiven(objectMapper, new ExceptionHandling(tracer), symphonyMessagingApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
       .body(sendSystemMessageRequest)
@@ -524,7 +593,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
       .then()
       .statusCode(HttpStatus.OK.value())
       .extract().response().body()
-      .as(SendMessageResponse.class);
+      .as(MessageInfo.class);
   }
 
   private void markMessagesAsRead(SetMessagesAsReadRequest setMessagesAsReadRequest) {

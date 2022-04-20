@@ -6,6 +6,8 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapper;
+import com.symphony.sfs.ms.chat.mapper.MessageInfoMapperImpl;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
@@ -21,10 +23,12 @@ import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyRsaAuthFunction;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import model.InboundMessage;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -118,7 +122,9 @@ class SymphonyMessageServiceTest {
     messageDecryptor = mock(MessageDecryptor.class);
     symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
 
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, null, null));
+    MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
+
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, null, null, messageInfoMapper));
   }
 
   @Test
@@ -126,8 +132,9 @@ class SymphonyMessageServiceTest {
     FederatedAccount federatedAccount = FederatedAccount.builder()
       .symphonyUsername("username")
       .build();
-    when(datafeedSessionPool.getSessionSupplier(federatedAccount)).thenReturn(mock(SessionSupplier.class));
+    when(datafeedSessionPool.getSessionSupplier(federatedAccount)).thenReturn(userSession);
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.of(federatedAccount));
+    when(streamService.sendMessage("podUrl", userSession, "streamId", "text")).thenReturn(Optional.of(new InboundMessage()));
 
     symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId");
 
@@ -150,9 +157,11 @@ class SymphonyMessageServiceTest {
 
     when(federatedAccountRepository.findBySymphonyId("fromSymphonyUserId")).thenReturn(Optional.of(federatedAccount));
 
-    symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId", Collections.singletonList(attachment));
     SymphonyOutboundMessage symphonyOutboundMessage = SymphonyOutboundMessage.builder().message("text")
       .attachment(new SymphonyOutboundAttachment[] { SymphonyOutboundAttachment.builder().mediaType(MediaType.IMAGE_PNG).name("filename.png").data(data).build()}).build();
+
+    when(streamService.sendMessageMultiPart(eq("podUrl"), any(), eq("streamId"), eq(symphonyOutboundMessage), eq(false))).thenReturn(Optional.of(new SymphonyInboundMessage()));
+    symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "text", "toSymphonyUserId", Collections.singletonList(attachment));
 
     verify(streamService, once()).sendMessageMultiPart(eq(podConfiguration.getUrl()), any(SessionSupplier.class), eq("streamId"), eq(symphonyOutboundMessage), eq(false));
   }
@@ -165,6 +174,9 @@ class SymphonyMessageServiceTest {
     public void sendSystemMessage(String templateName, String detemplatizedMessage, TriConsumer<SessionSupplier<SymphonySession>, String, String> messageSender) {
 
       when(templateProcessor.process("templatizedText", templateName)).thenReturn(detemplatizedMessage);
+      when(streamService.sendMessage("podUrl", userSession, "streamId", "simpleDetemplatizedText")).thenReturn(Optional.of(new InboundMessage()));
+      when(streamService.sendMessage("podUrl", userSession, "streamId", "infoDetemplatizedText")).thenReturn(Optional.of(new InboundMessage()));
+      when(streamService.sendMessage("podUrl", userSession, "streamId", "notificationDetemplatizedText")).thenReturn(Optional.of(new InboundMessage()));
 
       messageSender.accept(userSession, "streamId", "templatizedText");
 
@@ -187,6 +199,8 @@ class SymphonyMessageServiceTest {
   @Test
   void sendAlertMessage() {
     when(templateProcessor.process("templatizedText", "title", Collections.emptyList(), SYSTEM_MESSAGE_ALERT_HANDLEBARS_TEMPLATE)).thenReturn("alertDetemplatizedText");
+    when(streamService.sendMessage("podUrl", userSession, "streamId", "alertDetemplatizedText")).thenReturn(Optional.of(new InboundMessage()));
+    when(streamService.sendMessage("podUrl", userSession, "streamId", null)).thenReturn(Optional.of(new InboundMessage()));
 
     symphonyMessageSender.sendAlertMessage(userSession, "streamId", "templatizedText", "title", Collections.emptyList());
 

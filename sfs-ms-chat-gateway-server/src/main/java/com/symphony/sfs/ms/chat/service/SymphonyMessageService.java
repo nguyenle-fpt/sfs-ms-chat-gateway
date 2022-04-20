@@ -13,11 +13,11 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
-import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
 import com.symphony.sfs.ms.chat.generated.model.MessageSenderNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
@@ -46,7 +46,6 @@ import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
-import com.symphony.sfs.ms.starter.util.SpecialCharactersEscaper;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -402,44 +401,7 @@ public class SymphonyMessageService implements DatafeedListener {
       SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplierOrFail(symphonyUserId);
       for (MessageId id : messageIds) {
         SBEEventMessage sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
-        messageDecryptor.decrypt(sbeEventMessage, symphonyUserId, userSession.getPrincipal());
-
-        // TODO handle inline replies
-
-        MessageInfo messageInfo = buildMessageInfo(sbeEventMessage);
-
-        Optional<CustomEntity> quote = sbeEventMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
-
-        if (quote.isPresent()) {
-          messageInfo.setMessage(messageInfo.getMessage().substring(quote.get().getEndIndex()));
-          String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
-            Optional<SBEEventMessage> inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);
-            if (inlineMessageOptional.isEmpty()) {
-              // The message might not been retrieve with the federated account session
-              // We try with the connect bot session
-              inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, datafeedSessionPool.getBotSessionSupplier());
-            }
-          if (inlineMessageOptional.isEmpty()) {
-            throw new RetrieveMessageFailedProblem();
-          }
-
-          SBEEventMessage inlineMessage = inlineMessageOptional.get();
-
-          messageDecryptor.decrypt(inlineMessage, symphonyUserId, userSession.getPrincipal());
-          MessageInfo inlineMessageInfo = buildMessageInfo(inlineMessage);
-          Optional<CustomEntity> quoteInline = inlineMessage.getCustomEntity(CustomEntity.QUOTE_TYPE);
-
-          if (quoteInline.isPresent()) {
-            inlineMessageInfo.setMessage(inlineMessageInfo.getMessage().substring(quoteInline.get().getEndIndex()));
-          } else {
-            inlineMessageInfo.setMessage(inlineMessageInfo.getMessage());
-          }
-
-          messageInfo.setParentMessage(inlineMessageInfo);
-        } else {
-          messageInfo.setMessage(messageInfo.getMessage());
-        }
-
+        MessageInfo messageInfo = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage, symphonyUserId, userSession);
         messageInfos.add(messageInfo);
       }
 
@@ -453,37 +415,15 @@ public class SymphonyMessageService implements DatafeedListener {
     }
   }
 
-  private MessageInfo buildMessageInfo(SBEEventMessage sbeEventMessage) {
-    MessageInfo messageInfo = new MessageInfo()
-      .message(sbeEventMessage.getText())
-      .messageId(StreamUtil.toUrlSafeStreamId(sbeEventMessage.getMessageId()))
-      .disclaimer(sbeEventMessage.getDisclaimer())
-      .firstName(sbeEventMessage.getFrom().getFirstName())
-      .lastName(sbeEventMessage.getFrom().getSurName())
-      .timestamp(sbeEventMessage.getIngestionDate())
-      .displayName(sbeEventMessage.getFrom().getPrettyName())
-      .symphonyId(String.valueOf(sbeEventMessage.getFrom().getId()));
-
-    if(sbeEventMessage.getAttachments() != null) {
-      List<AttachmentInfo> attachmentInfos = sbeEventMessage.getAttachments()
-        .stream()
-        .map(sbeMessageAttachment -> new AttachmentInfo().contentType(sbeMessageAttachment.getContentType()).fileName(sbeMessageAttachment.getName()))
-        .collect(Collectors.toList());
-
-      messageInfo.setAttachments(attachmentInfos);
-    }
-    return messageInfo;
-  }
-
   @NewSpan
-  public String sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
+  public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
       return new MessageSenderNotFoundProblem();
     });
     MDC.put("federatedUserId", federatedAccount.getFederatedUserId());
-    String symphonyMessageId = null;
+    MessageInfoWithCustomEntities symphonyMessage = null;
     StreamInfo streamInfo = getStreamInfo(streamId);
     Optional<String> notEntitled = Optional.empty();
     if (streamInfo.getStreamType().getType() != StreamTypes.ROOM) {
@@ -501,7 +441,7 @@ public class SymphonyMessageService implements DatafeedListener {
         messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
         int maxTextLength = empConfig.getMaxTextLength().getOrDefault(federatedAccount.getEmp(), MAX_TEXT_LENGTH);
         boolean textTooLong = (text.length() > maxTextLength);
-        symphonyMessageId = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, forwarded, textTooLong, maxTextLength, attachmentReplySupported, attachmentMessageIds)
+        symphonyMessage = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, forwarded, textTooLong, maxTextLength, attachmentReplySupported, attachmentMessageIds)
           .orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
         if (textTooLong) {
@@ -524,11 +464,11 @@ public class SymphonyMessageService implements DatafeedListener {
       throw new IllegalStateException(e);
     }
 
-    return symphonyMessageId;
+    return symphonyMessage;
   }
 
   @NewSpan
-  public String sendSystemMessage(String streamId, FormattingEnum formatting, String text, String title, String fromSymphonyUserId) {
+  public MessageInfoWithCustomEntities sendSystemMessage(String streamId, FormattingEnum formatting, String text, String title, String fromSymphonyUserId) {
     boolean isRoom = getStreamInfo(streamId).getStreamType().getType() == StreamTypes.ROOM;
 
     try {
@@ -539,30 +479,30 @@ public class SymphonyMessageService implements DatafeedListener {
         session = datafeedSessionPool.getSessionSupplierOrFail(fromSymphonyUserId);
       }
 
-      Optional<String> symphonyMessageId;
+      Optional<MessageInfoWithCustomEntities> symphonyMessage;
       if (formatting == null) {
         return symphonyMessageSender.sendRawMessage(session, streamId, "<messageML>" + text + "</messageML>").orElseThrow(SendMessageFailedProblem::new);
       }
 
       switch (formatting) {
         case SIMPLE:
-          symphonyMessageId = symphonyMessageSender.sendSimpleMessage(session, streamId, text);
+          symphonyMessage = symphonyMessageSender.sendSimpleMessage(session, streamId, text);
           break;
         case NOTIFICATION:
-          symphonyMessageId = symphonyMessageSender.sendNotificationMessage(session, streamId, text);
+          symphonyMessage = symphonyMessageSender.sendNotificationMessage(session, streamId, text);
           break;
         case INFO:
-          symphonyMessageId = symphonyMessageSender.sendInfoMessage(session, streamId, text);
+          symphonyMessage = symphonyMessageSender.sendInfoMessage(session, streamId, text);
           break;
         case ALERT:
           List<String> errors = Collections.emptyList();
-          symphonyMessageId = symphonyMessageSender.sendAlertMessage(session, streamId, text, title, errors);
+          symphonyMessage = symphonyMessageSender.sendAlertMessage(session, streamId, text, title, errors);
           break;
         default:
           throw newConstraintViolation(new Violation("formatting", "invalid type, must be one of " + Arrays.toString(FormattingEnum.values())));
       }
 
-      return symphonyMessageId.orElseThrow(SendMessageFailedProblem::new);
+      return symphonyMessage.orElseThrow(SendMessageFailedProblem::new);
     } catch (UnknownDatafeedUserException e) {
       // should never happen, as we have a FederatedAccount
       throw new IllegalStateException(e);
@@ -570,7 +510,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
 
-  private Optional<String> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean forwarded,
+  private Optional<MessageInfoWithCustomEntities> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean forwarded,
                                                             boolean truncate, int maxTextLength, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     // TODO: remove this parameter for all call using it
     String toSymphonyUserId = null;

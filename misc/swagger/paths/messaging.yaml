@@ -19,7 +19,7 @@ messages:
         content:
           application/json:
             schema:
-              $ref: '../components/messaging.yaml#/send-message-response'
+              $ref: '../components/messaging.yaml#/message-info-with-custom-entities'
       '400':
         description: Bad Request
         content:
@@ -88,7 +88,7 @@ system-messages:
         content:
           application/json:
             schema:
-              $ref: '../components/messaging.yaml#/send-message-response'
+              $ref: '../components/messaging.yaml#/message-info-with-custom-entities'
       '400':
         description: Bad Request
         content:
