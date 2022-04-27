@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.datafeed;
 
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
 import lombok.Builder;
 import lombok.Builder.Default;
 import lombok.Getter;

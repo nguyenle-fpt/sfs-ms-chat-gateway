@@ -5,12 +5,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.datafeed.FileExtensionsResponse;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.ISessionManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
@@ -147,7 +147,7 @@ public class SymphonyService {
       .map(FileExtensionsResponse.FileExtension::getExtension)
       .collect(Collectors.toList());
   }
-  public SBEMessageAttachment[] uploadBlastAttachment(SessionSupplier<SymphonySession> session, String contentType, String fileName, byte[] fileEncrypted) {
+  public MessageAttachment[] uploadBlastAttachment(SessionSupplier<SymphonySession> session, String contentType, String fileName, byte[] fileEncrypted) {
 
     ObjectMapper objectMapper = new ObjectMapper();
     objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
@@ -164,7 +164,7 @@ public class SymphonyService {
       .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
       .attribute(BASE_URI, podConfiguration.getUrl())
       .attribute(BASE_PATH, BLAST_ATTACHMENT_UPLOAD)
-      .retrieve().bodyToMono(SBEMessageAttachment[].class)
+      .retrieve().bodyToMono(MessageAttachment[].class)
       .block();
   }
 }

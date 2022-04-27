@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
 import lombok.Builder;
 import lombok.Data;
 
@@ -28,7 +29,7 @@ public class MessageEntityData {
   /**
    * Forward and reply attachment data
    */
-  private List<SBEMessageAttachment> attachments;
+  private List<MessageAttachment> attachments;
 
   /**
    * Stream id the custom entity is based on - ex: in forward and reply, this is the stream id of the original message

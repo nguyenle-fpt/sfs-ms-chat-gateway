@@ -2,13 +2,10 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.util.Base64;
 import com.symphony.security.helper.ClientCryptoHandler;
-import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
-import com.symphony.sfs.ms.chat.exception.BlastAttachmentUploadException;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
+import com.symphony.sfs.ms.chat.exception.BlastAttachmentUploadException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
 import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
@@ -25,6 +22,9 @@ import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
@@ -176,10 +176,10 @@ public class SymphonyMessageSender {
 
     try {
       byte[] ephemeralKey = this.generateEphemeralKey();
-      List<SBEMessageAttachment> blastAttachments = new ArrayList<>();
+      List<MessageAttachment> blastAttachments = new ArrayList<>();
       if (attachments != null && !attachments.isEmpty()) {
         for (SymphonyAttachment attachment : attachments) {
-          SBEMessageAttachment blastAttachment = uploadBlastAttachment(userSession, attachment, ephemeralKey).orElseThrow(BlastAttachmentUploadException::new);
+          MessageAttachment blastAttachment = uploadBlastAttachment(userSession, attachment, ephemeralKey).orElseThrow(BlastAttachmentUploadException::new);
           blastAttachments.add(blastAttachment);
         }
       }
@@ -220,7 +220,7 @@ public class SymphonyMessageSender {
       }
 
 
-      List<SBEMessageAttachment> attachmentsFromMessageIds = attachmentMessageIds.orElse(Collections.emptyList())
+      List<MessageAttachment> attachmentsFromMessageIds = attachmentMessageIds.orElse(Collections.emptyList())
         .stream().flatMap(id -> {
         try {
           return getReplyMessage(fromSymphonyUserId, userSession, id).getAttachments().stream();
@@ -230,7 +230,7 @@ public class SymphonyMessageSender {
         }
       }).collect(Collectors.toList());
 
-      List<SBEMessageAttachment> allAttachments = Stream.of(
+      List<MessageAttachment> allAttachments = Stream.of(
         replyToMessage.getAttachments(),
         attachmentsFromMessageIds
       ).filter(Objects::nonNull)
@@ -248,10 +248,10 @@ public class SymphonyMessageSender {
     return Optional.empty();
   }
 
-  private Optional<SBEMessageAttachment> uploadBlastAttachment(SessionSupplier<SymphonySession> session, SymphonyAttachment attachment, byte[] ephemeralKey) {
+  private Optional<MessageAttachment> uploadBlastAttachment(SessionSupplier<SymphonySession> session, SymphonyAttachment attachment, byte[] ephemeralKey) {
     try {
       byte[] encryptedBytes = new ClientCryptoHandler().encryptMsgWithRotationIdZero(ephemeralKey, Base64.decode(attachment.getData()));
-      SBEMessageAttachment[] attachments = symphonyService.uploadBlastAttachment(session, attachment.getContentType(), attachment.getFileName(), encryptedBytes);
+      MessageAttachment[] attachments = symphonyService.uploadBlastAttachment(session, attachment.getContentType(), attachment.getFileName(), encryptedBytes);
       return attachments != null && attachments.length > 0 ? Optional.of(attachments[0]) : Optional.empty();
     } catch (Exception e) {
       throw new BlastAttachmentUploadException();

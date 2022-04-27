@@ -10,14 +10,10 @@ import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
-import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
-import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
 import com.symphony.sfs.ms.chat.mapper.MessageInfoMapper;
 import com.symphony.sfs.ms.chat.mapper.MessageInfoMapperImpl;
@@ -44,6 +40,10 @@ import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
+import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
+import com.symphony.sfs.ms.starter.symphony.stream.EventUser;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
@@ -257,14 +257,14 @@ class MessageServiceTest implements I18nTest {
           .build()
       ))
       .from(
-        SBEEventUser.builder()
-          .firstName("first")
-          .surName("last")
-          .id(12345L)
-          .company("company")
-          .build())
+        EventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(12345L)
+        .company("company")
+        .build())
       .attachments(Collections.singletonList(
-        SBEMessageAttachment.builder().contentType("image/png").name("hello.png").build()
+        MessageAttachment.builder().contentType("image/png").name("hello.png").build()
       ))
       .build();
 
@@ -325,12 +325,12 @@ class MessageServiceTest implements I18nTest {
           .build()
       ))
       .from(
-        SBEEventUser.builder()
-          .firstName("first")
-          .surName("last")
-          .id(Long.valueOf(botConfiguration.getSymphonyId()))
-          .company("company")
-          .build())
+        EventUser.builder()
+        .firstName("first")
+        .surName("last")
+        .id(Long.valueOf(botConfiguration.getSymphonyId()))
+        .company("company")
+        .build())
       .build();
 
 

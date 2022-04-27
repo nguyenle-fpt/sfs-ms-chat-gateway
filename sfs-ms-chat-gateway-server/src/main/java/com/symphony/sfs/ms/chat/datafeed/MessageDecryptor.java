@@ -13,6 +13,8 @@ import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
 import com.symphony.sfs.ms.starter.symphony.crypto.exception.ContentKeyRetrievalException;
 import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
+import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

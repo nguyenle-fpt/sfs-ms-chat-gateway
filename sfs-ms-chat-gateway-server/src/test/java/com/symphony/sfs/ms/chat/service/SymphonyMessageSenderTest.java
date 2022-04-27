@@ -3,8 +3,6 @@ package com.symphony.sfs.ms.chat.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
@@ -18,6 +16,8 @@ import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,7 +89,7 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
 
     SBEEventMessage parentMessage = SBEEventMessage.builder()
       .messageId("message_id")
-      .attachments(Collections.singletonList(SBEMessageAttachment.builder().fileId("attachment_id").build()))
+      .attachments(Collections.singletonList(MessageAttachment.builder().fileId("attachment_id").build()))
       .build();
     when(symphonyService.getEncryptedMessage(any(String.class), any(SessionSupplier.class))).thenReturn(Optional.of(parentMessage));
 
@@ -125,13 +125,13 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
   public void sendReplyMessageSuccesfully_Attachments() throws EncryptionException, JsonProcessingException {
     federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").build());
 
-    SBEMessageAttachment parentMessageAttachment = SBEMessageAttachment.builder().fileId("attachment_1").build();
+    MessageAttachment parentMessageAttachment = MessageAttachment.builder().fileId("attachment_1").build();
     SBEEventMessage parentMessage = SBEEventMessage.builder()
       .messageId("message_id")
       .attachments(Collections.singletonList(parentMessageAttachment))
       .build();
 
-    SBEMessageAttachment addedAttachment = SBEMessageAttachment.builder().fileId("attachment_2").build();
+    MessageAttachment addedAttachment = MessageAttachment.builder().fileId("attachment_2").build();
     SBEEventMessage attachmentMessage = SBEEventMessage.builder()
       .messageId("attachment_message_id")
       .attachments(Collections.singletonList(addedAttachment))
@@ -199,7 +199,7 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
   public void sendForwardedMessage_withAttachments_works() throws EncryptionException, JsonProcessingException {
     federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").emp("WHATSAPP").build());
     SBEEventMessage messageToBeSent = SBEEventMessage.builder().build();
-    SBEMessageAttachment[] uploadedAttachments = { SBEMessageAttachment.builder().fileId("new_attachment_id").build() };
+    MessageAttachment[] uploadedAttachments = { MessageAttachment.builder().fileId("new_attachment_id").build() };
     when(messageEncryptor.buildForwardedMessage(eq("123456789"), eq("wa_bot_user_name"),eq("streamId"), eq("message text"), eq("from WHATSAPP\n"), eq(Arrays.asList(uploadedAttachments)), any(byte[].class))).thenReturn(messageToBeSent);
     when(symphonyService.sendBulkMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
     when(symphonyService.uploadBlastAttachment(any(SessionSupplier.class), any(String.class), any(String.class), any(byte[].class))).thenReturn(uploadedAttachments);

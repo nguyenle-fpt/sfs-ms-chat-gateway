@@ -3,12 +3,8 @@ package com.symphony.sfs.ms.chat.api;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
-import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
-import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
@@ -41,6 +37,10 @@ import com.symphony.sfs.ms.starter.symphony.auth.SymphonyRsaAuthFunction;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
+import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
+import com.symphony.sfs.ms.starter.symphony.stream.EventUser;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
@@ -295,7 +295,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("7ThaU2OJ3nJ8A9Kz0qjheX///oOLK1YmbQ==").disclaimer("disclaimer1").text("This is the message 1")
       .ingestionDate(123L)
-      .from(SBEEventUser.builder()
+      .from(EventUser.builder()
         .firstName("first")
         .surName("last")
         .id(12345L)
@@ -307,7 +307,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("tAMLft+K2vyqWXnHFMeCh3///oQbTZrDdA==").disclaimer("disclaimer2").text("This is the message 2")
       .ingestionDate(123L)
-      .from(SBEEventUser.builder()
+      .from(EventUser.builder()
         .firstName("first")
         .surName("last")
         .id(12345L)
@@ -376,7 +376,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
           .data(Map.of("id", "otherMsg"))
           .build()
       ))
-      .from(SBEEventUser.builder()
+      .from(EventUser.builder()
         .firstName("first")
         .surName("last")
         .id(12345L)
@@ -395,14 +395,14 @@ class MessagingApiTest extends AbstractIntegrationTest {
           .data(Map.of("id", "messageId2"))
           .build()
       ))
-      .from(SBEEventUser.builder()
+      .from(EventUser.builder()
         .firstName("first")
         .surName("last")
         .id(12345L)
         .company("company")
         .build())
       .attachments(Collections.singletonList(
-        SBEMessageAttachment.builder().contentType("image/png").name("hello.png").build()
+        MessageAttachment.builder().contentType("image/png").name("hello.png").build()
       )).build();
 
     when(symphonyService.getEncryptedMessage("otherMsg", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
@@ -462,20 +462,20 @@ class MessagingApiTest extends AbstractIntegrationTest {
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This \\+ is \\_the\\_message \\*1")
       .ingestionDate(123L)
       .parsedCustomEntities(Collections.singletonList(ce))
-      .from(SBEEventUser.builder()
+      .from(EventUser.builder()
         .firstName("first")
         .surName("last")
         .id(12345L)
         .company("company")
         .build()).build();
     SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2").disclaimer("disclaimer1").text("This \\+ is \\_the\\_inlinemessage \\*1")
-      .ingestionDate(123L)
-      .from(SBEEventUser.builder()
-        .firstName("first")
-        .surName("last")
-        .id(12345L)
-        .company("company")
-        .build()).build();
+        .ingestionDate(123L)
+        .from(EventUser.builder()
+          .firstName("first")
+          .surName("last")
+          .id(12345L)
+          .company("company")
+          .build()).build();
 
     when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
     when(symphonyService.getEncryptedMessage("messageIdw", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
@@ -534,7 +534,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This \\+ is \\_the\\_message \\*1")
       .ingestionDate(123L)
-      .from(SBEEventUser.builder()
+      .from(EventUser.builder()
         .firstName("first")
         .surName("last")
         .id(12345L)

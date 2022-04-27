@@ -10,15 +10,15 @@ import com.symphony.security.exceptions.SymphonyInputException;
 import com.symphony.security.helper.ClientCryptoHandler;
 import com.symphony.security.helper.IClientCryptoHandler;
 import com.symphony.security.helper.KeyIdentifier;
-import com.symphony.sfs.ms.chat.datafeed.CustomEntity;
 import com.symphony.sfs.ms.chat.datafeed.MessageEntityData;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
-import com.symphony.sfs.ms.chat.datafeed.SBEEventUser;
-import com.symphony.sfs.ms.chat.datafeed.SBEMessageAttachment;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.starter.emojis.EmojiService;
 import com.symphony.sfs.ms.starter.symphony.crypto.ContentKeyManager;
 import com.symphony.sfs.ms.starter.symphony.crypto.exception.UnknownUserException;
+import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
+import com.symphony.sfs.ms.starter.symphony.stream.EventUser;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.codec.binary.Base64;
@@ -49,7 +49,7 @@ public class MessageEncryptor {
   }
 
 
-  public SBEEventMessage buildReplyMessage(String userId, String userName, String streamId, String messageText, SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws EncryptionException {
+  public SBEEventMessage buildReplyMessage(String userId, String userName, String streamId, String messageText, SBEEventMessage repliedToMessage, List<MessageAttachment> attachments) throws EncryptionException {
     try {
       String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
       KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId, userName);
@@ -68,7 +68,7 @@ public class MessageEncryptor {
     }
   }
 
-  public SBEEventMessage buildForwardedMessage(String userId, String userName, String streamId, String messageText, String forwardedPrefix, List<SBEMessageAttachment> blastAttachments, byte[] ephemeralKey) throws EncryptionException {
+  public SBEEventMessage buildForwardedMessage(String userId, String userName, String streamId, String messageText, String forwardedPrefix, List<MessageAttachment> blastAttachments, byte[] ephemeralKey) throws EncryptionException {
     try {
       String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
       KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId, userName);
@@ -104,7 +104,7 @@ public class MessageEncryptor {
                                                  String userId, String threadId, String text,
                                                  String presentationML, String customEntitiesText,
                                                  SBEEventMessage repliedToMessage,
-                                                 List<SBEMessageAttachment> attachments) throws JsonProcessingException, EncryptionException {
+                                                 List<MessageAttachment> attachments) throws JsonProcessingException, EncryptionException {
     return SBEEventMessage.builder()
       .threadId(threadId)
       .parentMessageId(repliedToMessage != null ? repliedToMessage.getMessageId() : null)
@@ -120,7 +120,7 @@ public class MessageEncryptor {
       .msgFeatures(repliedToMessage == null ? 7 : 3)
       .version(SBEEventMessage.Versions.SOCIALMESSAGE.toString())
       .format(repliedToMessage == null ? "com.symphony.messageml.v2" : "com.symphony.markdown")
-      .from(SBEEventUser.builder().id(Long.parseLong(userId)).build())
+      .from(EventUser.builder().id(Long.parseLong(userId)).build())
       .chatType(repliedToMessage == null ? "INSTANT_CHAT" : "CHATROOM")
       .build();
   }
@@ -141,7 +141,7 @@ public class MessageEncryptor {
   }
 
 
-  private String generateReplyCustomEntities(SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws IOException {
+  private String generateReplyCustomEntities(SBEEventMessage repliedToMessage, List<MessageAttachment> attachments) throws IOException {
     String prefix = generatePrefix(repliedToMessage);
     CustomEntity customEntity = new CustomEntity();
     customEntity.setType(CustomEntity.QUOTE_TYPE);
@@ -173,7 +173,7 @@ public class MessageEncryptor {
       .build();
   }
 
-  private MessageEntityData getQuotingEntityData(SBEEventMessage repliedToMessage, List<SBEMessageAttachment> attachments) throws IOException {
+  private MessageEntityData getQuotingEntityData(SBEEventMessage repliedToMessage, List<MessageAttachment> attachments) throws IOException {
     return MessageEntityData.builder()
       .id(repliedToMessage.getMessageId())
       .streamId(repliedToMessage.getStreamId())

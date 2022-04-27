@@ -1,7 +1,7 @@
 package com.symphony.sfs.ms.chat.mapper;
 
-import com.symphony.sfs.ms.chat.datafeed.SBEEventMessage;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
 import model.InboundMessage;
 import org.mapstruct.Mapper;
