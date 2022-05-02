@@ -396,6 +396,45 @@ class RoomApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  public void addRoomMember_OK_withDivision() {
+
+    createRoom_OK();
+
+    UserInfo advisorInfo = new UserInfo();
+    advisorInfo.setFirstName("firstName");
+    advisorInfo.setLastName("lastName");
+    advisorInfo.setDisplayName("displayName");
+    advisorInfo.setCompany("companyName");
+
+    when(usersInfoService.getUserFromId(any(), any(), any())).thenReturn(Optional.of(advisorInfo));
+
+    String podUrl = podConfiguration.getUrl();
+
+    SymphonyResponse symphonyResponse = SymphonyResponse.builder().format("TEXT").message("Member added").build();
+    doReturn(Optional.of(symphonyResponse)).when(streamService).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
+
+    FederatedAccount federatedAccount = federatedAccountRepository.save(FederatedAccount.builder()
+      .symphonyUserId(symphonyId("11", FEDERATION_POD_ID))
+      .federatedUserId(federatedUserId("11"))
+      .emp(emp("11"))
+      .phoneNumber((phoneNumber("11")))
+      .build());
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME).divisionId("divisionId");
+    RoomMemberResponse roomMemberResponse = addRoomMember(ROOM_STREAM_ID, roomMemberRequest);
+
+
+    assertEquals(ROOM_STREAM_ID, roomMemberResponse.getStreamId());
+    assertEquals(symphonyId("11", FEDERATION_POD_ID), roomMemberResponse.getSymphonyId());
+    assertEquals(federatedUserId("11"), roomMemberResponse.getFederatedUserId());
+    assertEquals(emp("11"), roomMemberResponse.getEmp());
+    assertEquals(phoneNumber("11"), roomMemberResponse.getPhoneNumber());
+
+    com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
+    verify(empClient, once()).addRoomMemberOrFail(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
+    verify(streamService, never()).removeRoomMember(any(), any(), any(), any());
+  }
+
+  @Test
   public void addRoomMember_ErrorCreatingChannel() throws JsonProcessingException, URISyntaxException {
 
     createRoom_OK();

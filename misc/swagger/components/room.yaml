@@ -100,6 +100,8 @@ room-member-request:
       type: string
     roomName:
       type: string
+    divisionId:
+      type: string
 
 #Responses
 room-response:
