@@ -100,6 +100,8 @@ room-member-request:
       type: string
     roomName:
       type: string
+    empRoomDisplayName:
+      type: string
     divisionId:
       type: string
 
