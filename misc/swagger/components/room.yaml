@@ -100,11 +100,12 @@ room-member-request:
       type: string
     roomName:
       type: string
+    attachmentsDisabled:
+      type: boolean
     empRoomDisplayName:
       type: string
     divisionId:
       type: string
-
 #Responses
 room-response:
   type: object
