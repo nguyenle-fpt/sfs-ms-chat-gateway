@@ -165,7 +165,7 @@ public class FederatedAccountService {
 
     SymphonyUserAttributes userAttributes = SymphonyUserAttributes.builder()
       .displayName(displayName(firstName, lastName, emp))
-      .userName(userName(emp, phoneNumber))
+      .userName(userName(emp))
       .emailAddress(emailAddress(emp, phoneNumber, session))
       .companyName(companyName) // https://perzoinc.atlassian.net/browse/CES-7627
       .currentKey(userKey)
@@ -196,12 +196,22 @@ public class FederatedAccountService {
   }
 
   /**
-   * Returns a username with pattern: {emp}.{phoneNumber}
+   * Returns a emailAddress with pattern: {emp}.{phoneNumber}
    * {phoneNumber} doesn't contain the '+' sign
    * a suffix is added for avoid conflicts with DES environment
    */
-  private String userName(String emp, String phoneNumber) {
-    return emp.toUpperCase() + '.' + formatPhoneNumber(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164).replace("+", "") + ((StringUtils.isNotBlank(podConfiguration.getUsernameSuffix()))? podConfiguration.getUsernameSuffix() : "");
+  private String generateEmailAddress(String emp, String phoneNumber) {
+    return emp.toUpperCase()
+      + '.' + formatPhoneNumber(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164).replace("+", "")
+      + ((StringUtils.isNotBlank(podConfiguration.getUsernameSuffix()))? podConfiguration.getUsernameSuffix() : "")
+      + "@symphony.com";
+  }
+
+  /**
+   * Returns a username with pattern: {emp}.{randomUUID}
+   */
+  private String userName(String emp) {
+    return emp.toUpperCase() + '_' + UUID.randomUUID().toString();
   }
 
   /**
@@ -209,7 +219,7 @@ public class FederatedAccountService {
    */
   private String emailAddress(String emp, String phoneNumber, SessionSupplier<SymphonySession> session) {
 
-    String emailAddress = userName(emp, phoneNumber) + "@symphony.com";
+    String emailAddress = generateEmailAddress(emp, phoneNumber);
 
     List<String> candidates = IntStream.range(0, 5)
       .mapToObj(i -> Hashing.murmur3_32().hashString(UUID.randomUUID().toString() + emailAddress, StandardCharsets.UTF_8).toString() + '|' + emailAddress)

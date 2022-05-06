@@ -149,7 +149,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
       SymphonyUserAttributes userAttributes = args.getUserAttributes();
       return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
-        userAttributes.getUserName().equals("WHATSAPP.33601020304") &&
+        userAttributes.getUserName().startsWith("WHATSAPP") &&
+        !userAttributes.getUserName().contains("33601020304") /* not PII data */ &&
         userAttributes.getEmailAddress().equals("WHATSAPP.33601020304@symphony.com")) &&
         userAttributes.getCompanyName().equals("companyName");
     }));
@@ -213,7 +214,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
     verify(adminUserManagementService, once()).createUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), argThat(args -> {
       SymphonyUserAttributes userAttributes = args.getUserAttributes();
       return (userAttributes.getDisplayName().equals("firstName lastName [WHATSAPP]") &&
-        userAttributes.getUserName().equals("WHATSAPP.33601020304.des") &&
+        userAttributes.getUserName().startsWith("WHATSAPP") &&
+        !userAttributes.getUserName().contains("33601020304") /* not PII data */ &&
         userAttributes.getEmailAddress().equals("WHATSAPP.33601020304.des@symphony.com"));
     }));
 
