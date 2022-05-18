@@ -5,6 +5,7 @@ import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
@@ -124,7 +125,11 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
 
     when(adminClient.getEmpList()).thenReturn(new EmpList());
-    EmpSchemaService empSchemaService = new EmpSchemaService(adminClient);
+    EmpSchemaService empSchemaService = mock(EmpSchemaService.class);
+
+    EmpEntity empEntity = new EmpEntity();
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
+    when(empSchemaService.getEmpDisplayName("WHATSAPP")).thenReturn("WHATSAPP");
 
     MessageStatusService messageStatusService = mock(MessageStatusService.class);
 

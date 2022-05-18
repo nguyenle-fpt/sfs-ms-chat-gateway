@@ -3,6 +3,8 @@ package com.symphony.sfs.ms.chat.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
+import com.symphony.sfs.ms.admin.generated.model.EmpSchema;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -12,6 +14,7 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
+import com.symphony.sfs.ms.chat.generated.model.EmpNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfo;
@@ -154,7 +157,10 @@ public class SymphonyMessageService implements DatafeedListener {
 
     for (String symphonyId : gatewaySocialMessage.getToUserIds()) {
       federatedAccountRepository.findBySymphonyId(symphonyId).ifPresent(
-        federatedAccount -> { federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount); federatedAccounts.add(federatedAccount); });
+        federatedAccount -> {
+          federatedAccountsByEmp.add(federatedAccount.getEmp(), federatedAccount);
+          federatedAccounts.add(federatedAccount);
+        });
     }
 
     if (federatedAccountsByEmp.isEmpty()) {
@@ -179,16 +185,7 @@ public class SymphonyMessageService implements DatafeedListener {
       }
       SendmessagerequestInlineMessage inlineMessageRequest = null;
 
-      // Check if message contents can be sent
-      if (gatewaySocialMessage.isChime()) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("chimes.not.supported", null, Locale.getDefault()), Collections.emptyList()));
-        messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
-        return;
-      } else if (gatewaySocialMessage.isTable()) {
-        allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault()), Collections.emptyList()));
-        messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
-        return;
-      } else if (gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
+      if (gatewaySocialMessage.containsCustomEntityType(CustomEntity.QUOTE_TYPE)) {
         inlineMessageRequest = getInlineQuote(gatewaySocialMessage, streamId, federatedAccounts, allUserSessions);
         if (inlineMessageRequest != null && botConfiguration.getSymphonyId().equals(inlineMessageRequest.getFromMember().getSymphonyId())) {
           allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("cannot.reply.to.message.type", null, Locale.getDefault()), Collections.emptyList()));
@@ -200,8 +197,22 @@ public class SymphonyMessageService implements DatafeedListener {
 
       // Forward the message to all EMP users
       for (Map.Entry<String, List<FederatedAccount>> entry : federatedAccountsByEmp.entrySet()) {
-        List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
         String emp = entry.getKey();
+        // Check if message contents can be sent
+        EmpEntity empEntity = empSchemaService.getEmpDefinition(emp).orElseThrow(EmpNotFoundProblem::new);
+        EmpSchema empSchema = empEntity.getSchema();
+
+        if (gatewaySocialMessage.isChime() && (empSchema.getSupportedFeatures() == null || empSchema.getSupportedFeatures().isChime() == null || !empSchema.getSupportedFeatures().isChime())) {
+          allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("chimes.not.supported", null, Locale.getDefault()), Collections.emptyList()));
+          messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
+          continue;
+        } else if (gatewaySocialMessage.isTable() && (empSchema.getSupportedFeatures() == null || empSchema.getSupportedFeatures().isTable() == null || !empSchema.getSupportedFeatures().isTable())) {
+          allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault()), Collections.emptyList()));
+          messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
+          continue;
+        }
+
+        List<FederatedAccount> toFederatedAccountsForEmp = entry.getValue();
         List<SessionSupplier<SymphonySession>> userSessions = new ArrayList<>(toFederatedAccountsForEmp.size());
 
         for (FederatedAccount toFederatedAccount : toFederatedAccountsForEmp) {
@@ -285,9 +296,9 @@ public class SymphonyMessageService implements DatafeedListener {
     SendmessagerequestInlineMessage inlineMessageRequest = null;
     CustomEntity quote = gatewaySocialMessage.getCustomEntity(CustomEntity.QUOTE_TYPE).get();
     gatewaySocialMessage.setTextContent(gatewaySocialMessage.getTextContent().substring(quote.getEndIndex()));
-    String id  = StreamUtil.toUrlSafeStreamId(quote.getData().get("id").toString());
+    String id = StreamUtil.toUrlSafeStreamId(quote.getData().get("id").toString());
     Optional<SBEEventMessage> messageSearch = symphonyService.getEncryptedMessage(id, allUserSessions.get(0));
-    if(messageSearch.isPresent()) {
+    if (messageSearch.isPresent()) {
       SBEEventMessage inlineMessage = messageSearch.get();
       try {
         // federatedAccounts is never empty
@@ -411,7 +422,7 @@ public class SymphonyMessageService implements DatafeedListener {
       throw new MessageSenderNotFoundProblem();
     } catch (DecryptionException e) {
       LOG.error("Could not decrypt message for user {}", symphonyUserId);
-      throw  new RetrieveMessageFailedProblem();
+      throw new RetrieveMessageFailedProblem();
     }
   }
 
@@ -511,7 +522,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
 
   private Optional<MessageInfoWithCustomEntities> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean forwarded,
-                                                            boolean truncate, int maxTextLength, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
+                                                                                   boolean truncate, int maxTextLength, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     // TODO: remove this parameter for all call using it
     String toSymphonyUserId = null;
     LOG.info("incoming message");
@@ -521,7 +532,7 @@ public class SymphonyMessageService implements DatafeedListener {
       text = text.substring(0, maxTextLength) + "...";
     }
     String messageML = "<messageML>" + text + "</messageML>";
-    if(forwarded) {
+    if (forwarded) {
       return symphonyMessageSender.sendForwardedMessage(streamId, fromSymphonyUserId, text, attachments);
     } else if (parentMessageId != null) {
       // we need pure text in case of relied message

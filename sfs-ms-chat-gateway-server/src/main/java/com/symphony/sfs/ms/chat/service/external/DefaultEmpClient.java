@@ -16,7 +16,6 @@ import com.symphony.sfs.ms.emp.generated.model.SendMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageResponse;
-import com.symphony.sfs.ms.emp.generated.model.SendSystemMessageToChannelsRequest;
 import com.symphony.sfs.ms.emp.generated.model.SendmessagerequestInlineMessage;
 import com.symphony.sfs.ms.emp.generated.model.UpdateUserRequest;
 import com.symphony.sfs.ms.emp.generated.model.UpdateUserResponse;

@@ -8,7 +8,10 @@ import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
+import com.symphony.sfs.ms.admin.generated.model.EmpSchema;
+import com.symphony.sfs.ms.admin.generated.model.EmpschemaSupportedFeatures;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
@@ -152,7 +155,7 @@ class MessageServiceTest implements I18nTest {
     adminClient = mock(AdminClient.class);
     when(adminClient.getEmpList()).thenReturn(new EmpList());
 
-    empSchemaService = new EmpSchemaService(adminClient);
+    empSchemaService = mock(EmpSchemaService.class);
 
 
     usersInfoService = mock(UsersInfoService.class);
@@ -165,6 +168,10 @@ class MessageServiceTest implements I18nTest {
 
     messageEncryptor = mock(MessageEncryptor.class);
     messageDecryptor = mock(MessageDecryptor.class);
+
+    EmpEntity empEntity = new EmpEntity();
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
+    when(empSchemaService.getEmpDisplayName("emp")).thenReturn("emp");
   }
 
   /**
@@ -258,11 +265,11 @@ class MessageServiceTest implements I18nTest {
       ))
       .from(
         EventUser.builder()
-        .firstName("first")
-        .surName("last")
-        .id(12345L)
-        .company("company")
-        .build())
+          .firstName("first")
+          .surName("last")
+          .id(12345L)
+          .company("company")
+          .build())
       .attachments(Collections.singletonList(
         MessageAttachment.builder().contentType("image/png").name("hello.png").build()
       ))
@@ -326,11 +333,11 @@ class MessageServiceTest implements I18nTest {
       ))
       .from(
         EventUser.builder()
-        .firstName("first")
-        .surName("last")
-        .id(Long.valueOf(botConfiguration.getSymphonyId()))
-        .company("company")
-        .build())
+          .firstName("first")
+          .surName("last")
+          .id(Long.valueOf(botConfiguration.getSymphonyId()))
+          .company("company")
+          .build())
       .build();
 
 
@@ -565,14 +572,137 @@ class MessageServiceTest implements I18nTest {
 
   @ParameterizedTest
   @MethodSource("unsupportedGatewaySocialMessageProvider")
-  void onIMMessage_UnsupportedContents(FederatedAccount toFederatedAccount, GatewaySocialMessage message, String expectedAlertMessage) {
+  void onIMMessage_UnsupportedContents_nullSupportedFeatures(FederatedAccount toFederatedAccount, GatewaySocialMessage message, String expectedAlertMessage) {
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
-    //when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, toFederatedAccount, NOW, "text", null, null)).thenReturn(Optional.of("leaseId"));
+    EmpEntity empEntity = new EmpEntity();
+    EmpSchema empSchema = new EmpSchema();
+    empEntity.setSchema(empSchema);
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
     messageService.onIMMessage(message);
 
     verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", expectedAlertMessage, Collections.emptyList());
+  }
+
+  @Test
+  void onIMMessage_chimeNotSupported_null() {
+    IUser fromSymphonyUser = buildDefaultFromUser();
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chime(true).chatType("CHATROOM").build();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+
+    EmpEntity empEntity = new EmpEntity();
+    EmpSchema empSchema = new EmpSchema();
+    empSchema.setSupportedFeatures(new EmpschemaSupportedFeatures());
+    empEntity.setSchema(empSchema);
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
+
+    messageService.onIMMessage(message);
+
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You cannot chime your contacts here.", Collections.emptyList());
+  }
+
+  @Test
+  void onIMMessage_chimeNotSupported_false() {
+    IUser fromSymphonyUser = buildDefaultFromUser();
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chime(true).chatType("CHATROOM").build();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+
+    EmpEntity empEntity = new EmpEntity();
+    EmpSchema empSchema = new EmpSchema();
+    empSchema.setSupportedFeatures(new EmpschemaSupportedFeatures().chime(false));
+    empEntity.setSchema(empSchema);
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
+
+    messageService.onIMMessage(message);
+
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You cannot chime your contacts here.", Collections.emptyList());
+  }
+
+  @Test
+  void onIMMessage_chimeSupported() {
+    IUser fromSymphonyUser = buildDefaultFromUser();
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chime(true).chatType("CHATROOM").build();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+
+    EmpEntity empEntity = new EmpEntity();
+    EmpSchema empSchema = new EmpSchema();
+    empSchema.setSupportedFeatures(new EmpschemaSupportedFeatures().chime(true));
+    empEntity.setSchema(empSchema);
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
+
+    messageService.onIMMessage(message);
+
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(symphonyMessageSender, never()).sendAlertMessage(null, "streamId", "You cannot chime your contacts here.", Collections.emptyList());
+  }
+
+  @Test
+  void onIMMessage_tableNotSupported_null() {
+    IUser fromSymphonyUser = buildDefaultFromUser();
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").table(true).chatType("CHATROOM").build();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+
+    EmpEntity empEntity = new EmpEntity();
+    EmpSchema empSchema = new EmpSchema();
+    empSchema.setSupportedFeatures(new EmpschemaSupportedFeatures());
+    empEntity.setSchema(empSchema);
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
+
+    messageService.onIMMessage(message);
+
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Sorry, you can't send tables here.", Collections.emptyList());
+  }
+
+  @Test
+  void onIMMessage_tableNotSupported_false() {
+    IUser fromSymphonyUser = buildDefaultFromUser();
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").table(true).chatType("CHATROOM").build();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+
+    EmpEntity empEntity = new EmpEntity();
+    EmpSchema empSchema = new EmpSchema();
+    empSchema.setSupportedFeatures(new EmpschemaSupportedFeatures().table(false));
+    empEntity.setSchema(empSchema);
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
+
+    messageService.onIMMessage(message);
+
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Sorry, you can't send tables here.", Collections.emptyList());
+  }
+
+  @Test
+  void onIMMessage_tableSupported() {
+    IUser fromSymphonyUser = buildDefaultFromUser();
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").table(true).chatType("CHATROOM").build();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+
+    EmpEntity empEntity = new EmpEntity();
+    EmpSchema empSchema = new EmpSchema();
+    empSchema.setSupportedFeatures(new EmpschemaSupportedFeatures().table(true));
+    empEntity.setSchema(empSchema);
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
+
+    messageService.onIMMessage(message);
+
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(symphonyMessageSender, never()).sendAlertMessage(null, "streamId", "Sorry, you can't send tables here.", Collections.emptyList());
   }
 
   @Test
@@ -706,6 +836,9 @@ class MessageServiceTest implements I18nTest {
       .build();
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
 
+    EmpEntity empEntity = new EmpEntity();
+    empEntity.setSchema(new EmpSchema());
+    when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
 
     IUser fromSymphonyUser = newIUser(FROM_SYMPHONY_USER_ID);
     GatewaySocialMessage gatewaySocialMessage = GatewaySocialMessage.builder()

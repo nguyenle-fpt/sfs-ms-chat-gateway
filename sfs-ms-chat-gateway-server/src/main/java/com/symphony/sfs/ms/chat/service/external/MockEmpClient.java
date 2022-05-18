@@ -3,10 +3,10 @@ package com.symphony.sfs.ms.chat.service.external;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
+import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelResponse;
 import com.symphony.sfs.ms.emp.generated.model.DeleteChannelsResponse;
-import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.OperationIdBySymId;
 import com.symphony.sfs.ms.emp.generated.model.RoomMemberResponse;
 import com.symphony.sfs.ms.emp.generated.model.SendMessageResponse;
@@ -86,7 +86,7 @@ public class MockEmpClient implements EmpClient {
 
   @Override
   public Optional<RoomMemberResponse> addRoomMemberOrFail(String streamId, String emp, com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest) {
-    if(federatedUserFailing.contains(empRoomMemberRequest.getFederatedUserId())) {
+    if (federatedUserFailing.contains(empRoomMemberRequest.getFederatedUserId())) {
       return Optional.empty();
     }
     RoomMemberResponse empRoomMemberResponse = RoomMemberDtoMapper.MAPPER.empRoomMemberRequestToEmpRoomMemberResponse(empRoomMemberRequest);
