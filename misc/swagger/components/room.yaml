@@ -104,7 +104,7 @@ room-member-request:
       type: boolean
     empRoomDisplayName:
       type: string
-    divisionId:
+    federationGroupId:
       type: string
 #Responses
 room-response:

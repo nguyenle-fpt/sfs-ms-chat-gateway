@@ -435,7 +435,7 @@ class RoomApiTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void addRoomMember_OK_withDivision() {
+  public void addRoomMember_OK_withFederationGroup() {
 
     createRoom_OK();
 
@@ -458,7 +458,7 @@ class RoomApiTest extends AbstractIntegrationTest {
       .emp(emp("11"))
       .phoneNumber((phoneNumber("11")))
       .build());
-    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME).divisionId("divisionId");
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME).federationGroupId("federationGroupId");
     RoomMemberResponse roomMemberResponse = addRoomMember(ROOM_STREAM_ID, roomMemberRequest);
 
 
