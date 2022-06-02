@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
+import com.symphony.oss.models.chat.canon.IMaestroMessage;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import model.InboundMessage;
 import model.Stream;
@@ -8,7 +9,6 @@ import model.events.RoomDeactivated;
 import model.events.RoomMemberDemotedFromOwner;
 import model.events.RoomMemberPromotedToOwner;
 import model.events.RoomUpdated;
-import model.events.UserLeftRoom;
 
 import java.util.List;
 
@@ -57,6 +57,9 @@ public interface DatafeedListener {
   }
 
   default void onUserLeftRoom(String streamId, IUser requestor, List<IUser> leavingUsers) {
+  }
+
+  default void onUserUpdated(IMaestroMessage maestroMessage, String podId) {
   }
 
   /*default void onConnectionAccepted(User user) {

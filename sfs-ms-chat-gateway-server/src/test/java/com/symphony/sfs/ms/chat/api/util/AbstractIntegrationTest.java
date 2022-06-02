@@ -13,6 +13,7 @@ import com.symphony.sfs.ms.chat.mapper.MessageInfoMapperImpl;
 import com.symphony.sfs.ms.chat.repository.ChannelRepository;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
+import com.symphony.sfs.ms.chat.service.AdvisorService;
 import com.symphony.sfs.ms.chat.service.ChannelService;
 import com.symphony.sfs.ms.chat.service.ConnectionRequestManager;
 import com.symphony.sfs.ms.chat.service.EmpSchemaService;
@@ -83,6 +84,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
   protected SymphonySystemMessageTemplateProcessor symphonySystemMessageTemplateProcessor;
   protected ConnectionsService connectionsServices;
   protected ConnectionRequestManager connectionRequestManager;
+  protected AdvisorService advisorService;
   protected ChannelService channelService;
   protected RoomService roomService;
   protected EmpSchemaService empSchemaService;
@@ -122,6 +124,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     // configurations
     podConfiguration = new PodConfiguration();
+    podConfiguration.setId("196");
     podConfiguration.setUrl("https://" + mockServer.getHostName() + ":" + mockServer.getPort());
     podConfiguration.setKeyAuth(podConfiguration.getUrl());
     podConfiguration.setSessionAuth(podConfiguration.getUrl());
@@ -153,10 +156,16 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
 
     ContentKeyManager contentKeyManager = new ContentKeyManager(podConfiguration, datafeedSessionPool);
     MessageDecryptor messageDecryptor = new MessageDecryptor(contentKeyManager, objectMapper);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
-
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration, podConfiguration);
 
     channelRepository = new ChannelRepository(db, dynamoConfiguration.getDynamoSchema());
+
+    tenantDetailRepository = new TenantDetailRepository(db, new SharedTableSchema(dynamoConfiguration.getDynamoSchema().getTableName()));
+    TenantDetailEntity tenantDetail = new TenantDetailEntity();
+    tenantDetail.setPodUrl("https://www.pod198.com");
+    tenantDetail.setPodId("0");
+    tenantDetail.setCompanyShortName("Symphony");
+    tenantDetailRepository.save(tenantDetail);
 
     // services
     streamService = spy(new StreamService(sessionManager));
@@ -170,13 +179,8 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     usersInfoService = mock(UsersInfoService.class);
     roomService = new RoomService(federatedAccountRepository, podConfiguration, botConfiguration, forwarderQueueConsumer, streamService, datafeedSessionPool, usersInfoService, empClient, adminClient);
     roomService.registerAsDatafeedListener();
-
-    tenantDetailRepository = new TenantDetailRepository(db, new SharedTableSchema(dynamoConfiguration.getDynamoSchema().getTableName()));
-    TenantDetailEntity tenantDetail = new TenantDetailEntity();
-    tenantDetail.setPodUrl("https://www.pod198.com");
-    tenantDetail.setPodId("0");
-    tenantDetail.setCompanyShortName("Symphony");
-    tenantDetailRepository.save(tenantDetail);
+    advisorService = new AdvisorService(tenantDetailRepository, forwarderQueueConsumer, adminClient);
+    advisorService.registerAsDatafeedListener();
 
     podVersionChecker = mock(PodVersionChecker.class);
     when(podVersionChecker.retrievePodVersion(anyString())).thenReturn(new PodVersion("2.0.1"));

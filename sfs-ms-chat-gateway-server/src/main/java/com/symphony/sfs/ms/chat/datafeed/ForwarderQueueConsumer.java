@@ -27,6 +27,7 @@ import com.symphony.oss.models.crypto.canon.CryptoModel;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.service.MessageIOMonitor;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
+import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
@@ -79,14 +80,16 @@ public class ForwarderQueueConsumer {
   private final MessageIOMonitor messageIOMonitor;
 
   private final BotConfiguration botConfiguration;
+  private final PodConfiguration podConfiguration;
 
 
-  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool, MessageIOMonitor messageIOMonitor, MeterManager meterManager, BotConfiguration botConfiguration) {
+  public ForwarderQueueConsumer(ObjectMapper objectMapper, MessageDecryptor messageDecryptor, DatafeedSessionPool datafeedSessionPool, MessageIOMonitor messageIOMonitor, MeterManager meterManager, BotConfiguration botConfiguration, PodConfiguration podConfiguration) {
     this.objectMapper = objectMapper;
     this.messageDecryptor = messageDecryptor;
     this.datafeedSessionPool = datafeedSessionPool;
     this.messageIOMonitor = messageIOMonitor;
     this.botConfiguration = botConfiguration;
+    this.podConfiguration = podConfiguration;
     this.forwarderQueueMetrics = new ForwarderQueueMetrics(meterManager);
 
     // Hell...
@@ -140,6 +143,23 @@ public class ForwarderQueueConsumer {
     }
 
     rawListener.accept(notification);
+  }
+
+  @SqsListener(value = {"${aws.sqs.ingestionCustomersPod}"}, deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
+  public void consumeCustomersPodEvents(String notification) throws IOException {
+    ISNSSQSWireObject sqsObject = SNSSQSWireObjectEntity.FACTORY.newInstance(JacksonAdaptor.adaptObject((ObjectNode) objectMapper.readTree(notification)).immutify(), modelRegistry);
+    IEnvelope envelope = parseEnvelope(sqsObject);
+    IMaestroMessage maestroMessage = MaestroMessage.FACTORY.newInstance(envelope.getPayload().getJsonObject(), modelRegistry);
+
+    String podId = envelope.getAttributes().get("podId").toString();
+
+    //Only UPDATE_USER is received by the queue for now
+    if (podConfiguration.getId().equals(podId)) {
+      LOG.info("Received UPDATE_USER event from federation Pod, nothing to do"); //This should be a federated Account
+      return;
+    }
+
+    datafeedListener.onUserUpdated(maestroMessage, podId);
   }
 
   private void notifySocialMessage(IEnvelope envelope, String receiveCount) {

@@ -2,8 +2,12 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.oss.models.chat.canon.IAttachment;
+import com.symphony.oss.models.chat.canon.IMaestroMessage;
+import com.symphony.oss.models.chat.canon.MaestroEventType;
 import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.admin.generated.model.AdvisorUpdateRequest;
+import com.symphony.sfs.ms.admin.generated.model.AdvisorUpdateRequestItem;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
@@ -31,6 +35,7 @@ import com.symphony.sfs.ms.starter.security.StaticSessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import model.UserInfo;
 import org.apache.commons.codec.binary.Base64;
@@ -48,6 +53,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -69,6 +75,7 @@ import static org.mockito.Mockito.when;
 public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
   protected ForwarderQueueConsumer forwarderQueueConsumer;
+  protected AdvisorService advisorService;
   private SymphonyMessageSender symphonyMessageSender;
   private MockEmpClient empClient;
   private DatafeedSessionPool datafeedSessionPool;
@@ -94,6 +101,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     botConfiguration.setSymphonyId("1234567890");
 
     PodConfiguration podConfiguration = new PodConfiguration();
+    podConfiguration.setId("196");
     podConfiguration.setUrl("podUrl");
     podConfiguration.setSessionAuth("sessionAuth");
     podConfiguration.setKeyAuth("keyAuth");
@@ -122,7 +130,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     ObjectMapper objectMapper = new JacksonConfiguration().configureJackson(new ObjectMapper());
 
     messageDecryptor = mock(MessageDecryptor.class);
-    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration);
+    forwarderQueueConsumer = new ForwarderQueueConsumer(objectMapper, messageDecryptor, datafeedSessionPool, new MessageIOMonitor(meterManager), meterManager, botConfiguration, podConfiguration);
 
     when(adminClient.getEmpList()).thenReturn(new EmpList());
     EmpSchemaService empSchemaService = mock(EmpSchemaService.class);
@@ -138,7 +146,81 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
     ChannelService channelService = new ChannelService(symphonyMessageSender, empClient, forwarderQueueConsumer, datafeedSessionPool, federatedAccountRepository, empSchemaService, channelRepository, messageSource);
     channelService.registerAsDatafeedListener();
+
+    advisorService = spy(new AdvisorService(tenantDetailRepository, forwarderQueueConsumer, adminClient));
+    advisorService.registerAsDatafeedListener();
   }
+
+  /////////////////////////////
+  /// Event on customer Pod ///
+  /////////////////////////////
+
+  @Test
+  public void onUserUpdated_byConnectBot() throws Exception {
+    String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getUpdateUserMaestroMessageByConnectBot(), MaestroEventType.UPDATE_USER, "196"));
+
+    forwarderQueueConsumer.consumeCustomersPodEvents(notification);
+
+    verify(advisorService, never()).onUserUpdated(any(IMaestroMessage.class), eq("196"));
+  }
+
+
+  @Test
+  public void onUserUpdated_byCustomer_notUnknownPod() throws Exception {
+    String notification = getSnsMaestroMessage("123", getEnvelopeMessage(getUpdateUserMaestroMessageByUser_Advisor(), MaestroEventType.UPDATE_USER, "123"));
+
+    forwarderQueueConsumer.consumeCustomersPodEvents(notification);
+
+    verify(advisorService).onUserUpdated(any(IMaestroMessage.class), eq("123"));
+
+    verify(adminClient, never()).updateAdvisorInfo(any(AdvisorUpdateRequest.class));
+  }
+
+  @Test
+  public void onUserUpdated_byCustomer_customerPod_advisor() throws Exception {
+    tenantDetailRepository.save(new TenantDetailEntity("123", "podUrl", "SYM", Set.of("EMP1")));
+
+    String notification = getSnsMaestroMessage("123", getEnvelopeMessage(getUpdateUserMaestroMessageByUser_Advisor(), MaestroEventType.UPDATE_USER, "123"));
+
+    forwarderQueueConsumer.consumeCustomersPodEvents(notification);
+
+    verify(advisorService).onUserUpdated(any(IMaestroMessage.class), eq("123"));
+
+    AdvisorUpdateRequestItem item = new AdvisorUpdateRequestItem()
+      .symphonyId("1234567891011")
+      .firstName("FirstName")
+      .lastName("LastName")
+      .displayName("DisplayName")
+      .companyName("Symphony")
+      .avatar("../avatars/static/150/default.png");
+    AdvisorUpdateRequest advisorUpdateRequest = new AdvisorUpdateRequest().addAdvisorsItem(item);
+
+    verify(adminClient, once()).updateAdvisorInfo(advisorUpdateRequest);
+  }
+
+  @Test
+  public void onUserUpdated_byCustomer_customerPod_bot() throws Exception {
+    tenantDetailRepository.save(new TenantDetailEntity("123", "podUrl", "SYM", Set.of("EMP1")));
+
+    String notification = getSnsMaestroMessage("123", getEnvelopeMessage(getUpdateUserMaestroMessageByUser_Bot(), MaestroEventType.UPDATE_USER, "123"));
+
+    forwarderQueueConsumer.consumeCustomersPodEvents(notification);
+
+    verify(advisorService).onUserUpdated(any(IMaestroMessage.class), eq("123"));
+
+    AdvisorUpdateRequestItem item = new AdvisorUpdateRequestItem()
+      .symphonyId("1234567891011")
+      .displayName("DisplayName")
+      .companyName("Symphony")
+      .avatar("../avatars/static/150/default.png");
+    AdvisorUpdateRequest advisorUpdateRequest = new AdvisorUpdateRequest().addAdvisorsItem(item);
+
+    verify(adminClient, once()).updateAdvisorInfo(advisorUpdateRequest);
+  }
+
+  ///////////////////////////////
+  /// Event on Federation Pod ///
+  ///////////////////////////////
 
   @Test
   public void createMIMChannel() throws Exception {
@@ -164,11 +246,10 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       whatsAppUserInvited,
       symphonyUserInvited,
       inviter
-    )));
+    ), MaestroEventType.CREATE_IM, "196"));
 
     forwarderQueueConsumer.consume(notification, "1");
     assertEquals(0, empClient.getChannels().size());
-//    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a MIM.");
   }
 
   @Test
@@ -191,12 +272,9 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getCreateIMMaestroMessage(
       whatsAppUserInvited,
       inviter
-    )));
+    ), MaestroEventType.CREATE_IM, "196"));
 
     forwarderQueueConsumer.consume(notification, "1");
-
-//    assertEquals(0, ((MockEmpClient) empClient).getChannels().size());
-//    verify(symphonyMessageSender, times(0)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite WHATSAPP contacts in a MIM.");
 
   }
 
@@ -217,17 +295,13 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
 
     SymphonySession session = datafeedSessionPool.openSession(whatsAppUserInvited);
     federatedAccountRepository.save(whatsAppUserInvited);
-   // doNothing().when(symphonyService).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn///pINMV/OdA==", session);
 
     String notification = getSnsMaestroMessage("196", getEnvelopeMessage(getCreateRoomMaestroMessage(
       whatsAppUserInvited,
       inviter
-    )));
+    ), MaestroEventType.JOIN_ROOM, "196"));
 
     forwarderQueueConsumer.consume(notification, "1");
-
-//    verify(symphonyService, times(1)).removeMemberFromRoom("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", session);
-//    verify(symphonyMessageSender, times(1)).sendAlertMessage(session, "KdO82B8UMTU7og2M4vOFqn___pINMV_OdA", "You are not allowed to invite a WHATSAPP contact in a chat room.");
   }
 
   @Test
@@ -251,12 +325,17 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageSocialMessage(
       whatsAppUser,
       sender
-    )));
+    ), MaestroEventType.CREATE_IM, "196"));
     doNothing().when(messageDecryptor).decrypt(any(ISocialMessage.class), eq(whatsAppUser.getSymphonyUserId()), any(), any());
     forwarderQueueConsumer.consume(notification, "1");
 
     verify(symphonyMessageSender, once()).sendAlertMessage(eq(session), eq("KdO82B8UMTU7og2M4vOFqn___pINMV_OdA"), eq("You are not permitted to send messages to WHATSAPP users."), eq(Collections.emptyList()));
   }
+
+
+  /////////////////
+  /// Messaging ///
+  /////////////////
 
   @Test
   public void onIMMessage() throws Exception {
@@ -279,7 +358,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonySession session = datafeedSessionPool.openSession(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
 
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getMIMMessageSocialMessage(
+    String notification = getSnsSocialMessage("196", getEnvelopeSocialMessage(getMIMMessageSocialMessage(
       whatsAppUser,
       sender
     )));
@@ -330,7 +409,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonySession session = datafeedSessionPool.openSession(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
 
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageSocialMessage(
+    String notification = getSnsSocialMessage("196", getEnvelopeSocialMessage(getRoomMessageSocialMessage(
       whatsAppUser,
       sender,
       bot
@@ -381,7 +460,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
     SymphonySession session = datafeedSessionPool.openSession(whatsAppUser);
     federatedAccountRepository.save(whatsAppUser);
 
-    String notification = getSnsSocialMessage("196", getEnvelopeMessage(getRoomMessageSocialMessage(
+    String notification = getSnsSocialMessage("196", getEnvelopeSocialMessage(getRoomMessageSocialMessage(
       whatsAppUser,
       bot,
       sender
@@ -409,6 +488,229 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
   }
 
 
+  private String getUpdateUserMaestroMessageByConnectBot(){
+    return "{\n" +
+      "  \"_type\":\"com.symphony.s2.model.chat.MaestroMessage\",\n" +
+      "  \"affectedUsers\":[\n" +
+      "    {\n" +
+      "      \"accountType\":\"SYSTEM\",\n" +
+      "      \"active\":true,\n" +
+      "      \"authenticationKeys\":{\n" +
+      "        \"currentKey\":\"-----BEGIN PUBLIC KEY-----\\nKEY==\\n-----END PUBLIC KEY-----\"\n" +
+      "      },\n" +
+      "      \"company\":\"application\",\n" +
+      "      \"createdBy\":\"13469017454766\",\n" +
+      "      \"eTag\":\"1652382873193\",\n" +
+      "      \"emailAddress\":\"WHATSAPP.123456789@symphony.com\",\n" +
+      "      \"emailAddressNormalized\":\"WHATSAPP.123456789@SYMPHONY.COM\",\n" +
+      "      \"entitlement\":[\n" +
+      "        {\n" +
+      "          \"name\":\"isExternalIMEnabled\",\n" +
+      "          \"value\":true\n" +
+      "        }\n" +
+      "      ],\n" +
+      "      \"focusedUser\":false,\n" +
+      "      \"id\":13469017534641,\n" +
+      "      \"imageUrl\":\"../avatars/static/150/default.png\",\n" +
+      "      \"imageUrlSmall\":\"../avatars/static/50/default.png\",\n" +
+      "      \"modifiedBy\":\"13469017454766\",\n" +
+      "      \"myCurrentThreadId\":\"wE3WU87NU+Uuf3AH5V/fa3///n9GTknddA==\",\n" +
+      "      \"preferences\":{\n" +
+      "      },\n" +
+      "      \"prettyName\":\"FN Add LN Error 1 [WHATSAPP]\",\n" +
+      "      \"prettyNameNormalized\":\"FN ADD LN ERROR 1 [WHATSAPP]\",\n" +
+      "      \"registrationStatus\":\"REGISTERED\",\n" +
+      "      \"roles\":[\n" +
+      "        {\n" +
+      "          \"id\":\"INDIVIDUAL\"\n" +
+      "        }\n" +
+      "      ],\n" +
+      "      \"samlId\":\"WHATSAPP.123456789\",\n" +
+      "      \"screenName\":\"WHATSAPP.123456789\",\n" +
+      "      \"source\":\"SERVICE\",\n" +
+      "      \"suspended\":false,\n" +
+      "      \"userType\":\"system\",\n" +
+      "      \"username\":\"WHATSAPP.123456789\",\n" +
+      "      \"usernameNormalized\":\"WHATSAPP.123456789\",\n" +
+      "      \"verifiedForBadge\":true\n" +
+      "    }\n" +
+      "  ],\n" +
+      "  \"copyDisabled\":false,\n" +
+      "  \"event\":\"UPDATE_USER\",\n" +
+      "  \"ingestionDate\":1652382873206,\n" +
+      "  \"isCopyDisabled\":false,\n" +
+      "  \"messageId\":\"KKGL2L3AT5NotZX6LSouO3///n9GTkmJbw==\",\n" +
+      "  \"requestingUser\":{\n" +
+      "    \"company\":\"Symphony\",\n" +
+      "    \"emailAddress\":\"connect@symphony.com\",\n" +
+      "    \"id\":1234567890,\n" +
+      "    \"imageUrl\":\"../avatars/static/150/default.png\",\n" +
+      "    \"imageUrlSmall\":\"../avatars/static/50/default.png\",\n" +
+      "    \"prettyName\":\"Symphony Connect Helper\",\n" +
+      "    \"userType\":\"system\",\n" +
+      "    \"username\":\"connectbot\"\n" +
+      "  },\n" +
+      "  \"schemaVersion\":1,\n" +
+      "  \"semVersion\":\"20.14.1\",\n" +
+      "  \"traceId\":\"OcUvs1\",\n" +
+      "  \"version\":\"MAESTRO\"\n" +
+      "}\n";
+  }
+
+  private String getUpdateUserMaestroMessageByUser_Advisor(){
+    return "{\n" +
+      "  \"_type\":\"com.symphony.s2.model.chat.MaestroMessage\",\n" +
+      "  \"affectedUsers\":[\n" +
+      "    {\n" +
+      "      \"accountType\":\"NORMAL\",\n" +
+      "      \"active\":true,\n" +
+      "      \"assetClass\":[],\n" +
+      "      \"authentication\":{\n" +
+      "        \"authGroupId\":\"org_AH0o8ylhP1oxmO8Z\",\n" +
+      "        \"method\":\"SSO\"\n" +
+      "      },\n" +
+      "      \"authenticationKeys\":{\n" +
+      "      },\n" +
+      "      \"company\":\"Symphony\",\n" +
+      "      \"createdBy\":\"15049565405266\",\n" +
+      "      \"eTag\":\"1652363484211\",\n" +
+      "      \"emailAddress\":\"email@company.com\",\n" +
+      "      \"emailAddressNormalized\":\"EMAIL@COMPANY.COM\",\n" +
+      "      \"entitlement\":[\n" +
+      "        {\n" +
+      "          \"name\":\"isExternalIMEnabled\",\n" +
+      "          \"value\":true\n" +
+      "        }\n" +
+      "      ],\n" +
+      "      \"firstName\":\"FirstName\",\n" +
+      "      \"firstNameNormalized\":\"FIRSTNAME\",\n" +
+      "      \"focusedUser\":false,\n" +
+      "      \"function\":[],\n" +
+      "      \"id\":1234567891011,\n" +
+      "      \"imageUrl\":\"../avatars/static/150/default.png\",\n" +
+      "      \"imageUrlSmall\":\"../avatars/static/50/default.png\",\n" +
+      "      \"industry\":[],\n" +
+      "      \"instrument\":[],\n" +
+      "      \"lastLoginDate\":1652363322658,\n" +
+      "      \"marketCoverage\":[],\n" +
+      "      \"modifiedBy\":\"15049565405266\",\n" +
+      "      \"myCurrentThreadId\":\"/l3sW0hOcb2bKTyBjHOqcn///n+urr8RdA==\",\n" +
+      "      \"prettyName\":\"DisplayName\",\n" +
+      "      \"prettyNameNormalized\":\"DISPLAYNAME\",\n" +
+      "      \"registrationStatus\":\"REGISTERED\",\n" +
+      "      \"responsibility\":[],\n" +
+      "      \"roles\":[\n" +
+      "        {\n" +
+      "          \"id\":\"INDIVIDUAL\"\n" +
+      "        }\n" +
+      "      ],\n" +
+      "      \"samlId\":\"firstName.lastName\",\n" +
+      "      \"screenName\":\"firstName.lastName\",\n" +
+      "      \"source\":\"ADMIN\",\n" +
+      "      \"surname\":\"LastName\",\n" +
+      "      \"surnameNormalized\":\"LASTNAME\",\n" +
+      "      \"suspended\":false,\n" +
+      "      \"userType\":\"lc\",\n" +
+      "      \"username\":\"username\",\n" +
+      "      \"usernameNormalized\":\"USERNAME\",\n" +
+      "      \"verifiedForBadge\":true\n" +
+      "    }\n" +
+      "  ],\n" +
+      "  \"copyDisabled\":false,\n" +
+      "  \"event\":\"UPDATE_USER\",\n" +
+      "  \"ingestionDate\":1652363484213,\n" +
+      "  \"isCopyDisabled\":false,\n" +
+      "  \"messageId\":\"qkqbSZt0D5JV24pfYmNkTX///n9HdiPKbw==\",\n" +
+      "  \"requestingUser\":{\n" +
+      "    \"company\":\"Symphony Support\",\n" +
+      "    \"emailAddress\":\"email@symphony.com\",\n" +
+      "    \"firstName\":\"firstName\",\n" +
+      "    \"id\":15049565405266,\n" +
+      "    \"imageUrl\":\"../avatars/static/150/default.png\",\n" +
+      "    \"imageUrlSmall\":\"../avatars/static/50/default.png\",\n" +
+      "    \"prettyName\":\"prettyName\",\n" +
+      "    \"surname\":\"lastName\",\n" +
+      "    \"userType\":\"lc\",\n" +
+      "    \"username\":\"userName\"\n" +
+      "  },\n" +
+      "  \"schemaVersion\":1,\n" +
+      "  \"semVersion\":\"20.14.30\",\n" +
+      "  \"version\":\"MAESTRO\"\n" +
+      "}\n";
+  }
+
+  private String getUpdateUserMaestroMessageByUser_Bot(){
+    return "{\n" +
+      "  \"_type\":\"com.symphony.s2.model.chat.MaestroMessage\",\n" +
+      "  \"affectedUsers\":[\n" +
+      "    {\n" +
+      "      \"accountType\":\"SYSTEM\",\n" +
+      "      \"active\":true,\n" +
+      "      \"assetClass\":[],\n" +
+      "      \"authenticationKeys\":{\n" +
+      "        \"currentKey\":\"-----BEGIN PUBLIC KEY-----\\nKEY==\\n-----END PUBLIC KEY-----\"\n" +
+      "      },\n" +
+      "      \"authenticationKeys\":{\n" +
+      "      },\n" +
+      "      \"company\":\"Symphony\",\n" +
+      "      \"createdBy\":\"15049565405266\",\n" +
+      "      \"eTag\":\"1652363484211\",\n" +
+      "      \"emailAddress\":\"email@company.com\",\n" +
+      "      \"emailAddressNormalized\":\"EMAIL@COMPANY.COM\",\n" +
+      "      \"entitlement\":[\n" +
+      "        {\n" +
+      "          \"name\":\"isExternalIMEnabled\",\n" +
+      "          \"value\":true\n" +
+      "        }\n" +
+      "      ],\n" +
+      "      \"focusedUser\":false,\n" +
+      "      \"id\":1234567891011,\n" +
+      "      \"imageUrl\":\"../avatars/static/150/default.png\",\n" +
+      "      \"imageUrlSmall\":\"../avatars/static/50/default.png\",\n" +
+      "      \"modifiedBy\":\"15049565405266\",\n" +
+      "      \"myCurrentThreadId\":\"/l3sW0hOcb2bKTyBjHOqcn///n+urr8RdA==\",\n" +
+      "      \"preferences\":{\n" +
+      "      },\n" +
+      "      \"prettyName\":\"DisplayName\",\n" +
+      "      \"prettyNameNormalized\":\"DISPLAYNAME\",\n" +
+      "      \"registrationStatus\":\"REGISTERED\",\n" +
+      "      \"roles\":[\n" +
+      "        {\n" +
+      "          \"id\":\"INDIVIDUAL\"\n" +
+      "        }\n" +
+      "      ],\n" +
+      "      \"samlId\":\"jiggly.trader\",\n" +
+      "      \"screenName\":\"jiggly.trader\",\n" +
+      "      \"source\":\"SERVICE\",\n" +
+      "      \"suspended\":false,\n" +
+      "      \"userType\":\"system\",\n" +
+      "      \"username\":\"username\",\n" +
+      "      \"usernameNormalized\":\"USERNAME\",\n" +
+      "      \"verifiedForBadge\":true\n" +
+      "    }\n" +
+      "  ],\n" +
+      "  \"copyDisabled\":false,\n" +
+      "  \"event\":\"UPDATE_USER\",\n" +
+      "  \"ingestionDate\":1652363484213,\n" +
+      "  \"isCopyDisabled\":false,\n" +
+      "  \"messageId\":\"qkqbSZt0D5JV24pfYmNkTX///n9HdiPKbw==\",\n" +
+      "  \"requestingUser\":{\n" +
+      "    \"company\":\"Symphony Support\",\n" +
+      "    \"emailAddress\":\"email@symphony.com\",\n" +
+      "    \"firstName\":\"firstName\",\n" +
+      "    \"id\":15049565405266,\n" +
+      "    \"imageUrl\":\"../avatars/static/150/default.png\",\n" +
+      "    \"imageUrlSmall\":\"../avatars/static/50/default.png\",\n" +
+      "    \"prettyName\":\"prettyName\",\n" +
+      "    \"surname\":\"lastName\",\n" +
+      "    \"userType\":\"lc\",\n" +
+      "    \"username\":\"userName\"\n" +
+      "  },\n" +
+      "  \"schemaVersion\":1,\n" +
+      "  \"semVersion\":\"20.14.30\",\n" +
+      "  \"version\":\"MAESTRO\"\n" +
+      "}\n";
+  }
 
   private String getCreateMIMMaestroMessage(FederatedAccount whatsAppUserInvited, UserInfo symphonyUserInvited, UserInfo inviter) {
     return " {" +
@@ -917,7 +1219,7 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "}";
   }
 
-  private String getEnvelopeMessage(String payload) {
+  private String getEnvelopeMessage(String payload, MaestroEventType type, String podId) {
     return "{" +
       "  \"_type\":\"com.symphony.s2.model.core.Envelope\"," +
       "  \"_version\":\"1.0\"," +
@@ -927,7 +1229,23 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       "  ]," +
       "  \"notificationDate\":\"2020-03-17T12:39:59.407Z\"," +
       "  \"payload\":" + payload + "," +
-      "  \"payloadType\":\"com.symphony.s2.model.chat.MaestroMessage.CONNECTION_REQUEST_ALERT\"," +
+      "  \"payloadType\":\"com.symphony.s2.model.chat.MaestroMessage." + type + " \"," +
+      "  \"podId\":" + podId + "," +
+      "  \"purgeDate\":\"2027-03-16T12:39:59.117Z\"" +
+      "}";
+  }
+
+  private String getEnvelopeSocialMessage(String payload) {
+    return "{" +
+      "  \"_type\":\"com.symphony.s2.model.core.Envelope\"," +
+      "  \"_version\":\"1.0\"," +
+      "  \"createdDate\":\"2020-03-17T12:39:59.117Z\"," +
+      "  \"distributionList\":[" +
+      "    13469017440257" +
+      "  ]," +
+      "  \"notificationDate\":\"2020-03-17T12:39:59.407Z\"," +
+      "  \"payload\":" + payload + "," +
+      "  \"payloadType\":\"com.symphony.s2.model.chat.SocialMessage\"," +
       "  \"podId\":196," +
       "  \"purgeDate\":\"2027-03-16T12:39:59.117Z\"" +
       "}";

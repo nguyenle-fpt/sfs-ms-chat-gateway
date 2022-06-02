@@ -9,6 +9,7 @@ aws:
   sqs:
 #    endpoint: https://sqs.us-east-1.amazonaws.com
 #    ingestion: sfs-dev-federation-events
+#    ingestionCustomersPod: sfs-dev-federation-customers-pod-events
     signinRegion: us-east-1
 
 tds:

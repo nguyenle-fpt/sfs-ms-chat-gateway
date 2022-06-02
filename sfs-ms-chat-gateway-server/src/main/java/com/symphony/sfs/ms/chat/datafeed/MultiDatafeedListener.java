@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
+import com.symphony.oss.models.chat.canon.IMaestroMessage;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 
 import java.util.HashSet;
@@ -47,5 +48,9 @@ public class MultiDatafeedListener implements DatafeedListener {
 
   public void onUserLeftRoom(String streamId, IUser requestor, List<IUser> leavingUsers) {
     listeners.forEach(l -> l.onUserLeftRoom(streamId, requestor, leavingUsers));
+  }
+
+  public void onUserUpdated(IMaestroMessage maestroMessage, String podId) {
+    listeners.forEach(l -> l.onUserUpdated(maestroMessage, podId));
   }
 }

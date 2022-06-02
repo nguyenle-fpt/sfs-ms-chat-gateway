@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.service.external;
 
+import com.symphony.sfs.ms.admin.generated.model.AdvisorUpdateRequest;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 
@@ -13,4 +14,6 @@ public interface AdminClient {
   Optional<CanChatResponse> canChat(String advisorSymphonyId, String federatedUserId, String entitlementType);
 
    void notifyLeaveRoom(String streamId, String requester, List<String> leavers);
+
+   void updateAdvisorInfo(AdvisorUpdateRequest advisorUpdateRequest);
 }

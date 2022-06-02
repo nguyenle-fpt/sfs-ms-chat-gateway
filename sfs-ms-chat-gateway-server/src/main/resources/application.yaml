@@ -37,6 +37,7 @@ aws:
     endpoint: http://localhost:4576 # localstack
     signinRegion: us-east-1
     ingestion: sfs-federation-events
+    ingestionCustomersPod: ${SQS_INGESTION_CUSTOMERS_POD}
   paramstore:
     prefix: /sfs
     name: ms-chat-gateway
