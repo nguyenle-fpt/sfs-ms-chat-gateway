@@ -30,6 +30,12 @@ messages:
                 - $ref: '../errors/messaging.yaml#/message-recipient-not-found'
                 - $ref: '../errors/messaging.yaml#/message-sender-not-found'
                 - $ref: '../errors/messaging.yaml#/room-not-found'
+      '409':
+        description: Conflict
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/messaging.yaml#/attachments-blocked'
       '500':
         description: Technical Error
         content:

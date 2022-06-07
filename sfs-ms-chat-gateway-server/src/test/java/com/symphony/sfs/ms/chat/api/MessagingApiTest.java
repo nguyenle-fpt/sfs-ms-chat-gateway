@@ -5,6 +5,7 @@ import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.generated.model.AttachmentBlockedProblem;
 import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
@@ -46,6 +47,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +66,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.MARKMESSAGESASREAD_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.RETRIEVEMESSAGES_ENDPOINT;
@@ -73,6 +76,7 @@ import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static com.symphony.sfs.ms.starter.util.RsaUtils.parseRSAPrivateKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -113,7 +117,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     empConfig.setMaxTextLength(maxTextLengths);
 
     FederatedAccountRepository federatedAccountRepository = mock(FederatedAccountRepository.class);
-    FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUsername("username").symphonyUserId("fromSymphonyUserId").build();
+    FederatedAccount federatedAccount = FederatedAccount.builder().symphonyUsername("username").symphonyUserId("fromSymphonyUserId").emp("emp").build();
     when(federatedAccountRepository.findBySymphonyId(anyString())).thenReturn(Optional.of(federatedAccount));
 
     AuthenticationService authenticationService = mock(AuthenticationService.class);
@@ -130,7 +134,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     messageStatusService = mock(MessageStatusService.class);
 
     messageDecryptor = mock(MessageDecryptor.class);
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
 
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
@@ -138,13 +142,19 @@ class MessagingApiTest extends AbstractIntegrationTest {
   @Test
   void sendMessage() {
     SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null);
-    verifyRequest(sendMessageRequest, HttpStatus.NO_CONTENT, Void.class);
+    when(symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
+    assertEquals(expectedResponse, sendMessageResponse);
   }
 
   @Test
   void sendFormattedMessage() {
     SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", FormattingEnum.INFO);
-    verifyRequest(sendMessageRequest, HttpStatus.NO_CONTENT, Void.class);
+    when(symphonyMessageSender.sendInfoMessage("streamId", "fromSymphonyUserId", "text", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
+    assertEquals(expectedResponse, sendMessageResponse);
   }
 
   @Test
@@ -226,6 +236,47 @@ class MessagingApiTest extends AbstractIntegrationTest {
     MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
 
     assertEquals(expectedResponse, sendMessageResponse);
+  }
+
+  @Test
+  void sendMessageToRoom_withAttachments_notBlocked() {
+    TenantDetailEntity tenantDetail = new TenantDetailEntity();
+    tenantDetail.setPodUrl("https://www.pod198.com");
+    tenantDetail.setPodId("123");
+    tenantDetail.setCompanyShortName("Symphony");
+    tenantDetail.setBlockedFileTypes(Map.of("emp", Set.of("image/jpg")));
+    tenantDetailRepository.save(tenantDetail);
+
+    SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
+    SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").tenantId("123").addAttachmentsItem(attachment);
+    when(symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null, Collections.singletonList(attachment))).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
+
+    assertEquals(expectedResponse, sendMessageResponse);
+  }
+
+  @Test
+  void sendMessageToRoom_withAttachments_blocked() {
+    TenantDetailEntity tenantDetail = new TenantDetailEntity();
+    tenantDetail.setPodUrl("https://www.pod198.com");
+    tenantDetail.setPodId("123");
+    tenantDetail.setCompanyShortName("Symphony");
+    tenantDetail.setBlockedFileTypes(Map.of("emp", Set.of("image/png")));
+    tenantDetailRepository.save(tenantDetail);
+
+    SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
+    SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").tenantId("123").addAttachmentsItem(attachment);
+    when(symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null, Collections.singletonList(attachment))).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    DefaultProblem blockedProblem =  verifyRequest(sendMessageRequest, HttpStatus.CONFLICT, DefaultProblem.class);
+
+
+    assertNotNull(blockedProblem.getParameters().get("attachmentsBlocked"));
+
+
+    List<Map<String, String>> expected = Collections.singletonList(Map.of("mimeType", "image/png", "name", "attachment.png"));
+    assertEquals(expected, blockedProblem.getParameters().get("attachmentsBlocked"));
+
   }
 
   @Test
@@ -548,16 +599,15 @@ class MessagingApiTest extends AbstractIntegrationTest {
   }
 
   private <RESPONSE> RESPONSE verifyRequest(SendMessageRequest sendMessageRequest, HttpStatus expectedStatus, Class<RESPONSE> response) {
-//    return configuredGiven(objectMapper, new ExceptionHandling(tracer), symphonyMessagingApi)
-//      .contentType(MediaType.APPLICATION_JSON_VALUE)
-//      .body(sendMessageRequest)
-//      .when()
-//      .post(SENDMESSAGE_ENDPOINT)
-//      .then()
-//      .statusCode(expectedStatus.value())
-//      .extract().response().body()
-//      .as(response);
-    return null;
+    return configuredGiven(objectMapper, new ExceptionHandling(tracer), symphonyMessagingApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(sendMessageRequest)
+      .when()
+      .post(SENDMESSAGE_ENDPOINT)
+      .then()
+      .statusCode(expectedStatus.value())
+      .extract().response().body()
+      .as(response);
   }
 
   private RetrieveMessagesResponse retrieveMessages(RetrieveMessagesRequest retrieveMessagesRequest) {

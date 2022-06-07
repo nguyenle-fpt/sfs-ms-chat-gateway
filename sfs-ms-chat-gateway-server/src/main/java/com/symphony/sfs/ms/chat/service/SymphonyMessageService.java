@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
+import com.symphony.oss.models.chat.canon.IAttachmentEntity;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpSchema;
@@ -13,6 +14,8 @@ import com.symphony.sfs.ms.chat.datafeed.GatewaySocialMessage;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.generated.model.AttachmentBlocked;
+import com.symphony.sfs.ms.chat.generated.model.AttachmentBlockedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CannotRetrieveStreamIdProblem;
 import com.symphony.sfs.ms.chat.generated.model.EmpNotFoundProblem;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
@@ -49,7 +52,10 @@ import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
+import com.symphony.sfs.ms.starter.util.UserIdUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.log4j.MDC;
@@ -69,10 +75,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
@@ -97,6 +105,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
   private final EmpConfig empConfig;
   private final EmpClient empClient;
+  private final TenantDetailRepository tenantDetailRepository;
   private final FederatedAccountRepository federatedAccountRepository;
   private final ForwarderQueueConsumer forwarderQueueConsumer;
   private final DatafeedSessionPool datafeedSessionPool;
@@ -231,24 +240,38 @@ public class SymphonyMessageService implements DatafeedListener {
 
         if (manageCanChat(gatewaySocialMessage, emp, streamId, userSessions, canChat)) {
           List<Attachment> attachmentsContent = null;
+          List<IAttachment> blockedAttachments = new ArrayList<>();
           long totalsize = 0;
           if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
+
+            String tenantId = UserIdUtils.extractPodId(gatewaySocialMessage.getFromUserId());
+            Optional<TenantDetailEntity> tenantDetailEntity = tenantDetailRepository.findByPodId(tenantId);
+            Set<String> blockedAttachmentsType = new HashSet<>();
+            if(tenantDetailEntity.isPresent() && tenantDetailEntity.get().getBlockedFileTypes().containsKey(emp)) {
+              blockedAttachmentsType = tenantDetailEntity.get().getBlockedFileTypes().get(emp);
+            }
             // retrieve the attachment
             try {
               attachmentsContent = new ArrayList<>();
               for (IAttachment attachment : gatewaySocialMessage.getAttachments()) {
-                Attachment result = new Attachment()
-                  .contentType(attachment.getContentType())
-                  .fileName(attachment.getName())
-                  .data(symphonyService.getAttachment(streamId, gatewaySocialMessage.getMessageId(), attachment.getFileId(), allUserSessions.get(0)));
 
-                attachmentsContent.add(result);
+                if(blockedAttachmentsType.contains(attachment.getContentType())) {
+                  blockedAttachments.add(attachment);
+                } else {
+                  Attachment result = new Attachment()
+                    .contentType(attachment.getContentType())
+                    .fileName(attachment.getName())
+                    .data(symphonyService.getAttachment(streamId, gatewaySocialMessage.getMessageId(), attachment.getFileId(), allUserSessions.get(0)));
 
-                totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
-                if (totalsize > MAX_UPLOAD_SIZE) {
-                  String alertMessage = messageSource.getMessage("message.partially.sent", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault());
-                  allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
-                  return;
+                  attachmentsContent.add(result);
+
+
+                  totalsize += result.getData().length(); // Technically the byte size might not match the length but we assume this is ASCII
+                  if (totalsize > MAX_UPLOAD_SIZE) {
+                    String alertMessage = messageSource.getMessage("message.partially.sent", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault());
+                    allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
+                    return;
+                  }
                 }
               }
             } catch (DataBufferLimitException dbe) {
@@ -257,6 +280,14 @@ public class SymphonyMessageService implements DatafeedListener {
               return;
             }
           }
+
+          if (!blockedAttachments.isEmpty()) {
+
+            String types = blockedAttachments.stream().map(IAttachmentEntity::getContentType).collect(Collectors.joining(", "));
+            String alertMessage = messageSource.getMessage("attachment.blocked", new Object[]{types, empEntity.getDisplayName()}, Locale.getDefault());
+            allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, alertMessage, Collections.emptyList()));
+          }
+
 
           // TODO Define the behavior in case of message not correctly sent to all EMPs
           //  need a recovery mechanism to re-send message in case of error only on some EMPs
@@ -268,21 +299,23 @@ public class SymphonyMessageService implements DatafeedListener {
 
           messageMetrics.onSendMessageFromSymphony(gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp, streamId);
 
-          Optional<SendMessageResponse> sendMessageResponse = empClient.sendMessage(emp,
-            streamId,
-            gatewaySocialMessage.getMessageId(),
-            gatewaySocialMessage.getFromUser(),
-            toFederatedAccountsForEmp,
-            gatewaySocialMessage.getTimestamp(),
-            //we send raw message to whatsapp, so whatsapp api can format the message correctly
-            gatewaySocialMessage.getTextContent(),
-            gatewaySocialMessage.getDisclaimerForEmp(),
-            attachmentsContent,
-            inlineMessageRequest);
-          if (sendMessageResponse.isEmpty()) {
-            allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault()), Collections.emptyList()));
-          } else {
-            this.dealWithMessageSentPartially(gatewaySocialMessage, sendMessageResponse.get(), allUserSessions);
+          if(!StringUtils.isEmpty(gatewaySocialMessage.getTextContent()) || (attachmentsContent != null && !attachmentsContent.isEmpty())) {
+            Optional<SendMessageResponse> sendMessageResponse = empClient.sendMessage(emp,
+              streamId,
+              gatewaySocialMessage.getMessageId(),
+              gatewaySocialMessage.getFromUser(),
+              toFederatedAccountsForEmp,
+              gatewaySocialMessage.getTimestamp(),
+              //we send raw message to whatsapp, so whatsapp api can format the message correctly
+              gatewaySocialMessage.getTextContent(),
+              gatewaySocialMessage.getDisclaimerForEmp(),
+              attachmentsContent,
+              inlineMessageRequest);
+            if (sendMessageResponse.isEmpty()) {
+              allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault()), Collections.emptyList()));
+            } else {
+              this.dealWithMessageSentPartially(gatewaySocialMessage, sendMessageResponse.get(), allUserSessions);
+            }
           }
         }
       }
@@ -427,7 +460,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-  public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
+  public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
@@ -452,6 +485,18 @@ public class SymphonyMessageService implements DatafeedListener {
         messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
         int maxTextLength = empConfig.getMaxTextLength().getOrDefault(federatedAccount.getEmp(), MAX_TEXT_LENGTH);
         boolean textTooLong = (text.length() > maxTextLength);
+
+        if (attachments != null && attachments.size() > 0 && tenantId != null) {
+          Optional<TenantDetailEntity> tenantDetailEntity = tenantDetailRepository.findByPodId(tenantId);
+          if (tenantDetailEntity.isPresent() && tenantDetailEntity.get().getBlockedFileTypes().containsKey(federatedAccount.getEmp())) {
+            Set<String> empBlockedTypes = tenantDetailEntity.get().getBlockedFileTypes().get(federatedAccount.getEmp());
+            List<SymphonyAttachment> attachmentsBlocked = attachments.stream().filter(a -> empBlockedTypes.contains(a.getContentType())).collect(Collectors.toList());
+            if (!attachmentsBlocked.isEmpty()) {
+              throw new AttachmentBlockedProblem(null, Map.of("attachmentsBlocked", attachmentsBlocked.stream().map(a -> new AttachmentBlocked().name(a.getFileName()).mimeType(a.getContentType())).collect(Collectors.toList())));
+            }
+          }
+        }
+
         symphonyMessage = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, forwarded, textTooLong, maxTextLength, attachmentReplySupported, attachmentMessageIds)
           .orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)

@@ -26,7 +26,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @Override
   @ContinueSpan
   public ResponseEntity<MessageInfoWithCustomEntities> sendMessage(SendMessageRequest request) {
-    MessageInfoWithCustomEntities messageInfo = symphonyMessageService.sendMessage(request.getStreamId(), request.getFromSymphonyUserId(), request.getFormatting(), request.getText(), request.getAttachments(), Boolean.TRUE.equals(request.isForwarded()),
+    MessageInfoWithCustomEntities messageInfo = symphonyMessageService.sendMessage(request.getStreamId(), request.getFromSymphonyUserId(), request.getTenantId(), request.getFormatting(), request.getText(), request.getAttachments(), Boolean.TRUE.equals(request.isForwarded()),
       request.getReplyToMessageId(), request.isAttachmentReplySupported(), Optional.ofNullable(request.getReplyToAttachmentMessageIds()));
     return ResponseEntity.ok(messageInfo);
   }

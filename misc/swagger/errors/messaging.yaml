@@ -81,3 +81,29 @@ retrieve-message-failed:
     status:
       type: integer
       format: 400
+attachments-blocked:
+  type: object
+  description: 'attachment blocked'
+  properties:
+    type:
+      type: string
+      format: 'attachment.blocked'
+    title:
+      type: string
+      format: 'Attachment blocked'
+    status:
+      type: integer
+      format: 409
+    attachmentsBlocked:
+      type: array
+      description: List of attachments blocked
+      items:
+        $ref: '#/attachment-blocked'
+
+attachment-blocked:
+  type: object
+  properties:
+    mimeType:
+      type: string
+    name:
+      type: string

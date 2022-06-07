@@ -129,7 +129,7 @@ public class ForwarderQueueConsumer {
     String payloadType = envelope.getPayload().getCanonType();
 
     forwarderQueueMetrics.incomingMessages.increment();
-    //LOG.debug("Message received | payloadType={} notification={}", payloadType, notification);
+    LOG.debug("Message received | payloadType={} notification={}", payloadType, notification);
 
     switch (payloadType) {
       case SocialMessage.TYPE_ID:
@@ -173,7 +173,7 @@ public class ForwarderQueueConsumer {
     IUser fromUser = socialMessage.getFrom(); // or getActualFromUser()?
     MDC.put("streamId", streamId);
     MDC.put("messageId", messageId);
-    LOG.debug("ENVELOPE | envelope={}", envelope);
+   // LOG.debug("ENVELOPE | envelope={}", envelope);
 
     IJsonObject<?> attributes = envelope.getPayload().getJsonObject().getObject("attributes");
     String chatType = envelope.getPayload().getJsonObject().getString("chatType", "IM");
@@ -201,11 +201,11 @@ public class ForwarderQueueConsumer {
     } else {
       members = distList.stream().map(PodAndUserId::toString).collect(Collectors.toList());
     }
-
+/*
     LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getText()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getText());
     LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getPresentationML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getPresentationML());
     LOG.debug("onIMMessage | streamId={} messageId={} fromUserId={}, members={}, timestamp={} message.getMessageML()={}", streamId, messageId, fromUser.getId(), members, timestamp, socialMessage.getMessageML());
-
+*/
     List<IAttachment> attachments = new ArrayList<>();
 
     if(socialMessage.getAttachments() != null) {
@@ -238,7 +238,7 @@ public class ForwarderQueueConsumer {
 
     try {
       messageDecryptor.decrypt(socialMessage, managedSessionId.get().getLeft(), managedSessionId.get().getRight(), gatewaySocialMessage);
-      //LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); //To uncomment for local execution
+      LOG.debug("onIMMessage | decryptedSocialMessage={}", gatewaySocialMessage); //To uncomment for local execution
       datafeedListener.onIMMessage(gatewaySocialMessage);
 
       // time in milliseconds between now (the message is sent to WhatsApp) and the ingestion date
