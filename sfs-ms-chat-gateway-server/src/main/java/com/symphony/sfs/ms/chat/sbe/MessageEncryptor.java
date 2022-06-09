@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.sbe;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.core.canon.facade.ThreadId;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -37,11 +39,14 @@ import java.util.TimeZone;
 @Component
 @Log4j2
 public class MessageEncryptor {
+
+  private static final String FORWARDED_HEADER = "\n\n**Forwarded Message:**\n";
+  private static final String ENTITIES_CONTENT = "{ \"hashtags\": [], \"userMentions\": [], \"urls\": [] }";
+
   private IClientCryptoHandler cryptoHandler;
   private final ContentKeyManager contentKeyManager;
   private final EmojiService emojiService = new EmojiService();
   private final ObjectMapper objectMapper = new ObjectMapper();
-  private static final String FORWARDED_HEADER = "\n\n**Forwarded Message:**\n";
 
   public MessageEncryptor(ContentKeyManager contentKeyManager) {
     this.contentKeyManager = contentKeyManager;
@@ -76,7 +81,7 @@ public class MessageEncryptor {
       String convertedMessageText = emojiService.convertEmojisFromUtf8ToMarkdown(messageText);
       String text = FORWARDED_HEADER + forwardedPrefix + convertedMessageText;
 
-      String customEntitiesText = generateForwardedCustomEntities(forwardedPrefix, convertedMessageText);
+      String customEntitiesText = generateForwardedCustomEntities(threadId, forwardedPrefix, convertedMessageText, Collections.emptyList());
 
 
       SBEEventMessage sbeEventMessage = generateSBEEventMessage(keyId, contentKey, userId, threadId, text, null, customEntitiesText, null, Collections.emptyList());
@@ -115,8 +120,8 @@ public class MessageEncryptor {
       .encryptedEntities(encrypt(contentKey, keyId, "{}"))
       .entityJSON(encrypt(contentKey, keyId, "{}"))
       .customEntities(customEntitiesText == null ? null : encrypt(contentKey, keyId, customEntitiesText))
-      .entities(objectMapper.readValue("{}", Object.class))
-      .attachments(attachments)
+      .entities(objectMapper.readValue(ENTITIES_CONTENT, Object.class))
+      .attachments((attachments != null)? attachments : new ArrayList<>())
       .msgFeatures(repliedToMessage == null ? 7 : 3)
       .version(SBEEventMessage.Versions.SOCIALMESSAGE.toString())
       .format(repliedToMessage == null ? "com.symphony.messageml.v2" : "com.symphony.markdown")
@@ -153,23 +158,28 @@ public class MessageEncryptor {
 
     return objectMapper.writeValueAsString(Collections.singletonList(customEntity));
   }
-  private String generateForwardedCustomEntities(String forwardedPrefix, String text) throws IOException {
+  private String generateForwardedCustomEntities(String threadId, String forwardedPrefix, String text, List<MessageAttachment> attachments) throws IOException {
     CustomEntity customEntity = new CustomEntity();
     customEntity.setType(CustomEntity.FORWARDED_TYPE);
     customEntity.setBeginIndex(0);
     customEntity.setEndIndex(text.length() + forwardedPrefix.length() + FORWARDED_HEADER.length());
     customEntity.setVersion("0.0.1");
 
-    MessageEntityData customEntityData = buildForwardedMessageEntityData(forwardedPrefix, text);
+    MessageEntityData customEntityData = buildForwardedMessageEntityData(threadId, forwardedPrefix, text, attachments);
     customEntity.setData(objectMapper.convertValue(customEntityData, Map.class));
 
     return objectMapper.writeValueAsString(Collections.singletonList(customEntity));
   }
 
-  private MessageEntityData buildForwardedMessageEntityData(String forwardedPrefix, String text) {
+  private MessageEntityData buildForwardedMessageEntityData(String threadId, String forwardedPrefix, String text, List<MessageAttachment> attachments) throws IOException {
     return MessageEntityData.builder()
       .text(text)
       .metadata(forwardedPrefix)
+      .streamId(threadId)
+      .attachments(attachments)
+      .entities(objectMapper.readValue(ENTITIES_CONTENT, JsonNode.class))
+      .customEntities(Collections.emptyList())
+      .entityJSON(objectMapper.readTree("{}"))
       .build();
   }
 
@@ -182,7 +192,7 @@ public class MessageEncryptor {
       .ingestionDate(repliedToMessage.getIngestionDate())
       .metadata(generateRepliedMessageMetaData(repliedToMessage))
       .attachments(attachments)
-      .entities(objectMapper.readTree(Optional.ofNullable(repliedToMessage.getEncryptedEntities()).orElse("{ \"hashtags\": [], \"userMentions\": [], \"urls\": [] }")))
+      .entities(objectMapper.readTree(Optional.ofNullable(repliedToMessage.getEncryptedEntities()).orElse(ENTITIES_CONTENT)))
       .customEntities(Collections.emptyList())
       .entityJSON(objectMapper.readTree(Optional.ofNullable(repliedToMessage.getEntityJSON()).orElse("{}")))
       .build();

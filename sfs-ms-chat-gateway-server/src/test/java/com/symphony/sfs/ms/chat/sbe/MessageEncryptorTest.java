@@ -19,8 +19,10 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.stubbing.Answer;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -92,15 +94,26 @@ public class MessageEncryptorTest {
     assertEquals(encryptedMessage.getChatType(), "CHATROOM");
     assertEquals(encryptedMessage.getVersion(), "SOCIALMESSAGE");
     assertEquals(encryptedMessage.getEntityJSON(), "encrypted**{}**");
-    assertEquals(encryptedMessage.getEntities().toString(), "{}");
+    assertEquals(encryptedMessage.getEntities(), Map.of("hashtags", new ArrayList<String>(), "userMentions", new ArrayList<String>(), "urls", new ArrayList<String>()));
     assertEquals(encryptedMessage.getEncryptedEntities(), "encrypted**{}**");
     assertEquals(encryptedMessage.getEncryptedMedia(), "encrypted**{\"content\":[],\"mediaType\":\"JSON\"}**");
     assertEquals("encrypted**[" +
       "{\"type\":\"com.symphony.sharing.quote\"," +
-      "\"beginIndex\":0,\"endIndex\":79," +
-      "\"data\":{\"text\":\"parent message text\",\"ingestionDate\":1634118131913,\"metadata\":\"User 1 13/10/21 @ 09:42\",\"attachments\":[],\"streamId\":null,\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"presentationML\":null,\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]},\"customEntities\":[],\"entityJSON\":{}}," +
-      "\"version\":\"0.0.1\"}]" +
-      "**",
+      "\"beginIndex\":0," +
+      "\"endIndex\":79," +
+      "\"data\":{" +
+        "\"text\":\"parent message text\"," +
+        "\"ingestionDate\":1634118131913," +
+        "\"metadata\":\"User 1 13/10/21 @ 09:42\"," +
+        "\"attachments\":[]," +
+        "\"streamId\":null," +
+        "\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\"," +
+        "\"presentationML\":null," +
+        "\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]}," +
+        "\"customEntities\":[]," +
+        "\"entityJSON\":{}" +
+      "}," +
+      "\"version\":\"0.0.1\"}]**",
       encryptedMessage.getCustomEntities());
     assertEquals(encryptedMessage.getFormat(), "com.symphony.markdown");
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
@@ -210,7 +223,7 @@ public class MessageEncryptorTest {
     assertEquals(encryptedMessage.getChatType(), "CHATROOM");
     assertEquals(encryptedMessage.getVersion(), "SOCIALMESSAGE");
     assertEquals(encryptedMessage.getEntityJSON(), "encrypted**{}**");
-    assertEquals(encryptedMessage.getEntities().toString(), "{}");
+    assertEquals(encryptedMessage.getEntities(), Map.of("hashtags", new ArrayList<String>(), "userMentions", new ArrayList<String>(), "urls", new ArrayList<String>()));
     assertEquals(encryptedMessage.getEncryptedEntities(), "encrypted**{}**");
     assertEquals(encryptedMessage.getEncryptedMedia(), "encrypted**{\"content\":[],\"mediaType\":\"JSON\"}**");
     assertEquals("encrypted**[{\"type\":\"com.symphony.sharing.message\"," +
@@ -219,12 +232,13 @@ public class MessageEncryptorTest {
           "\"text\":\"new message text\"," +
           "\"ingestionDate\":0," +
           "\"metadata\":\"from a WhatsApp chat\\n\"," +
-          "\"attachments\":null," +
-          "\"streamId\":null,\"id\":null," +
+          "\"attachments\":[]," +
+          "\"streamId\":\"FrgZb/0yPjOuShqA35oAM3///oOQU772dA==\"," +
+          "\"id\":null," +
           "\"presentationML\":null," +
-          "\"entities\":null," +
-          "\"customEntities\":null," +
-          "\"entityJSON\":null}," +
+          "\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]}," +
+          "\"customEntities\":[]," +
+          "\"entityJSON\":{}}," +
           "\"version\":\"0.0.1\"" +
         "}]**",
       encryptedMessage.getCustomEntities());
