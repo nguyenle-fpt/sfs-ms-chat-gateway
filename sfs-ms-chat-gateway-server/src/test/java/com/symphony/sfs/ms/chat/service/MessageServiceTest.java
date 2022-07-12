@@ -7,6 +7,7 @@ import com.symphony.oss.models.chat.canon.AttachmentEntity;
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.oss.models.core.canon.facade.PodAndUserId;
+import com.symphony.sfs.ms.admin.generated.model.BlockedFileTypes;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
@@ -444,10 +445,10 @@ class MessageServiceTest implements I18nTest {
 
     IUser fromSymphonyUser = buildDefaultFromUser();
 
-    TenantDetailEntity tenantDetailEntity = new TenantDetailEntity();
-    tenantDetailEntity.setBlockedFileTypes(Map.of("emp", Set.of("audio/ogg; codecs=opus")));
+    BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
+    blockedFileTypes.addAll(List.of("audio/ogg; codecs=opus"));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
-    when(tenantDetailRepository.findByPodId(PODID)).thenReturn(Optional.of(tenantDetailEntity));
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("input")
@@ -472,10 +473,10 @@ class MessageServiceTest implements I18nTest {
 
     IUser fromSymphonyUser = buildDefaultFromUser();
 
-    TenantDetailEntity tenantDetailEntity = new TenantDetailEntity();
-    tenantDetailEntity.setBlockedFileTypes(Map.of("emp", Set.of("audio/ogg; codecs=opus")));
+    BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
+    blockedFileTypes.addAll(List.of("audio/ogg; codecs=opus"));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
-    when(tenantDetailRepository.findByPodId(PODID)).thenReturn(Optional.of(tenantDetailEntity));
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW)
@@ -499,10 +500,10 @@ class MessageServiceTest implements I18nTest {
 
     IUser fromSymphonyUser = buildDefaultFromUser();
 
-    TenantDetailEntity tenantDetailEntity = new TenantDetailEntity();
-    tenantDetailEntity.setBlockedFileTypes(Map.of("emp", Set.of("audio/ogg; codecs=opus")));
+    BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
+    blockedFileTypes.addAll(List.of("audio/ogg; codecs=opus"));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
-    when(tenantDetailRepository.findByPodId(PODID)).thenReturn(Optional.of(tenantDetailEntity));
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW)

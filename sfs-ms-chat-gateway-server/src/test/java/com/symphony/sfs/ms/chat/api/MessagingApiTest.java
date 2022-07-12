@@ -1,11 +1,11 @@
 package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.symphony.sfs.ms.admin.generated.model.BlockedFileTypes;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
-import com.symphony.sfs.ms.chat.generated.model.AttachmentBlockedProblem;
 import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.FormattingEnum;
 import com.symphony.sfs.ms.chat.generated.model.MessageId;
@@ -27,6 +27,7 @@ import com.symphony.sfs.ms.chat.service.SymphonyMessageSender;
 import com.symphony.sfs.ms.chat.service.SymphonyMessageService;
 import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
+import com.symphony.sfs.ms.chat.service.external.MockAdminClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.HttpRequestUtils;
 import com.symphony.sfs.ms.starter.config.ExceptionHandling;
@@ -83,6 +84,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -96,6 +98,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   private SessionSupplier<SymphonySession> symphonySession;
   private SessionSupplier<SymphonySession> botSession;
   private MessageDecryptor messageDecryptor;
+  private AdminClient mockAdminClient;
 
   @BeforeEach
   public void setUp(AmazonDynamoDB db, DefaultMockServer mockServer, MessageSource messageSource) throws Exception {
@@ -123,7 +126,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     AuthenticationService authenticationService = mock(AuthenticationService.class);
     symphonySession = new SessionSupplier<>(federatedAccount.getSymphonyUsername(), new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
     botSession = symphonyAuthFactory.getBotAuth();
-    AdminClient adminClient = mock(AdminClient.class);
+    mockAdminClient = spy(MockAdminClient.class);
     EmpClient empClient = mock(EmpClient.class);
     SessionManager sessionManager = new SessionManager(webClient, Collections.emptyList());
 
@@ -134,7 +137,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     messageStatusService = mock(MessageStatusService.class);
 
     messageDecryptor = mock(MessageDecryptor.class);
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, adminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, mockAdminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
 
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
@@ -240,12 +243,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void sendMessageToRoom_withAttachments_notBlocked() {
-    TenantDetailEntity tenantDetail = new TenantDetailEntity();
-    tenantDetail.setPodUrl("https://www.pod198.com");
-    tenantDetail.setPodId("123");
-    tenantDetail.setCompanyShortName("Symphony");
-    tenantDetail.setBlockedFileTypes(Map.of("emp", Set.of("image/jpg")));
-    tenantDetailRepository.save(tenantDetail);
+    BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
+    blockedFileTypes.add("image/jpg");
+    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").tenantId("123").addAttachmentsItem(attachment);
@@ -258,12 +258,9 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void sendMessageToRoom_withAttachments_blocked() {
-    TenantDetailEntity tenantDetail = new TenantDetailEntity();
-    tenantDetail.setPodUrl("https://www.pod198.com");
-    tenantDetail.setPodId("123");
-    tenantDetail.setCompanyShortName("Symphony");
-    tenantDetail.setBlockedFileTypes(Map.of("emp", Set.of("image/png")));
-    tenantDetailRepository.save(tenantDetail);
+    BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
+    blockedFileTypes.addAll(List.of("image/png", "application/pdf"));
+    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").tenantId("123").addAttachmentsItem(attachment);

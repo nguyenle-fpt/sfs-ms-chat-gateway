@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service.external;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.SfsAdminClient;
 import com.symphony.sfs.ms.admin.generated.model.AdvisorUpdateRequest;
+import com.symphony.sfs.ms.admin.generated.model.BlockedFileTypes;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import com.symphony.sfs.ms.admin.generated.model.RoomLeftNotification;
@@ -54,5 +55,11 @@ public class DefaultAdminClient implements AdminClient {
   public void updateAdvisorInfo(AdvisorUpdateRequest advisorUpdateRequest) {
     adminClient.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     adminClient.getWebhookApi().updateAdvisorInfo(advisorUpdateRequest);
+  }
+
+  @Override
+  public Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String tenantId, String emp) {
+    adminClient.getAttachmentConfigApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
+    return adminClient.getAttachmentConfigApi().getBlockedFilesTypes(streamId, tenantId, emp);
   }
 }

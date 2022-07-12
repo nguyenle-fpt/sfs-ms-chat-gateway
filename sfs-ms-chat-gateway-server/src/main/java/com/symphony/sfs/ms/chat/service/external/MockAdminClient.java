@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.sfs.ms.admin.generated.model.AdvisorUpdateRequest;
+import com.symphony.sfs.ms.admin.generated.model.BlockedFileTypes;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpList;
 import lombok.Getter;
@@ -31,5 +32,10 @@ public class MockAdminClient implements AdminClient {
 
   @Override
   public void updateAdvisorInfo(AdvisorUpdateRequest advisorUpdateRequest) {
+  }
+
+  @Override
+  public Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String tenantId, String emp) {
+    return null;
   }
 }

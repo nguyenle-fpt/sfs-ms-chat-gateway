@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.IAttachmentEntity;
+import com.symphony.sfs.ms.admin.generated.model.BlockedFileTypes;
 import com.symphony.sfs.ms.admin.generated.model.CanChatResponse;
 import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.admin.generated.model.EmpSchema;
@@ -205,6 +206,7 @@ public class SymphonyMessageService implements DatafeedListener {
       }
 
       // Forward the message to all EMP users
+      String tenantId = UserIdUtils.extractPodId(gatewaySocialMessage.getFromUserId());
       for (Map.Entry<String, List<FederatedAccount>> entry : federatedAccountsByEmp.entrySet()) {
         String emp = entry.getKey();
         // Check if message contents can be sent
@@ -243,13 +245,8 @@ public class SymphonyMessageService implements DatafeedListener {
           List<IAttachment> blockedAttachments = new ArrayList<>();
           long totalsize = 0;
           if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
-
-            String tenantId = UserIdUtils.extractPodId(gatewaySocialMessage.getFromUserId());
-            Optional<TenantDetailEntity> tenantDetailEntity = tenantDetailRepository.findByPodId(tenantId);
-            Set<String> blockedAttachmentsType = new HashSet<>();
-            if(tenantDetailEntity.isPresent() && tenantDetailEntity.get().getBlockedFileTypes().containsKey(emp)) {
-              blockedAttachmentsType = tenantDetailEntity.get().getBlockedFileTypes().get(emp);
-            }
+            Optional<BlockedFileTypes> blockedFileTypesOptional = adminClient.getBlockedFileTypes(streamId, tenantId, emp);
+            Set<String> blockedAttachmentsType = blockedFileTypesOptional.isPresent() ? new HashSet<>(blockedFileTypesOptional.get()) : new HashSet<>();
             // retrieve the attachment
             try {
               attachmentsContent = new ArrayList<>();
@@ -487,9 +484,10 @@ public class SymphonyMessageService implements DatafeedListener {
         boolean textTooLong = (text.length() > maxTextLength);
 
         if (attachments != null && attachments.size() > 0 && tenantId != null) {
-          Optional<TenantDetailEntity> tenantDetailEntity = tenantDetailRepository.findByPodId(tenantId);
-          if (tenantDetailEntity.isPresent() && tenantDetailEntity.get().getBlockedFileTypes().containsKey(federatedAccount.getEmp())) {
-            Set<String> empBlockedTypes = tenantDetailEntity.get().getBlockedFileTypes().get(federatedAccount.getEmp());
+          Optional<BlockedFileTypes> blockedFileTypesOptional = adminClient.getBlockedFileTypes(streamId, tenantId, federatedAccount.getEmp());
+          Set<String> empBlockedTypes = blockedFileTypesOptional.isPresent() ? new HashSet<>(blockedFileTypesOptional.get()) : new HashSet<>();
+
+          if (!empBlockedTypes.isEmpty()) {
             List<SymphonyAttachment> attachmentsBlocked = attachments.stream().filter(a -> empBlockedTypes.contains(a.getContentType())).collect(Collectors.toList());
             if (!attachmentsBlocked.isEmpty()) {
               throw new AttachmentBlockedProblem(null, Map.of("attachmentsBlocked", attachmentsBlocked.stream().map(a -> new AttachmentBlocked().name(a.getFileName()).mimeType(a.getContentType())).collect(Collectors.toList())));
