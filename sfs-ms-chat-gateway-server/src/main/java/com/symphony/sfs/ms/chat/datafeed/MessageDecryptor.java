@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.datafeed;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.oss.models.core.canon.facade.ThreadId;
@@ -85,9 +86,19 @@ public class MessageDecryptor {
         message.setCustomEntities(decryptedData);
       }
 
+      boolean isJsonMediaSet = false;
       if (message.getEncryptedMedia() != null) {
         String decryptedData = cryptoHandler.decryptMsg(contentKey, message.getEncryptedMedia());
         message.setEncryptedMedia(decryptedData);
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode jsonNode = mapper.readTree(decryptedData);
+        if (jsonNode.has("mediaType") && jsonNode.get("mediaType").asText().equals("JSON")) {
+          if (jsonNode.has("content")) {
+            message.setJsonMedia(jsonNode.get("content").toString());
+            isJsonMediaSet = true;
+          }
+        }
       }
 
       if (message.getEncryptedEntities() != null) {
@@ -95,7 +106,7 @@ public class MessageDecryptor {
         message.setEncryptedEntities(decryptedData);
       }
 
-      if (message.getJsonMedia() != null) {
+      if (!isJsonMediaSet && message.getJsonMedia() != null) {
         String decryptedData = cryptoHandler.decryptMsg(contentKey, message.getJsonMedia());
         message.setJsonMedia(decryptedData);
       }

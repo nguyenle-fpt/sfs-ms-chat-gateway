@@ -61,5 +61,7 @@ public class MessageEntityData {
    * entityJSON of the original message in forward and reply
    */
   private JsonNode entityJSON;
+
+  private List<JsonNode> jsonMedia;
 }
 

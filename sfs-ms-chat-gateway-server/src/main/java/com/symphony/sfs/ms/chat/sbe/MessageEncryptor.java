@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.sbe;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
@@ -180,10 +181,22 @@ public class MessageEncryptor {
       .entities(objectMapper.readValue(ENTITIES_CONTENT, JsonNode.class))
       .customEntities(Collections.emptyList())
       .entityJSON(objectMapper.readTree("{}"))
+      .jsonMedia(Collections.emptyList())
       .build();
   }
 
   private MessageEntityData getQuotingEntityData(SBEEventMessage repliedToMessage, List<MessageAttachment> attachments) throws IOException {
+    List<JsonNode> jsonMedia;
+    try {
+      if (repliedToMessage.getJsonMedia() != null) {
+        jsonMedia = objectMapper.readValue(repliedToMessage.getJsonMedia(), new TypeReference<>() {});
+      } else {
+        jsonMedia = Collections.emptyList();
+      }
+    } catch (JsonProcessingException jsonProcessingException){
+      jsonMedia = Collections.emptyList();
+    }
+
     return MessageEntityData.builder()
       .id(repliedToMessage.getMessageId())
       .streamId(repliedToMessage.getStreamId())
@@ -195,6 +208,7 @@ public class MessageEncryptor {
       .entities(objectMapper.readTree(Optional.ofNullable(repliedToMessage.getEncryptedEntities()).orElse(ENTITIES_CONTENT)))
       .customEntities(Collections.emptyList())
       .entityJSON(objectMapper.readTree(Optional.ofNullable(repliedToMessage.getEntityJSON()).orElse("{}")))
+      .jsonMedia(jsonMedia)
       .build();
   }
 

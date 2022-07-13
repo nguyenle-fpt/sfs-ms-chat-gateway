@@ -111,7 +111,8 @@ public class MessageEncryptorTest {
         "\"presentationML\":null," +
         "\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]}," +
         "\"customEntities\":[]," +
-        "\"entityJSON\":{}" +
+        "\"entityJSON\":{}," +
+        "\"jsonMedia\":[]" +
       "}," +
       "\"version\":\"0.0.1\"}]**",
       encryptedMessage.getCustomEntities());
@@ -135,7 +136,7 @@ public class MessageEncryptorTest {
     assertEquals(encryptedMessage.getCustomEntities(), "encrypted**[" +
       "{\"type\":\"com.symphony.sharing.quote\"," +
       "\"beginIndex\":0,\"endIndex\":79," +
-      "\"data\":{\"text\":\"parent message text\",\"ingestionDate\":1634118131913,\"metadata\":\"User 1 13/10/21 @ 09:42\",\"attachments\":[{\"fileId\":\"attachment_id\",\"name\":\"attachment_name\",\"encrypted\":false,\"sizeInBytes\":1024,\"images\":{},\"contentType\":\"attachment_type\"}],\"streamId\":null,\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"presentationML\":null,\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]},\"customEntities\":[],\"entityJSON\":{}}," +
+      "\"data\":{\"text\":\"parent message text\",\"ingestionDate\":1634118131913,\"metadata\":\"User 1 13/10/21 @ 09:42\",\"attachments\":[{\"fileId\":\"attachment_id\",\"name\":\"attachment_name\",\"encrypted\":false,\"sizeInBytes\":1024,\"images\":{},\"contentType\":\"attachment_type\"}],\"streamId\":null,\"id\":\"uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==\",\"presentationML\":null,\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]},\"customEntities\":[],\"entityJSON\":{},\"jsonMedia\":[]}," +
       "\"version\":\"0.0.1\"}]" +
       "**");
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
@@ -238,7 +239,8 @@ public class MessageEncryptorTest {
           "\"presentationML\":null," +
           "\"entities\":{\"hashtags\":[],\"userMentions\":[],\"urls\":[]}," +
           "\"customEntities\":[]," +
-          "\"entityJSON\":{}}," +
+          "\"entityJSON\":{}," +
+          "\"jsonMedia\":[]}," +
           "\"version\":\"0.0.1\"" +
         "}]**",
       encryptedMessage.getCustomEntities());
