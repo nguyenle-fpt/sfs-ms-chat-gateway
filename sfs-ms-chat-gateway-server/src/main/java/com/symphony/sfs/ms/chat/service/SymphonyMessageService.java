@@ -49,10 +49,12 @@ import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
 import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
 import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageEnvelope;
 import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
+import com.symphony.sfs.ms.starter.symphony.stream.ThreadMessagesResponse;
 import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
 import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
@@ -71,11 +73,13 @@ import org.springframework.util.StringUtils;
 import org.zalando.problem.violations.Violation;
 
 import javax.annotation.PostConstruct;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -102,6 +106,7 @@ public class SymphonyMessageService implements DatafeedListener {
   // The max size of attachments in a single message we accept is 25 MB ~ 34 MB when the file is encoded in base64
   private final long MAX_UPLOAD_SIZE = 34 * 1024 * 1024;
   private static final int MAX_TEXT_LENGTH = 30000;
+  private static final int POD_BATCH_REQUEST_SIZE = 500;
   private static final String TEXT_TOO_LONG_WARNING = "The message was too long and was truncated. Only the first %,d characters were delivered";
 
   private final EmpConfig empConfig;
@@ -435,15 +440,41 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-  public RetrieveMessagesResponse retrieveMessages(List<MessageId> messageIds, String symphonyUserId) {
+  public RetrieveMessagesResponse retrieveMessages(String threadId, List<MessageId> messageIds, String symphonyUserId, OffsetDateTime startTime, OffsetDateTime endTime) {
     try {
       List<MessageInfo> messageInfos = new ArrayList<>();
 
       SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplierOrFail(symphonyUserId);
+
+      Map<String, SBEEventMessage> sbeEventMessages = new HashMap<>();
+      ThreadMessagesResponse response;
+
+      long from = startTime.toInstant().toEpochMilli();
+      long to = endTime.toInstant().toEpochMilli();
+
+      do {
+        response = streamService.retrieveSocialMessagesList(podConfiguration.getUrl(), userSession, threadId, POD_BATCH_REQUEST_SIZE, from, to).orElseThrow(RetrieveMessageFailedProblem::new);
+
+        for (MessageEnvelope messageEnvelope: response.getEnvelopes()) {
+          sbeEventMessages.put(StreamUtil.toUrlSafeStreamId(messageEnvelope.getMessage().getMessageId()), messageEnvelope.getMessage());
+        }
+
+        if (!response.getEnvelopes().isEmpty()) {
+          to = response.getEnvelopes().get(response.getEnvelopes().size() - 1).getMessage().getIngestionDate();
+        }
+
+      } while (response.getEnvelopes().size() == POD_BATCH_REQUEST_SIZE);
+
       for (MessageId id : messageIds) {
-        SBEEventMessage sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
-        MessageInfo messageInfo = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage, symphonyUserId, userSession);
-        messageInfos.add(messageInfo);
+        SBEEventMessage sbeEventMessage = sbeEventMessages.get(id.getMessageId());
+        if (sbeEventMessage == null) {
+          sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
+        }
+
+        if (sbeEventMessage != null){
+          MessageInfo messageInfo = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage.toBuilder().build(), symphonyUserId, userSession, sbeEventMessages);
+          messageInfos.add(messageInfo);
+        }
       }
 
       return new RetrieveMessagesResponse().messages(messageInfos);
@@ -457,7 +488,7 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-  public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
+    public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);

@@ -40,8 +40,10 @@ import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -281,9 +283,12 @@ public class SymphonyMessageSender {
 
     return eventMessage;
   }
-
-
   public MessageInfoWithCustomEntities decryptAndBuildMessageInfo(SBEEventMessage sbeEventMessage, String symphonyUserId, SessionSupplier<SymphonySession> userSession) throws DecryptionException {
+      return decryptAndBuildMessageInfo(sbeEventMessage, symphonyUserId, userSession, new HashMap<>());
+  }
+
+
+    public MessageInfoWithCustomEntities decryptAndBuildMessageInfo(SBEEventMessage sbeEventMessage, String symphonyUserId, SessionSupplier<SymphonySession> userSession, Map<String, SBEEventMessage> retrievedMessages) throws DecryptionException {
     messageDecryptor.decrypt(sbeEventMessage, symphonyUserId, userSession.getPrincipal());
 
     // TODO handle inline replies
@@ -295,7 +300,13 @@ public class SymphonyMessageSender {
     if (quote.isPresent()) {
       messageInfo.setMessage(messageInfo.getMessage().substring(quote.get().getEndIndex()));
       String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
-      Optional<SBEEventMessage> inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);
+      Optional<SBEEventMessage> inlineMessageOptional = Optional.empty();
+      if (retrievedMessages.containsKey(quotedId)) {
+        inlineMessageOptional = Optional.of(retrievedMessages.get(quotedId));
+      }
+      if(inlineMessageOptional.isEmpty()) {
+        inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);
+      }
       if (inlineMessageOptional.isEmpty()) {
         // The message might not been retrieve with the federated account session
         // We try with the connect bot session

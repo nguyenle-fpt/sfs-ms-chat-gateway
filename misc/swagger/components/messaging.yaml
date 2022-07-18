@@ -67,11 +67,19 @@ retrieve-messages-request:
   properties:
     symphonyUserId:
       type: string
+    threadId:
+      type: string
     messages-ids:
       type: array
       description: List of messages ids
       items:
         $ref: '#/message-id'
+    startTime:
+      type: string
+      format: date-time
+    endTime:
+      type: string
+      format: date-time
 
 message-id:
   type: object

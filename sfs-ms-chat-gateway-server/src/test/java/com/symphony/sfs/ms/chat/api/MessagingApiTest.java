@@ -42,12 +42,14 @@ import com.symphony.sfs.ms.starter.symphony.message.SendMessageStatusRequest;
 import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
 import com.symphony.sfs.ms.starter.symphony.stream.EventUser;
 import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageEnvelope;
 import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
+import com.symphony.sfs.ms.starter.symphony.stream.ThreadMessagesResponse;
 import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.apache.commons.codec.binary.Base64;
@@ -61,6 +63,7 @@ import org.zalando.problem.DefaultProblem;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -80,8 +83,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -105,7 +111,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
     super.setUp(db, mockServer, messageSource);
 
     symphonyMessageSender = mock(SymphonyMessageSender.class);
-    StreamService streamService = mock(StreamService.class);
+    //streamService = mock(StreamService.class);
     StreamInfo streamInfo = StreamInfo.builder().streamAttributes(StreamAttributes.builder().members(Arrays.asList(1L)).build()).streamType(new StreamType(StreamTypes.ROOM)).build();
     when(streamService.getStreamInfo(anyString(), any(), anyString())).thenReturn(Optional.of(streamInfo));
 
@@ -339,7 +345,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void retrieveMessages_ok() {
-    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ"), new MessageId().messageId("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA"))).symphonyUserId("fromSymphonyUserId");
+    OffsetDateTime start = OffsetDateTime.now().minusHours(1);
+    OffsetDateTime end = OffsetDateTime.now();
+    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ"), new MessageId().messageId("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA"))).symphonyUserId("fromSymphonyUserId")
+      .threadId("streamId").startTime(start).endTime(end);
 
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("7ThaU2OJ3nJ8A9Kz0qjheX///oOLK1YmbQ==").disclaimer("disclaimer1").text("This is the message 1")
       .ingestionDate(123L)
@@ -350,7 +359,6 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
 
 
     SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("tAMLft+K2vyqWXnHFMeCh3///oQbTZrDdA==").disclaimer("disclaimer2").text("This is the message 2")
@@ -362,7 +370,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("tAMLft-K2vyqWXnHFMeCh3___oQbTZrDdA", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
+    ThreadMessagesResponse threadMessagesResponse = new ThreadMessagesResponse();
+    threadMessagesResponse.setEnvelopes(List.of(MessageEnvelope.builder().message(sbeEventMessage).build(), MessageEnvelope.builder().message(sbeEventMessage2).build()));
+
+    when(streamService.retrieveSocialMessagesList(anyString(), any(), anyString(), anyInt(), anyLong(), anyLong())).thenReturn(Optional.of(threadMessagesResponse));
 
     MessageInfoWithCustomEntities messageInfo1 = new MessageInfoWithCustomEntities()
       .messageId("7ThaU2OJ3nJ8A9Kz0qjheX___oOLK1YmbQ")
@@ -382,8 +393,8 @@ class MessagingApiTest extends AbstractIntegrationTest {
       .timestamp(123L);
 
     try {
-      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo1);
-      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage2), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo2);
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any(), any())).thenReturn(messageInfo1);
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage2), eq("fromSymphonyUserId"), any(), any())).thenReturn(messageInfo2);
     } catch (Exception e) {
       fail();
     }
@@ -413,7 +424,11 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void retrieveMessages_ok_withParent() {
-    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Collections.singletonList(new MessageId().messageId("messageId1"))).symphonyUserId("fromSymphonyUserId");
+
+    OffsetDateTime start = OffsetDateTime.now().minusHours(1);
+    OffsetDateTime end = OffsetDateTime.now();
+    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Collections.singletonList(new MessageId().messageId("messageIdw"))).symphonyUserId("fromSymphonyUserId")
+      .threadId("streamId").startTime(start).endTime(end);
 
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("12345This is the message 1")
       .ingestionDate(123L)
@@ -430,8 +445,6 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .id(12345L)
         .company("company")
         .build()).build();
-
-    when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
 
 
     SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("otherMsg").disclaimer("disclaimer2").text("123456This is the message 2")
@@ -453,7 +466,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
         MessageAttachment.builder().contentType("image/png").name("hello.png").build()
       )).build();
 
-    when(symphonyService.getEncryptedMessage("otherMsg", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
+    ThreadMessagesResponse threadMessagesResponse = new ThreadMessagesResponse();
+    threadMessagesResponse.setEnvelopes(List.of(MessageEnvelope.builder().message(sbeEventMessage).build(), MessageEnvelope.builder().message(sbeEventMessage2).build()));
+
+    when(streamService.retrieveSocialMessagesList(anyString(), any(), anyString(), anyInt(), anyLong(), anyLong())).thenReturn(Optional.of(threadMessagesResponse));
 
     MessageInfoWithCustomEntities messageInfo = new MessageInfoWithCustomEntities()
       .messageId("messageIdw")
@@ -474,7 +490,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .addAttachmentsItem(new AttachmentInfo().contentType("image/png").fileName("hello.png")));
 
     try {
-      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo);
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any(), any())).thenReturn(messageInfo);
     } catch (Exception e) {
       fail();
     }
@@ -505,7 +521,11 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void retrieveMessages_ok_specialCharacters() {
-    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Collections.singletonList(new MessageId().messageId("messageId1"))).symphonyUserId("fromSymphonyUserId");
+    OffsetDateTime start = OffsetDateTime.now().minusHours(1);
+    OffsetDateTime end = OffsetDateTime.now();
+
+    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Collections.singletonList(new MessageId().messageId("messageIdw"))).symphonyUserId("fromSymphonyUserId")
+      .threadId("streamId").startTime(start).endTime(end);
     CustomEntity ce = CustomEntity.builder().type(CustomEntity.QUOTE_TYPE).endIndex(0).data(Collections.singletonMap("id", "messageId2")).build();
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This \\+ is \\_the\\_message \\*1")
       .ingestionDate(123L)
@@ -516,7 +536,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .id(12345L)
         .company("company")
         .build()).build();
-    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2").disclaimer("disclaimer1").text("This \\+ is \\_the\\_inlinemessage \\*1")
+    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId11").disclaimer("disclaimer1").text("This \\+ is \\_the\\_inlinemessage \\*1")
         .ingestionDate(123L)
         .from(EventUser.builder()
           .firstName("first")
@@ -525,8 +545,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
           .company("company")
           .build()).build();
 
-    when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
-    when(symphonyService.getEncryptedMessage("messageIdw", symphonySession)).thenReturn(Optional.of(sbeEventMessage2));
+    ThreadMessagesResponse threadMessagesResponse = new ThreadMessagesResponse();
+    threadMessagesResponse.setEnvelopes(List.of(MessageEnvelope.builder().message(sbeEventMessage).build(), MessageEnvelope.builder().message(sbeEventMessage2).build()));
+
+    when(streamService.retrieveSocialMessagesList(anyString(), any(), anyString(), anyInt(), anyLong(), anyLong())).thenReturn(Optional.of(threadMessagesResponse));
 
     MessageInfoWithCustomEntities messageInfo = new MessageInfoWithCustomEntities()
       .messageId("messageIdw")
@@ -546,7 +568,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .timestamp(123L));
 
     try {
-      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any())).thenReturn(messageInfo);
+      when(symphonyMessageSender.decryptAndBuildMessageInfo(eq(sbeEventMessage), eq("fromSymphonyUserId"), any(), any())).thenReturn(messageInfo);
     } catch (Exception e) {
       fail();
     }
@@ -577,7 +599,11 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void retrieveMessages_fails() {
-    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("messageId1"), new MessageId().messageId("messageId2"), new MessageId().messageId("messageId3"))).symphonyUserId("fromSymphonyUserId");
+    OffsetDateTime start = OffsetDateTime.now().minusHours(1);
+    OffsetDateTime end = OffsetDateTime.now();
+
+    RetrieveMessagesRequest retrieveMessagesRequest = new RetrieveMessagesRequest().messagesIds(Arrays.asList(new MessageId().messageId("messageId1"), new MessageId().messageId("messageId2"), new MessageId().messageId("messageId3"))).symphonyUserId("fromSymphonyUserId")
+      .threadId("streamId").startTime(start).endTime(end);
 
 
     SBEEventMessage sbeEventMessage = SBEEventMessage.builder().messageId("messageId1").disclaimer("disclaimer1").text("This \\+ is \\_the\\_message \\*1")
@@ -589,8 +615,11 @@ class MessagingApiTest extends AbstractIntegrationTest {
         .company("company")
         .build()).build();
 
-    when(symphonyService.getEncryptedMessage("messageId1", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
-    when(symphonyService.getEncryptedMessage("messageId2", symphonySession)).thenReturn(Optional.of(sbeEventMessage));
+    ThreadMessagesResponse threadMessagesResponse = new ThreadMessagesResponse();
+    threadMessagesResponse.setEnvelopes(List.of(MessageEnvelope.builder().message(sbeEventMessage).build()));
+
+    when(streamService.retrieveSocialMessagesList(anyString(), any(), anyString(), anyInt(), anyLong(), anyLong())).thenReturn(Optional.of(threadMessagesResponse));
+
 
     HttpRequestUtils.getRequestFail(symphonyMessagingApi, retrieveMessagesRequest, RETRIEVEMESSAGES_ENDPOINT, Collections.emptyList(), objectMapper, tracer, RetrieveMessageFailedProblem.class.getName(), null, HttpStatus.BAD_REQUEST);
   }

@@ -41,7 +41,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @Override
   @ContinueSpan
   public ResponseEntity<RetrieveMessagesResponse> retrieveMessages(@Valid RetrieveMessagesRequest body) {
-    RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getMessagesIds(), body.getSymphonyUserId());
+    RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getThreadId(), body.getMessagesIds(), body.getSymphonyUserId(), body.getStartTime(), body.getEndTime());
     return ResponseEntity.ok(response);
   }
 
