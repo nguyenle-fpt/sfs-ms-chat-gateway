@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.datafeed;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.symphony.oss.models.chat.canon.facade.ISocialMessage;
 import com.symphony.oss.models.core.canon.facade.ThreadId;
 import com.symphony.security.clientsdk.transport.CiphertextFactory;
@@ -18,6 +19,8 @@ import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
 import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import static com.symphony.sfs.ms.starter.symphony.stream.CustomEntity.QUOTE_TYPE;
 
 @Component
 @Slf4j
@@ -80,22 +83,41 @@ public class MessageDecryptor {
         message.setEntityJSON(decryptedData);
       }
 
+      String decryptedCustomEntities = "";
       if (message.getCustomEntities() != null) {
-        String decryptedData = cryptoHandler.decryptMsg(contentKey, message.getCustomEntities());
-        message.setParsedCustomEntities(CustomEntity.fromJSONString(decryptedData, objectMapper));
-        message.setCustomEntities(decryptedData);
+        decryptedCustomEntities = cryptoHandler.decryptMsg(contentKey, message.getCustomEntities());
+        message.setCustomEntities(decryptedCustomEntities);
+        message.setParsedCustomEntities(CustomEntity.fromJSONString(decryptedCustomEntities, objectMapper));
       }
 
       boolean isJsonMediaSet = false;
       if (message.getEncryptedMedia() != null) {
-        String decryptedData = cryptoHandler.decryptMsg(contentKey, message.getEncryptedMedia());
-        message.setEncryptedMedia(decryptedData);
-
+        String decryptedMedia = cryptoHandler.decryptMsg(contentKey, message.getEncryptedMedia());
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode jsonNode = mapper.readTree(decryptedData);
-        if (jsonNode.has("mediaType") && jsonNode.get("mediaType").asText().equals("JSON")) {
-          if (jsonNode.has("content")) {
-            message.setJsonMedia(jsonNode.get("content").toString());
+        JsonNode decryptedMediaNode = mapper.readTree(decryptedMedia);
+        JsonNode decryptedCustomEntitiesNode = mapper.readTree(decryptedCustomEntities);
+
+        int quoteEndIndex = 0;
+
+        if (decryptedCustomEntitiesNode.isArray()) {
+          for (JsonNode node : decryptedCustomEntitiesNode) {
+            if (node.has("type") && node.get("type").asText().equals(QUOTE_TYPE) && node.has("endIndex")) {
+              quoteEndIndex = node.get("endIndex").asInt();
+            }
+          }
+        }
+
+        if (decryptedMediaNode.has("mediaType") && decryptedMediaNode.get("mediaType").asText().equals("JSON") && decryptedMediaNode.has("content")) {
+          ArrayNode array = mapper.createArrayNode();
+          for (JsonNode node : decryptedMediaNode.get("content")) {
+            int arrayIndex = node.has("index") ? node.get("index").asInt() : 0;
+            if (arrayIndex > quoteEndIndex) {
+              array.add(node);
+            }
+          }
+
+          if (!array.isEmpty()) {
+            message.setJsonMedia(array.toString());
             isJsonMediaSet = true;
           }
         }

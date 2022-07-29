@@ -104,7 +104,7 @@ class MessageDecryptorTest {
           "}," +
           "\"version\":\"0.0.1\"}]"))
           .entityJSON(mockEncryptText("{}"))
-          .encryptedMedia(mockEncryptText("{\"mediaType\":\"JSON\", \"content\":[{\"type\":\"excel-rcp\",\"title\":\"\",\"text\":[[\"ID\",\"Type\"],[\"CES-7754\",\"Story\"]]}]}"))
+          .encryptedMedia(mockEncryptText("{\"mediaType\":\"JSON\", \"content\":[{\"type\":\"excel-rcp\",\"title\":\"\",\"text\":[[\"ID\",\"Type\"],[\"CES-7754\",\"Story\"]],\"index\":80}]}"))
           .encryptedEntities(mockEncryptText("{}")).build();
 
         assertEquals("encrypted**Test text**", encryptedMessage.getText());
@@ -131,9 +131,7 @@ class MessageDecryptorTest {
           "\"jsonMedia\":[]" +
           "}," +
           "\"version\":\"0.0.1\"}]", encryptedMessage.getCustomEntities());
-        assertEquals("{\"mediaType\":\"JSON\", \"content\":[{\"type\":\"excel-rcp\",\"title\":\"\",\"text\":[[\"ID\",\"Type\"],[\"CES-7754\",\"Story\"]]}]}",
-          encryptedMessage.getEncryptedMedia());
-        assertEquals("[{\"type\":\"excel-rcp\",\"title\":\"\",\"text\":[[\"ID\",\"Type\"],[\"CES-7754\",\"Story\"]]}]", encryptedMessage.getJsonMedia());
+        assertEquals("[{\"type\":\"excel-rcp\",\"title\":\"\",\"text\":[[\"ID\",\"Type\"],[\"CES-7754\",\"Story\"]],\"index\":80}]", encryptedMessage.getJsonMedia());
         assertEquals("{}", encryptedMessage.getEncryptedEntities());
       }
   }
