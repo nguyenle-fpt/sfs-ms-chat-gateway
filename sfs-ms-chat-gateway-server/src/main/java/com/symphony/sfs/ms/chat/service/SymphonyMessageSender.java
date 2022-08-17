@@ -302,7 +302,7 @@ public class SymphonyMessageSender {
       String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
       Optional<SBEEventMessage> inlineMessageOptional = Optional.empty();
       if (retrievedMessages.containsKey(quotedId)) {
-        inlineMessageOptional = Optional.of(retrievedMessages.get(quotedId));
+        inlineMessageOptional = Optional.of(retrievedMessages.get(quotedId).toBuilder().build());
       }
       if(inlineMessageOptional.isEmpty()) {
         inlineMessageOptional = symphonyService.getEncryptedMessage(quotedId, userSession);

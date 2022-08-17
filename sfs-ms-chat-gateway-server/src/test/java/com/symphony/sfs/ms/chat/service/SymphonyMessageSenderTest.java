@@ -3,6 +3,7 @@ package com.symphony.sfs.ms.chat.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
@@ -15,7 +16,9 @@ import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
+import com.symphony.sfs.ms.starter.symphony.auth.SymphonyRsaAuthFunction;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.stream.CustomEntity;
 import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
 import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import org.apache.commons.lang3.StringUtils;
@@ -26,18 +29,23 @@ import org.springframework.context.MessageSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.BLAST_ATTACHMENTS_UPLOAD_FAILED;
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseToSymphony.ENCRYPTION_FAILED;
+import static com.symphony.sfs.ms.starter.util.RsaUtils.parseRSAPrivateKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,6 +59,8 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
   private MessageDecryptor messageDecryptor;
   private MessageEncryptor messageEncryptor;
   private SymphonyService symphonyService;
+  private SessionSupplier<SymphonySession> userSession;
+
 
   @BeforeEach
   public void setUp(MessageSource messageSource) throws Exception {
@@ -61,6 +71,7 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     symphonyService = mock(SymphonyService.class);
     MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
     symphonyMessageSender = new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper);
+    userSession = new SessionSupplier<>("username", new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
   }
 
   @Test
@@ -253,4 +264,28 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     verify(messageMetrics, times(1)).onMessageBlockToSymphony(ENCRYPTION_FAILED, "streamId");
     assertTrue(newMessage.isEmpty());
   }
+
+  @Test
+  public void decryptAndBuildMessageInfo_WithQuote() throws EncryptionException, DecryptionException {
+    String symphonyUserId = "123456789";
+    String messageId = "messageId1///n1ZVrIxbQ==";
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("id", messageId);
+    CustomEntity customEntity = CustomEntity.builder().data(data).type(CustomEntity.QUOTE_TYPE).endIndex(0).build();
+    List<CustomEntity> parsedCustomEntities = List.of(customEntity);
+
+    SBEEventMessage sbeEventMessage1 = SBEEventMessage.builder().messageId(messageId).text("Message").build();
+    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2///n2ZVrIxbQ==").text("Reply to message").parsedCustomEntities(parsedCustomEntities).build();
+    Map<String, SBEEventMessage> retrievedMessage = new HashMap<>();
+    retrievedMessage.put("messageId1___n1ZVrIxbQ", sbeEventMessage1);
+    retrievedMessage.put("messageId2___n2ZVrIxbQ", sbeEventMessage2);
+
+    doNothing().when(messageDecryptor).decrypt(any(SBEEventMessage.class), eq(symphonyUserId), eq(userSession.getPrincipal()));
+
+    MessageInfoWithCustomEntities messageInfoWithCustomEntities = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage2, symphonyUserId, userSession, retrievedMessage);
+    assertEquals("messageId2___n2ZVrIxbQ", messageInfoWithCustomEntities.getMessageId());
+    assertNotNull(messageInfoWithCustomEntities.getParentMessage());
+  }
+
 }

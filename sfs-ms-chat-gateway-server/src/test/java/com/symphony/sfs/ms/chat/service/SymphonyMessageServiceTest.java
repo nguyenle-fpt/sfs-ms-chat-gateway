@@ -1,9 +1,15 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
+import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
+import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.UnknownDatafeedUserException;
+import com.symphony.sfs.ms.chat.generated.model.MessageId;
+import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
+import com.symphony.sfs.ms.chat.generated.model.RetrieveMessagesResponse;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
 import com.symphony.sfs.ms.chat.mapper.MessageInfoMapper;
@@ -11,6 +17,8 @@ import com.symphony.sfs.ms.chat.mapper.MessageInfoMapperImpl;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.repository.FederatedAccountRepository;
 import com.symphony.sfs.ms.chat.sbe.MessageEncryptor;
+import com.symphony.sfs.ms.chat.service.external.AdminClient;
+import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
@@ -19,13 +27,17 @@ import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
 import com.symphony.sfs.ms.starter.health.MeterManager;
 import com.symphony.sfs.ms.starter.security.SessionSupplier;
 import com.symphony.sfs.ms.starter.symphony.auth.AuthenticationService;
-import com.symphony.sfs.ms.starter.symphony.auth.SymphonyAuthFactory;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonyRsaAuthFunction;
 import com.symphony.sfs.ms.starter.symphony.auth.SymphonySession;
+import com.symphony.sfs.ms.starter.symphony.message.MessageStatusService;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageEnvelope;
+import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundAttachment;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyOutboundMessage;
+import com.symphony.sfs.ms.starter.symphony.stream.ThreadMessagesResponse;
+import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.util.RsaUtils;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import model.InboundMessage;
@@ -38,11 +50,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
+import org.springframework.context.MessageSource;
 import org.springframework.http.MediaType;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -53,11 +69,13 @@ import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESS
 import static com.symphony.sfs.ms.chat.service.SymphonyMessageSender.SYSTEM_MESSAGE_SIMPLE_HANDLEBARS_TEMPLATE;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
 import static com.symphony.sfs.ms.starter.util.RsaUtils.parseRSAPrivateKey;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -82,7 +100,14 @@ class SymphonyMessageServiceTest {
   private DatafeedSessionPool datafeedSessionPool;
   private MessageEncryptor messageEncryptor;
   private MessageDecryptor messageDecryptor;
-  private SymphonyAuthFactory symphonyAuthFactory;
+
+  private EmpClient empClient;
+  private EmpConfig empConfig;
+  private TenantDetailRepository tenantDetailRepository;
+  private AdminClient adminClient;
+  private EmpSchemaService empSchemaService;
+  private MessageStatusService messageStatusService;
+
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -110,8 +135,6 @@ class SymphonyMessageServiceTest {
     streamService = mock(StreamService.class);
     templateProcessor = mock(SymphonySystemMessageTemplateProcessor.class);
 
-    symphonyMessageSender = mock(SymphonyMessageSender.class);
-    symphonyMessageService = mock(SymphonyMessageService.class); // TODO this can't be a mock
     datafeedSessionPool = mock(DatafeedSessionPool.class);
     symphonyService = mock(SymphonyService.class);
 
@@ -120,11 +143,19 @@ class SymphonyMessageServiceTest {
 
     messageEncryptor = mock(MessageEncryptor.class);
     messageDecryptor = mock(MessageDecryptor.class);
-    symphonyAuthFactory = new SymphonyAuthFactory(authenticationService, null, podConfiguration, botConfiguration, null);
 
     MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
 
     symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, null, null, messageInfoMapper));
+    empClient = mock(EmpClient.class);
+    empConfig = new EmpConfig();
+    tenantDetailRepository = mock(TenantDetailRepository.class);
+    adminClient = mock(AdminClient.class);
+    empSchemaService = mock(EmpSchemaService.class);
+    messageStatusService = mock(MessageStatusService.class);
+
+    symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), mock(MessageSource.class), mock(MessageDecryptor.class));
+
   }
 
   @Test
@@ -220,24 +251,33 @@ class SymphonyMessageServiceTest {
   }
 
   // TODO symphonyMessageService is a mock
-//  @Test
-//  public void retrieveMessagesTest() throws UnknownDatafeedUserException {
-//    MessageId messageId = new MessageId().messageId("messageId");
-//
-//    List<MessageId> messagesIds = Collections.singletonList(messageId);
-//    String fromSymphonyUserId = "fromSymphonyUserId";
-//    SymphonySession userSession = new SymphonySession("username", "kmToken", "sessionToken");
-//    DatafeedSessionPool.DatafeedSession session = new DatafeedSessionPool.DatafeedSession(userSession, "fromSymphonyUserId");
-//    MessageInfo messageInfo = new MessageInfo().message("message").messageId("messageId");
-//
-//    when(datafeedSessionPool.refreshSession("fromSymphonyUserId")).thenReturn(session);
-//    when(symphonyService.getMessage("messageId", session, "podUrl")).thenReturn(Optional.of(messageInfo));
-//
-//    RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(messagesIds, fromSymphonyUserId);
-//    assertEquals(1, response.getMessages().size());
-//    assertEquals("message", response.getMessages().get(0).getMessage());
-//    assertEquals("messageId", response.getMessages().get(0).getMessageId());
-//  }
+  @Test
+  public void retrieveMessagesTest() throws UnknownDatafeedUserException, DecryptionException {
+    MessageId messageId = new MessageId().messageId("messageId1___n1ZVrIxbQ");
+    List<MessageId> messagesIds = Collections.singletonList(messageId);
+    String threadId = "threadId";
+    String fromSymphonyUserId = "fromSymphonyUserId";
+    OffsetDateTime start = OffsetDateTime.now().minusHours(1);
+    OffsetDateTime end = OffsetDateTime.now();
+
+    MessageInfoWithCustomEntities messageInfoWithCustomEntities = new MessageInfoWithCustomEntities();
+    messageInfoWithCustomEntities.setMessage("message");
+    messageInfoWithCustomEntities.setMessageId("messageId1___n1ZVrIxbQ");
+
+    MessageEnvelope messageEnvelope = MessageEnvelope.builder().message(SBEEventMessage.builder().messageId("messageId1///n1ZVrIxbQ==").build()).build();
+    MessageEnvelope messageEnvelope2 = MessageEnvelope.builder().message(SBEEventMessage.builder().messageId("messageId2///n2ZVrIxbQ==").build()).build();
+    List<MessageEnvelope> messageEnvelopes = Arrays.asList(messageEnvelope, messageEnvelope2);
+    ThreadMessagesResponse threadMessagesResponse = ThreadMessagesResponse.builder().envelopes(messageEnvelopes).build();
+
+    when(datafeedSessionPool.getSessionSupplierOrFail(fromSymphonyUserId)).thenReturn(userSession);
+    when(streamService.retrieveSocialMessagesList(podConfiguration.getUrl(), userSession, threadId, SymphonyMessageService.POD_BATCH_REQUEST_SIZE, start.toInstant().toEpochMilli(), end.toInstant().toEpochMilli())).thenReturn(Optional.of(threadMessagesResponse));
+    doReturn(messageInfoWithCustomEntities).when(symphonyMessageSender).decryptAndBuildMessageInfo(any(SBEEventMessage.class), eq(fromSymphonyUserId), eq(userSession), any());
+
+    RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(threadId, messagesIds, fromSymphonyUserId, start, end);
+    assertEquals(1, response.getMessages().size());
+    assertEquals("message", response.getMessages().get(0).getMessage());
+    assertEquals("messageId1___n1ZVrIxbQ", response.getMessages().get(0).getMessageId());
+  }
 
   @FunctionalInterface
   private interface TriConsumer<T, U, V> {

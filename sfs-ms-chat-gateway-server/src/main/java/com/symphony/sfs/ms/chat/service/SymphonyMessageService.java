@@ -106,7 +106,7 @@ public class SymphonyMessageService implements DatafeedListener {
   // The max size of attachments in a single message we accept is 25 MB ~ 34 MB when the file is encoded in base64
   private final long MAX_UPLOAD_SIZE = 34 * 1024 * 1024;
   private static final int MAX_TEXT_LENGTH = 30000;
-  private static final int POD_BATCH_REQUEST_SIZE = 500;
+  protected static final int POD_BATCH_REQUEST_SIZE = 500;
   private static final String TEXT_TOO_LONG_WARNING = "The message was too long and was truncated. Only the first %,d characters were delivered";
 
   private final EmpConfig empConfig;
