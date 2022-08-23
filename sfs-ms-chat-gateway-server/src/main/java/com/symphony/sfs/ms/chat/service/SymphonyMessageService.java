@@ -312,7 +312,9 @@ public class SymphonyMessageService implements DatafeedListener {
               gatewaySocialMessage.getTextContent(),
               gatewaySocialMessage.getDisclaimerForEmp(),
               attachmentsContent,
-              inlineMessageRequest);
+              inlineMessageRequest,
+              gatewaySocialMessage.getEntityJSON()
+            );
             if (sendMessageResponse.isEmpty()) {
               allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("message.not.delivered", new Object[]{gatewaySocialMessage.getMessageId()}, Locale.getDefault()), Collections.emptyList()));
             } else {

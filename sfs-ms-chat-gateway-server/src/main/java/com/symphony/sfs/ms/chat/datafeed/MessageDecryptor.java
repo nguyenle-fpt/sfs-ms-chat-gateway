@@ -41,17 +41,23 @@ public class MessageDecryptor {
       ICiphertextTransport msgCipherTransport = CiphertextFactory.getTransport(socialMessage.getText());
 
       byte[] contentKey = contentKeyManager.getContentKey(socialMessage.getThreadId(), userId,  userName, msgCipherTransport.getRotationId());
+
       if (socialMessage.getText() != null) {
         gatewaySocialMessage.setTextContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getText()));
-
       }
+
       if (socialMessage.getPresentationML() != null) {
         gatewaySocialMessage.setPresentationMLContent(cryptoHandler.decryptMsg(contentKey, socialMessage.getPresentationML()));
       }
+
       if(socialMessage.getCustomEntities() != null) {
         String customEntitiesJson = new String(cryptoHandler.decryptMsg(contentKey, socialMessage.getCustomEntities().toByteArray()));
         gatewaySocialMessage.setCustomEntities(CustomEntity.fromJSONString(customEntitiesJson, objectMapper));
+      }
 
+      if (socialMessage.getEntityJSON() != null) {
+        String decryptedData = cryptoHandler.decryptMsg(contentKey, socialMessage.getEntityJSON());
+        gatewaySocialMessage.setEntityJSON(decryptedData);
       }
     } catch (SymphonyInputException | CiphertextTransportIsEmptyException | CiphertextTransportVersionException | InvalidDataException | SymphonyEncryptionException e) {
       throw new DecryptionException(e);

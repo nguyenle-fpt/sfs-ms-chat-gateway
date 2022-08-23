@@ -41,7 +41,7 @@ public class DefaultEmpClient implements EmpClient {
   private final JwtTokenGenerator jwtTokenGenerator;
 
   @Override
-  public Optional<SendMessageResponse> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments, SendmessagerequestInlineMessage inlineMessage) {
+  public Optional<SendMessageResponse> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments, SendmessagerequestInlineMessage inlineMessage, String jsonData) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     SendMessageRequest request = new SendMessageRequest()
@@ -53,7 +53,8 @@ public class DefaultEmpClient implements EmpClient {
       .text(message)
       .disclaimer(disclaimer)
       .attachments(attachments)
-      .inlineMessage(inlineMessage);
+      .inlineMessage(inlineMessage)
+      .jsonData(jsonData);
 
     // TODO async result too?
     client.getMessagingApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());

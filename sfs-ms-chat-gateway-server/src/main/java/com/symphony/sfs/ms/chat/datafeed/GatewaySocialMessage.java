@@ -47,6 +47,8 @@ public class GatewaySocialMessage {
   @Setter
   @Default
   private List<CustomEntity> customEntities = new ArrayList<>();
+  @Setter
+  private String entityJSON;
 
   public void setPresentationMLContent(String presentationMLContent) {
     this.presentationMLContent = presentationMLContent;

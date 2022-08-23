@@ -221,16 +221,16 @@ class MessageServiceTest implements I18nTest {
     messageService.onIMMessage(message);
 
     InOrder orderVerifier = inOrder(empClient);
-    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null, null);
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null, null);
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null, null, null);
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null, null, null);
     orderVerifier.verifyNoMoreInteractions();
 
     // With disclaimer
     GatewaySocialMessage messageWithDisclaimer = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(members).timestamp(now).textContent("message").disclaimer("disclaimer").build();
     messageService.onIMMessage(messageWithDisclaimer);
 
-    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null, null);
-    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null, null);
+    orderVerifier.verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "disclaimer", null, null, null);
+    orderVerifier.verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(federatedAccount101), now, "message", "", null, null, null);
     orderVerifier.verifyNoMoreInteractions();
   }
 
@@ -299,7 +299,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "ThisIsAMessage", "", null, sendmessagerequestInlineMessage);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "ThisIsAMessage", "", null, sendmessagerequestInlineMessage, null);
   }
 
   @Test
@@ -364,7 +364,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You can't reply to this type of message.", Collections.emptyList());
   }
@@ -390,7 +390,23 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, expectedSentText, "", null, null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, expectedSentText, "", null, null, null);
+  }
+
+  @Test
+  void onIMMessage() {
+    when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+
+    IUser fromSymphonyUser = buildDefaultFromUser();
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("test").entityJSON("{\"test\":true}").build();
+    messageService.onIMMessage(message);
+
+    verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
+    verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "test", "", null, null, "{\"test\":true}");
   }
 
 
@@ -411,7 +427,7 @@ class MessageServiceTest implements I18nTest {
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
     List<Attachment> attachments = Collections.singletonList(new Attachment().fileName("filename.opus").contentType("audio/ogg; codecs=opus").data("abc"));
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", attachments, null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", attachments, null, null);
   }
 
   @Test
@@ -435,7 +451,7 @@ class MessageServiceTest implements I18nTest {
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
     List<Attachment> attachments = Collections.singletonList(new Attachment().fileName("filename.opus").contentType("audio/ogg; codecs=opus").data("abc"));
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", attachments, null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", attachments, null, null);
   }
 
   @Test
@@ -461,7 +477,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", Collections.emptyList(), null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", Collections.emptyList(), null, null);
     verify(symphonyMessageSender, once()).sendAlertMessage(any(), eq("streamId"), eq("Attachment undelivered. Your corporate policies prevent sharing audio/ogg; codecs=opus attachments in WhatsApp Connect rooms."), eq(Collections.emptyList()));
 
   }
@@ -489,7 +505,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", Collections.emptyList(), null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", Collections.emptyList(), null, null);
     verify(symphonyMessageSender, once()).sendAlertMessage(any(), eq("streamId"), eq("Attachment undelivered. Your corporate policies prevent sharing audio/ogg; codecs=opus attachments in WhatsApp Connect rooms."), eq(Collections.emptyList()));
 
   }
@@ -520,7 +536,7 @@ class MessageServiceTest implements I18nTest {
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
     List<Attachment> attachments = Collections.singletonList(new Attachment().fileName("img.png").contentType("image/png").data("abc"));
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, null, "", attachments, null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, null, "", attachments, null, null);
     verify(symphonyMessageSender, once()).sendAlertMessage(any(), eq("streamId"), eq("Attachment undelivered. Your corporate policies prevent sharing audio/ogg; codecs=opus attachments in WhatsApp Connect rooms."), eq(Collections.emptyList()));
 
   }
@@ -542,7 +558,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You are not permitted to send messages to emp users.", Collections.emptyList());
   }
@@ -580,7 +596,7 @@ class MessageServiceTest implements I18nTest {
       // no operation ID ==> message not sent for user 2
       new OperationIdBySymId().symphonyId(toFedAcc2.getSymphonyUserId()));
     SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult);
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null, null)).thenReturn(Optional.of(sendMessageResponse));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null, null, null)).thenReturn(Optional.of(sendMessageResponse));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(id1, id2, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chatType("CHATROOM").build();
 
     messageService.onIMMessage(message);
@@ -631,7 +647,7 @@ class MessageServiceTest implements I18nTest {
       new EmpError().statusCode(400).detail("error coming directly from EMP"));
 
     SendMessageResponse sendMessageResponse = new SendMessageResponse().operationIds(empResult).errors(empErrors);
-    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null, null)).thenReturn(Optional.of(sendMessageResponse));
+    when(empClient.sendMessage("emp", "streamId", "messageId", fromSymphonyUser, List.of(toFedAcc1, toFedAcc2), NOW, "text", "", null, null, null)).thenReturn(Optional.of(sendMessageResponse));
     when(streamService.sendMessage(eq("podUrl"), eq(null), eq("streamId"), any())).thenReturn(Optional.of(new InboundMessage()));
     GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(id1, id2, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text").chatType("CHATROOM").build();
 
@@ -681,7 +697,7 @@ class MessageServiceTest implements I18nTest {
 
     verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
     verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Sorry, you're not permitted to chat with this user.", Collections.emptyList());
   }
@@ -721,7 +737,7 @@ class MessageServiceTest implements I18nTest {
     when(empSchemaService.getEmpDefinition("emp")).thenReturn(Optional.of(empEntity));
     messageService.onIMMessage(message);
 
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     // session is mocked, null for now
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", expectedAlertMessage, Collections.emptyList());
   }
@@ -742,7 +758,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
 
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You cannot chime your contacts here.", Collections.emptyList());
   }
 
@@ -762,7 +778,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
 
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "You cannot chime your contacts here.", Collections.emptyList());
   }
 
@@ -782,7 +798,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
 
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     verify(symphonyMessageSender, never()).sendAlertMessage(null, "streamId", "You cannot chime your contacts here.", Collections.emptyList());
   }
 
@@ -802,7 +818,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
 
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Sorry, you can't send tables here.", Collections.emptyList());
   }
 
@@ -822,7 +838,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
 
-    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, never()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Sorry, you can't send tables here.", Collections.emptyList());
   }
 
@@ -842,7 +858,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
 
-    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", message.getFromUser(), Collections.singletonList(toFederatedAccount), NOW, "text", "", null, null, null);
     verify(symphonyMessageSender, never()).sendAlertMessage(null, "streamId", "Sorry, you can't send tables here.", Collections.emptyList());
   }
 

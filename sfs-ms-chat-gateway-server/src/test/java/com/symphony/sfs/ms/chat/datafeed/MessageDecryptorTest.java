@@ -152,6 +152,7 @@ class MessageDecryptorTest {
       SocialMessage encryptedMessage = (SocialMessage) new SocialMessageEntity.Builder().withVersion(LiveCurrentMessageType.SOCIALMESSAGE.toString())
         .withMessageId(ImmutableByteArray.newInstance("uXUfu2rsJRLALM0okkK1q3///oOAYQiRbQ==")).withIngestionDate(Long.valueOf("1657584000000"))
         .withThreadId(ThreadId.newBuilder().build("FrgZb_0yPjOuShqA35oAM3___oOQU772dA")).withText(mockEncryptText("Test text")).withPresentationML(mockEncryptText("Test presentationML"))
+        .withEntityJSON(mockEncryptText("{\"test\":true}"))
         .build();
 
       assertEquals("encrypted**Test text**", encryptedMessage.getText());
@@ -161,6 +162,7 @@ class MessageDecryptorTest {
 
       assertEquals("Test text", gatewaySocialMessage.getTextContent());
       assertEquals("Test presentationML", gatewaySocialMessage.getPresentationMLContent());
+      assertEquals("{\"test\":true}", gatewaySocialMessage.getEntityJSON());
     }
   }
 }
