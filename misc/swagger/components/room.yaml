@@ -106,6 +106,10 @@ room-member-request:
       type: string
     federationGroupId:
       type: string
+    advisorPhoneNumber:
+      type: string
+      format: phone
+
 #Responses
 room-response:
   type: object
