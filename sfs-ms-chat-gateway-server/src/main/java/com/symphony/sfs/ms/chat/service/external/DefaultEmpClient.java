@@ -86,13 +86,14 @@ public class DefaultEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId, String firstName, String lastName, String companyName) {
+  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId, String firstName, String lastName, String companyName, String preferredLanguage) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
 
     UpdateUserRequest request = new UpdateUserRequest()
       .firstName(firstName)
       .lastName(lastName)
-      .companyName(companyName);
+      .companyName(companyName)
+      .preferredLanguage(preferredLanguage);
 
     client.getUserApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
     return client.getUserApi().updateUserOrFail(symphonyId, phoneNumber, tenantId, request);

@@ -64,8 +64,8 @@ public class MockEmpClient implements EmpClient {
   }
 
   @Override
-  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId, String firstName, String lastName, String companyName) {
-    return Optional.of(new UpdateUserResponse().firstName(firstName).lastName(lastName).companyName(companyName));
+  public Optional<UpdateUserResponse> updateAccountOrFail(String emp, String symphonyId, String phoneNumber, String tenantId, String firstName, String lastName, String companyName, String preferredLanguage) {
+    return Optional.of(new UpdateUserResponse().firstName(firstName).lastName(lastName).companyName(companyName).preferredLanguage(preferredLanguage));
   }
 
   @Override

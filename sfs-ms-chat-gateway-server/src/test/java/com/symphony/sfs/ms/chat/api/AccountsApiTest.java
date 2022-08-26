@@ -349,7 +349,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName("firstName2")
       .lastName("lastName2")
-      .companyName("companyName2");
+      .companyName("companyName2")
+      .preferredLanguage("ENGLISH");
 
     UpdateAccountResponse updateAccountResponse = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -365,7 +366,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .firstName(updateAccountRequest.getFirstName())
       .lastName(updateAccountRequest.getLastName())
       .companyName(updateAccountRequest.getCompanyName())
-      .phoneNumber(createAccountRequest.getPhoneNumber());
+      .phoneNumber(createAccountRequest.getPhoneNumber())
+      .preferredLanguage(updateAccountRequest.getPreferredLanguage());
     assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
     verify(adminUserManagementService, once()).updateUser(eq(podConfiguration.getUrl()), any(SessionSupplier.class), any(String.class), argThat(userAttributes ->
       userAttributes.getDisplayName().equals("firstName2 lastName2 [WHATSAPP]") &&
@@ -380,6 +382,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .emp(createAccountRequest.getEmp())
       .symphonyUserId(DEFAULT_USER_ID_STRING)
       .symphonyUsername(accountSession.getUsername())
+      .preferredLanguage(updateAccountRequest.getPreferredLanguage())
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();
@@ -458,7 +461,8 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .phoneNumber(createAccountRequest.getPhoneNumber())
       .firstName("firstName2")
       .lastName("lastName2")
-      .companyName("companyName2");
+      .companyName("companyName2")
+      .preferredLanguage("ENGLISH");
 
     UpdateAccountResponse updateAccountResponse = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
       .contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -475,11 +479,12 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .firstName(updateAccountRequest.getFirstName())
       .lastName(updateAccountRequest.getLastName())
       .companyName(updateAccountRequest.getCompanyName())
-      .phoneNumber(createAccountRequest.getPhoneNumber());
+      .phoneNumber(createAccountRequest.getPhoneNumber())
+      .preferredLanguage(updateAccountRequest.getPreferredLanguage());
     assertEquals(expectedUpdateAccountResponse, updateAccountResponse);
 
-    verify(empClient).updateAccountOrFail(empEntity.getName(), DEFAULT_USER_ID_STRING,  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
-    verify(empClient).updateAccountOrFail(empEntity2.getName(), DEFAULT_USER_ID_STRING,  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName());
+    verify(empClient).updateAccountOrFail(empEntity.getName(), DEFAULT_USER_ID_STRING,  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName(), updateAccountRequest.getPreferredLanguage());
+    verify(empClient).updateAccountOrFail(empEntity2.getName(), DEFAULT_USER_ID_STRING,  createAccountRequest.getPhoneNumber(), CLIENT_POD_ID, updateAccountRequest.getFirstName(), updateAccountRequest.getLastName(), updateAccountRequest.getCompanyName(), updateAccountRequest.getPreferredLanguage());
 
     FederatedAccount expectedAccount = FederatedAccount.builder()
       .phoneNumber(createAccountRequest.getPhoneNumber())
@@ -490,6 +495,7 @@ public class AccountsApiTest extends AbstractIntegrationTest {
       .emp(createAccountRequest.getEmp())
       .symphonyUserId(DEFAULT_USER_ID_STRING)
       .symphonyUsername(accountSession.getUsername())
+      .preferredLanguage(updateAccountRequest.getPreferredLanguage())
       .build();
 
     FederatedAccount actualAccount = federatedAccountRepository.findByFederatedUserIdAndEmp(createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp()).get();

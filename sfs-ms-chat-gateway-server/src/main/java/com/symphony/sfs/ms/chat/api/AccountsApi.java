@@ -19,7 +19,7 @@ import static com.symphony.sfs.ms.starter.logging.LogUtils.obfuscatePhone;
 @RestController
 public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.AccountsApi {
 
-  private FederatedAccountService federatedAccountService;
+  private final FederatedAccountService federatedAccountService;
 
   public AccountsApi(FederatedAccountService federatedAccountService) {
     this.federatedAccountService = federatedAccountService;
@@ -49,8 +49,8 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
   public ResponseEntity<UpdateAccountResponse> updateFederatedAccount(String federatedUserId, String tenantId, UpdateAccountRequest body) {
     MDC.put("federatedUserId", federatedUserId);
     LOG.info("update account | tenantId={}", tenantId);
-    LOG.debug("update account | federatedUserId={} tenantId={} firstName={}, lastName={}, companyName={}", federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName());
-    FederatedAccount federatedAccount = federatedAccountService.updateAccount(federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName());
+    LOG.debug("update account | federatedUserId={} tenantId={} firstName={}, lastName={}, companyName={}, preferredLanguage={}", federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName(), body.getPreferredLanguage());
+    FederatedAccount federatedAccount = federatedAccountService.updateAccount(federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName(), body.getPreferredLanguage());
     return ResponseEntity.ok(UpdateAccountResponseDtoMapper.MAPPER.federatedAccountToUpdateAccountResponse(federatedAccount));
   }
 }

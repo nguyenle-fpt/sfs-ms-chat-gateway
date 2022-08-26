@@ -46,6 +46,8 @@ update-account-request:
       type: string
     companyName:
       type: string
+    preferredLanguage:
+      type: string
 
 #Responses
 create-account-response:
@@ -68,4 +70,6 @@ update-account-response:
     lastName:
       type: string
     companyName:
+      type: string
+    preferredLanguage:
       type: string

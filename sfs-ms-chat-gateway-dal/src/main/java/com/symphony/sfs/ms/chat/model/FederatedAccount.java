@@ -37,6 +37,7 @@ public class FederatedAccount extends DynamoDocument {
   private String symphonyUsername;
   private String sessionToken;
   private String kmToken;
+  private String preferredLanguage;
 
   public FederatedAccount(AttributeMap attributes) {
     super(attributes);
@@ -50,6 +51,7 @@ public class FederatedAccount extends DynamoDocument {
     this.symphonyUsername = attributes.getString("symphonyUsername");
     this.sessionToken = attributes.getString("sessionToken");
     this.kmToken = attributes.getString("kmToken");
+    this.preferredLanguage = attributes.getString("preferredLanguage");
   }
 
   @Override
@@ -66,6 +68,7 @@ public class FederatedAccount extends DynamoDocument {
     attributes.putString("symphonyUsername", getSymphonyUsername());
     attributes.putString("sessionToken", getSessionToken());
     attributes.putString("kmToken", getKmToken());
+    attributes.putString("preferredLanguage", getPreferredLanguage());
 
     attributes.putString(PARTITION_KEY, federatedAccountPk(getFederatedUserId()));
     attributes.putString(SORT_KEY, federatedAccountSk(getEmp()));
