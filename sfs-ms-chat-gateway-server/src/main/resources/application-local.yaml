@@ -27,7 +27,7 @@ pod:
 bot:
   username: sfs-admin
   emailAddress: sfs-admin@symphony.com
-  privateKey: file:../misc/certs/sfs-admin-bot_privatekey.pem
+  privateKey: file:${CERTS_DIRECTORY}/sfs-admin-bot_privatekey.pem
   symphonyId: 13469017444294
 
 agent:
@@ -38,7 +38,7 @@ microservices:
 
 microservice:
   chat:
-    privateKey: file:../misc/certs/sfs-ms-chat-gateway_privatekey.pem
+    privateKey: file:${CERTS_DIRECTORY}/sfs-ms-chat-gateway_privatekey.pem
     msAdminUrl: 'https://localhost:9600'
-    sharedPublicKey: file:../misc/certs/sa_publickey.pem
-    sharedPrivateKey: file:../misc/certs/sa_privatekey.pem
+    sharedPublicKey: file:${CERTS_DIRECTORY}/sa_publickey.pem
+    sharedPrivateKey: file:${CERTS_DIRECTORY}/sa_privatekey.pem

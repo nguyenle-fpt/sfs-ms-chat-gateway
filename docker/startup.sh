@@ -20,6 +20,9 @@ function checkYaml() {
 }
 
 function start() {
+    echo "Downloading certificate..."
+    aws s3 cp "s3://$CERT_BUCKET/https-keystore.p12"  /opt/symphony/sfs-ms-chat-gateway/
+
     echo "Starting backend..."
     if [ "$PARAMSTORE" = "1" ] || [ "$(echo $PARAMSTORE | tr '[:upper:]' '[:lower:]')" = "true" ]
     then

@@ -9,7 +9,7 @@ WORKDIR /opt/symphony/sfs-ms-chat-gateway
 
 COPY docker/resources /opt/symphony/sfs-ms-chat-gateway
 
-RUN apt-get update && apt-get install -y procps
+RUN apt-get update && apt-get install -y procps awscli
 RUN chmod 755 /opt/symphony/sfs-ms-chat-gateway/startup.sh
 
 ENV LOGGING_PATH=./

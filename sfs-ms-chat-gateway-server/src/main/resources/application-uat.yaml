@@ -43,6 +43,5 @@ server:
     enabled-protocols: TLSv1.2
     ciphers: ECDHE-RSA-AES256-GCM-SHA384,ECDHE-RSA-AES128-GCM-SHA256,DHE-RSA-AES256-GCM-SHA384,DHE-RSA-AES128-GCM-SHA256
     key-store-type: PKCS12
-    key-store: file:certs/https-keystore.p12
-    key-store-password: nndjrdn
+    key-store: file:https-keystore.p12
     key-alias: localhost
