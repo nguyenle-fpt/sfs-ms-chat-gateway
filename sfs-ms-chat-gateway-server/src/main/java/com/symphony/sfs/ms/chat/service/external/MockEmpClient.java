@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.service.external;
 
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
 import com.symphony.sfs.ms.chat.mapper.RoomMemberDtoMapper;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
@@ -35,7 +36,6 @@ public class MockEmpClient implements EmpClient {
   @Getter
   @Setter
   private Set<String> federatedUserFailing = new HashSet<>();
-
   @Override
   public Optional<SendMessageResponse> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments, SendmessagerequestInlineMessage inlineMessage, String jsonData) {
     // For now use the same mock implementation as channels

@@ -2,9 +2,13 @@ package com.symphony.sfs.ms.chat.service.external;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.oss.models.chat.canon.facade.IUser;
+import com.symphony.sfs.ms.admin.generated.model.EmpEntity;
+import com.symphony.sfs.ms.chat.generated.model.EmpNotFoundProblem;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
 import com.symphony.sfs.ms.chat.service.EmpMicroserviceResolver;
+import com.symphony.sfs.ms.chat.service.EmpSchemaService;
 import com.symphony.sfs.ms.chat.service.JwtTokenGenerator;
+import com.symphony.sfs.ms.chat.util.ChannelMemberUtils;
 import com.symphony.sfs.ms.emp.EmpMicroserviceClient;
 import com.symphony.sfs.ms.emp.generated.model.Attachment;
 import com.symphony.sfs.ms.emp.generated.model.ChannelIdentifier;
@@ -39,15 +43,15 @@ public class DefaultEmpClient implements EmpClient {
   private final ObjectMapper objectMapper;
   private final EmpMicroserviceResolver empMicroserviceResolver;
   private final JwtTokenGenerator jwtTokenGenerator;
+  private final EmpSchemaService empSchemaService;
 
   @Override
   public Optional<SendMessageResponse> sendMessage(String emp, String streamId, String messageId, IUser fromSymphonyUser, List<FederatedAccount> toFederatedAccounts, Long timestamp, String message, String disclaimer, List<Attachment> attachments, SendmessagerequestInlineMessage inlineMessage, String jsonData) {
     EmpMicroserviceClient client = new EmpMicroserviceClient(empMicroserviceResolver.getEmpMicroserviceBaseUri(emp), webClient, objectMapper);
-
     SendMessageRequest request = new SendMessageRequest()
       .streamId(streamId)
       .messageId(messageId)
-      .channelMembers(toChannelMembers(toFederatedAccounts, fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser)))
+      .channelMembers(ChannelMemberUtils.toChannelMembers(toFederatedAccounts, fromSymphonyUser.getId().toString(), Collections.singletonList(fromSymphonyUser), empSchemaService.getEmpDefinition(emp).orElseThrow(EmpNotFoundProblem::new)))
       .fromSymphonyUserId(fromSymphonyUser.getId().toString())
       .timestamp(timestamp)
       .text(message)
@@ -113,30 +117,5 @@ public class DefaultEmpClient implements EmpClient {
     client.getRoomApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
 
     return client.getRoomApi().addRoomMemberOrFail(streamId, empRoomMemberRequest);
-  }
-
-  private List<ChannelMember> toChannelMembers(List<FederatedAccount> federatedUsers, String initiatorUserId, List<IUser> symphonyUsers) {
-    List<ChannelMember> members = new ArrayList<>();
-    federatedUsers.forEach(account -> members.add(new ChannelMember()
-      .phoneNumber(account.getPhoneNumber())
-      .firstName(account.getFirstName())
-      .lastName(account.getLastName())
-      .companyName(account.getCompanyName())
-      .federatedUserId(account.getFederatedUserId())
-      .symphonyId(account.getSymphonyUserId())
-      .isFederatedUser(true)
-      .isInitiator(initiatorUserId.equals(account.getSymphonyUserId()))
-    ));
-    symphonyUsers.forEach(user -> members.add(new ChannelMember()
-      .symphonyId(user.getId().toString())
-      .firstName(user.getFirstName())
-      .lastName(user.getSurname())
-      .displayName(user.getPrettyName())
-      .companyName(Objects.requireNonNullElse(user.getCompany(), "Guest"))
-      .isFederatedUser(false)
-      .isInitiator(initiatorUserId.equals(user.getId().toString()))
-    ));
-
-    return members;
   }
 }
