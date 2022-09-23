@@ -30,7 +30,7 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
   public ResponseEntity<CreateAccountResponse> createAccount(CreateAccountRequest request) {
     MDC.put("federatedUserId", request.getFederatedUserId());
     MDC.put("emp", request.getEmp());
-    LOG.info("create account | federatedUserId={} phoneNumber={} emp={}", request.getFederatedUserId(), obfuscatePhone(request.getPhoneNumber()), request.getEmp());
+    LOG.info("Create account | federatedUserId={} phoneNumber={} emp={}", request.getFederatedUserId(), obfuscatePhone(request.getPhoneNumber()), request.getEmp());
     FederatedAccount account = federatedAccountService.createAccount(request);
     CreateAccountResponse response = new CreateAccountResponse()
       .symphonyUserId(account.getSymphonyUserId())
@@ -40,6 +40,7 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
 
   @Override
   public ResponseEntity<Void> deleteFederatedAccount(String federatedUserId, String emp, String tenantId, Boolean deleteEMPAccount) {
+    LOG.info("Delete account | federatedUserId={} emp={} tenantId={} deleteEMPAccount={}", federatedUserId, emp, tenantId, deleteEMPAccount);
     federatedAccountService.deleteAccount(emp, federatedUserId, tenantId, deleteEMPAccount);
     return ResponseEntity.ok().build();
   }
@@ -48,8 +49,8 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
   @ContinueSpan
   public ResponseEntity<UpdateAccountResponse> updateFederatedAccount(String federatedUserId, String tenantId, UpdateAccountRequest body) {
     MDC.put("federatedUserId", federatedUserId);
-    LOG.info("update account | tenantId={}", tenantId);
-    LOG.debug("update account | federatedUserId={} tenantId={} firstName={}, lastName={}, companyName={}, preferredLanguage={}", federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName(), body.getPreferredLanguage());
+    LOG.info("Update account | tenantId={}", tenantId);
+    LOG.debug("Update account | federatedUserId={} tenantId={} firstName={}, lastName={}, companyName={}, preferredLanguage={}", federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName(), body.getPreferredLanguage());
     FederatedAccount federatedAccount = federatedAccountService.updateAccount(federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName(), body.getPreferredLanguage());
     return ResponseEntity.ok(UpdateAccountResponseDtoMapper.MAPPER.federatedAccountToUpdateAccountResponse(federatedAccount));
   }

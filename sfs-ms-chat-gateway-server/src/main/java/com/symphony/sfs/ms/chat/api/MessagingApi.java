@@ -26,6 +26,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @Override
   @ContinueSpan
   public ResponseEntity<MessageInfoWithCustomEntities> sendMessage(SendMessageRequest request) {
+    LOG.info("Send message | streamId={} from={}", request.getStreamId(), request.getFromSymphonyUserId());
     MessageInfoWithCustomEntities messageInfo = symphonyMessageService.sendMessage(request.getStreamId(), request.getFromSymphonyUserId(), request.getTenantId(), request.getFormatting(), request.getText(), request.getAttachments(), Boolean.TRUE.equals(request.isForwarded()),
       request.getReplyToMessageId(), request.isAttachmentReplySupported(), Optional.ofNullable(request.getReplyToAttachmentMessageIds()));
     return ResponseEntity.ok(messageInfo);
@@ -41,6 +42,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @Override
   @ContinueSpan
   public ResponseEntity<RetrieveMessagesResponse> retrieveMessages(@Valid RetrieveMessagesRequest body) {
+    LOG.info("Retrieve messages | streamId={} start={} end={}", body.getThreadId(), body.getStartTime(), body.getEndTime());
     RetrieveMessagesResponse response = symphonyMessageService.retrieveMessages(body.getThreadId(), body.getMessagesIds(), body.getSymphonyUserId(), body.getStartTime(), body.getEndTime());
     return ResponseEntity.ok(response);
   }
@@ -48,6 +50,7 @@ public class MessagingApi implements com.symphony.sfs.ms.chat.generated.api.Mess
   @Override
   @ContinueSpan
   public ResponseEntity<Void> markMessagesAsRead(@Valid SetMessagesAsReadRequest setMessagesAsReadRequest) {
+    LOG.info("Mark messages as read | streamId={}", setMessagesAsReadRequest.getStreamId());
     symphonyMessageService.markMessagesAsRead(setMessagesAsReadRequest);
     return ResponseEntity.ok().build();
   }

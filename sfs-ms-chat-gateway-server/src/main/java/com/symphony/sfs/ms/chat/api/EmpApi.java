@@ -20,6 +20,7 @@ public class EmpApi implements com.symphony.sfs.ms.chat.generated.api.EmpApi {
   @Override
   @ContinueSpan
   public ResponseEntity<Void> reloadEmps() {
+    LOG.info("Reload EMPs");
     empSchemaService.loadEmpDefinitions();
     return ResponseEntity.noContent().build();
   }
@@ -27,6 +28,7 @@ public class EmpApi implements com.symphony.sfs.ms.chat.generated.api.EmpApi {
   @Override
   @ContinueSpan
   public ResponseEntity<FileExtensionList> getAllowedFileExtensions() {
+    LOG.info("Get allowed file extensions");
     return ResponseEntity.ok(podConfigService.getEmpAllowedFileTypes());
   }
 }

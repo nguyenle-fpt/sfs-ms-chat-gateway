@@ -57,12 +57,14 @@ public class RoomApi implements com.symphony.sfs.ms.chat.generated.api.RoomApi {
 
   @Override
   public ResponseEntity<Void> removeMember(String streamId, RoomMemberRemoveRequest body) {
+    LOG.info("Remove Room Member | streamId={} symphonyId={}", streamId, body.getSymphonyId());
     roomService.removeMember(streamId, body.getSymphonyId(), body.getEmp(), body.isFederatedUser(), body.isRemoveChannel());
     return ResponseEntity.ok().build();
   }
 
   @Override
   public ResponseEntity<Void> deleteRoom(String streamId, RoomRemoveRequest body) {
+    LOG.info("Delete Room | streamId={}", streamId);
     roomService.deleteRoom(streamId, body);
     return ResponseEntity.ok().build();
   }

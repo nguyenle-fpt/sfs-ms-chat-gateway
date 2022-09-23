@@ -22,11 +22,13 @@ public class ConnectionRequestsApi implements com.symphony.sfs.ms.chat.generated
 
   @Override
   public ResponseEntity<ConnectionRequestResponse> sendConnectionRequest(@NotBlank @NotNull @Pattern(regexp = "^\\d+$") String symphonyId) {
+    LOG.info("Send connection request | symphonyId={}", symphonyId);
     return ResponseEntity.ok(connectionRequestManager.sendConnectionRequestFromBot(symphonyId));
   }
 
   @Override
   public ResponseEntity<ConnectionRequestResponse> getConnectionRequestStatus(@NotBlank @NotNull @Pattern(regexp = "^\\d+$") String symphonyId) {
+    LOG.info("Get connection request status | symphonyId={}", symphonyId);
     return ResponseEntity.ok(connectionRequestManager.getConnectionRequestFromBotStatus(symphonyId));
   }
 }
