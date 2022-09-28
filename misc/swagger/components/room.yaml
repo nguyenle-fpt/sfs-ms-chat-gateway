@@ -109,6 +109,8 @@ room-member-request:
     advisorPhoneNumber:
       type: string
       format: phone
+    empChannelConnector:
+      type: string
 
 #Responses
 room-response:

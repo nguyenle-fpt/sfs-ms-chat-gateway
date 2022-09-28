@@ -380,7 +380,7 @@ class RoomApiTest extends AbstractIntegrationTest {
       .emp(emp("11"))
       .phoneNumber((phoneNumber("11")))
       .build());
-    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME);
+    RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME).empChannelConnector("empChannelConnector");
     RoomMemberResponse roomMemberResponse = addRoomMember(ROOM_STREAM_ID, roomMemberRequest);
 
 
@@ -391,6 +391,7 @@ class RoomApiTest extends AbstractIntegrationTest {
     assertEquals(phoneNumber("11"), roomMemberResponse.getPhoneNumber());
 
     com.symphony.sfs.ms.emp.generated.model.RoomMemberRequest empRoomMemberRequest = RoomMemberDtoMapper.MAPPER.toEmpRoomMemberRequest(roomMemberRequest, federatedAccount, advisorInfo);
+    assertEquals("empChannelConnector", empRoomMemberRequest.getEmpChannelConnector());
     verify(empClient, once()).addRoomMemberOrFail(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
     verify(streamService, never()).removeRoomMember(any(), any(), any(), any());
   }
