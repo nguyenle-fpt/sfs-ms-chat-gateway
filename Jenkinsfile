@@ -140,7 +140,7 @@ def checkoutDependencyRepo(org, repo, branch) {
   if (branchExists(org, repo, branch)) {
     targetBranch = branch
   } else {
-    targetBranch = 'master'
+    targetBranch = env.CHANGE_TARGET
   }
   println "branch for ${repo} will be ${targetBranch}"
   checkout(org, repo, targetBranch)
