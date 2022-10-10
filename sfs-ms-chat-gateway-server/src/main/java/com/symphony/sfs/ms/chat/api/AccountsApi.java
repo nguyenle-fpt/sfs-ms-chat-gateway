@@ -2,6 +2,7 @@ package com.symphony.sfs.ms.chat.api;
 
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
+import com.symphony.sfs.ms.chat.generated.model.GetAccountResponse;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountResponse;
 import com.symphony.sfs.ms.chat.mapper.UpdateAccountResponseDtoMapper;
@@ -53,5 +54,12 @@ public class AccountsApi implements com.symphony.sfs.ms.chat.generated.api.Accou
     LOG.debug("Update account | federatedUserId={} tenantId={} firstName={}, lastName={}, companyName={}, preferredLanguage={}", federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName(), body.getPreferredLanguage());
     FederatedAccount federatedAccount = federatedAccountService.updateAccount(federatedUserId, tenantId, body.getFirstName(), body.getLastName(), body.getCompanyName(), body.getPreferredLanguage());
     return ResponseEntity.ok(UpdateAccountResponseDtoMapper.MAPPER.federatedAccountToUpdateAccountResponse(federatedAccount));
+  }
+  
+  @Override
+  public ResponseEntity<GetAccountResponse> getFederatedAccount(String federatedUserId, String emp) {
+    FederatedAccount account = federatedAccountService.getFederatedAccount(federatedUserId, emp);
+    GetAccountResponse response = new GetAccountResponse().symphonyUsername(account.getSymphonyUsername());
+    return ResponseEntity.ok(response);
   }
 }

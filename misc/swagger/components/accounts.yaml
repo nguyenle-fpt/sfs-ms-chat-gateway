@@ -73,3 +73,9 @@ update-account-response:
       type: string
     preferredLanguage:
       type: string
+
+get-account-response:
+  type: object
+  properties:
+    symphonyUsername:
+      type: string

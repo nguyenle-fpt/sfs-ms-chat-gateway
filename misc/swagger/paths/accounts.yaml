@@ -85,6 +85,45 @@ modify-account:
               oneOf:
                 - $ref: '../errors/accounts.yaml#/federated-account-not-found'
                 - $ref: '../errors/accounts.yaml#/emp-not-found'
+                
+get-account:
+  get:
+    tags:
+      - Accounts
+    summary: Get a federated account
+    operationId: getFederatedAccount
+    description: >
+      => Get a federated account given a federated user id and an emp.
+    security:
+      - sfsAuthentication: []
+    parameters:
+      - in: path
+        name: federatedUserId
+        schema:
+          type: string
+        required: true
+        description: The federated user id
+      - in: path
+        name: emp
+        schema:
+          type: string
+        required: true
+        description: The EMP
+    responses:
+      '200':
+        description: The account has been successfully returned
+        content:
+          application/json:
+            schema:
+              $ref: '../components/accounts.yaml#/get-account-response'
+      '404':
+        description: Federated account not found
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../errors/accounts.yaml#/federated-account-not-found'
+                - $ref: '../errors/accounts.yaml#/emp-not-found'
 
 
 delete-account:

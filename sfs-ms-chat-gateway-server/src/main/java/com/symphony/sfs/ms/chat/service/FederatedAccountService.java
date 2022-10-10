@@ -123,6 +123,11 @@ public class FederatedAccountService {
     return existingAccounts.get(0);
   }
 
+  public FederatedAccount getFederatedAccount(String federatedUserId, String emp) {
+    return federatedAccountRepository.findByFederatedUserIdAndEmp(federatedUserId, emp)
+        .orElseThrow(FederatedAccountNotFoundProblem::new);
+  }
+  
   private void updateAccount(FederatedAccount federatedAccount, String tenantId, String firstName, String lastName, String companyName, String preferredLanguage) {
 
     if (StringUtils.isNotBlank(firstName)) {

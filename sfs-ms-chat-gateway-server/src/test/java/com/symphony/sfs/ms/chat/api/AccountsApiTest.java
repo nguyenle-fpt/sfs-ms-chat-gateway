@@ -6,6 +6,7 @@ import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.CreateAccountResponse;
 import com.symphony.sfs.ms.chat.generated.model.FederatedAccountNotFoundProblem;
+import com.symphony.sfs.ms.chat.generated.model.GetAccountResponse;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountRequest;
 import com.symphony.sfs.ms.chat.generated.model.UpdateAccountResponse;
 import com.symphony.sfs.ms.chat.model.FederatedAccount;
@@ -44,6 +45,7 @@ import static clients.symphony.api.constants.PodConstants.ADMINUPDATEUSER;
 import static clients.symphony.api.constants.PodConstants.UPDATEUSERSTATUSADMIN;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.CREATEACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.DELETEFEDERATEDACCOUNT_ENDPOINT;
+import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.GETFEDERATEDACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.AccountsApi.UPDATEFEDERATEDACCOUNT_ENDPOINT;
 import static com.symphony.sfs.ms.starter.testing.MockMvcUtils.configuredGiven;
 import static com.symphony.sfs.ms.starter.testing.MockitoUtils.once;
@@ -583,6 +585,60 @@ public class AccountsApiTest extends AbstractIntegrationTest {
 
     FederatedAccountNotFoundProblem expectedProblem = new FederatedAccountNotFoundProblem();
     TestUtils.testProblemEquality(expectedProblem, actualProblem);
+  }
+  
+  @Test
+  public void createAccount_ThenGet() {
+    SymphonySession botSession = getSession(botConfiguration.getUsername());
+    SymphonySession accountSession = getSession(DEFAULT_USERNAME);
+
+    EmpEntity empEntity = new EmpEntity()
+      .name("WHATSAPP")
+      .serviceAccountSuffix("WHATSAPP");
+    when(empSchemaService.getEmpDefinition("WHATSAPP")).thenReturn(Optional.of(empEntity));
+    when(authenticationService.authenticate(any(), any(), eq(botConfiguration.getUsername()), anyString())).thenReturn(botSession);
+    when(authenticationService.authenticate(any(), any(), eq(accountSession.getUsername()), anyString())).thenReturn(accountSession);
+
+    SymphonyUser symphonyUser = new SymphonyUser();
+    symphonyUser.setUserSystemInfo(SymphonyUserSystemAttributes.builder().id(DEFAULT_USER_ID).build());
+    symphonyUser.setUserAttributes(SymphonyUserAttributes.builder().userName(accountSession.getUsername()).build());
+
+    mockServer.expect()
+      .post()
+      .withPath(ADMINCREATEUSER)
+      .andReturn(HttpStatus.OK.value(), symphonyUser)
+      .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+      .always();
+
+    CreateAccountRequest createAccountRequest = createDefaultAccountRequest();
+
+    CreateAccountResponse response = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .body(createAccountRequest)
+      .when()
+      .post(CREATEACCOUNT_ENDPOINT)
+      .then()
+      .statusCode(HttpStatus.OK.value())
+      .extract().response().body()
+      .as(CreateAccountResponse.class);
+
+    assertEquals(new CreateAccountResponse()
+      .symphonyUserId(DEFAULT_USER_ID_STRING)
+      .symphonyUsername(accountSession.getUsername()), response);
+
+
+    GetAccountResponse getResponse = configuredGiven(objectMapper, new ExceptionHandling(tracer), accountsApi)
+      .contentType(MediaType.APPLICATION_JSON_VALUE)
+      .when()
+      .get(GETFEDERATEDACCOUNT_ENDPOINT, createAccountRequest.getFederatedUserId(), createAccountRequest.getEmp())
+      .then()
+      .statusCode(HttpStatus.OK.value())
+      .extract().response().body()
+      .as(GetAccountResponse.class);
+
+
+    assertEquals(new GetAccountResponse()
+        .symphonyUsername(accountSession.getUsername()), getResponse);
   }
 
   //====================
