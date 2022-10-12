@@ -1,14 +1,20 @@
 package com.symphony.sfs.ms.chat.mapper;
 
+import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
+import com.symphony.sfs.ms.starter.symphony.stream.MessageAttachment;
 import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.SymphonyInboundMessage;
+import model.Attachment;
 import model.InboundMessage;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface MessageInfoMapper {
+
+  @Mapping(target="images", ignore = true)
+  AttachmentInfo inboundMessageAttachmentToAttachmentInfo(Attachment attachment);
 
   @Mapping(source= "inboundMessage.user.firstName", target = "firstName")
   @Mapping(source= "inboundMessage.user.lastName", target = "lastName")
@@ -31,5 +37,10 @@ public interface MessageInfoMapper {
   @Mapping(source= "sbeEventMessage.from.id", target = "symphonyId")
   @Mapping(source= "sbeEventMessage.ingestionDate", target = "timestamp")
   MessageInfoWithCustomEntities sbeEventMessageToMessageInfo(SBEEventMessage sbeEventMessage);
+
+  @Mapping(source= "sbeAttachment.fileId", target = "id")
+  @Mapping(source= "sbeAttachment.name", target = "fileName")
+  @Mapping(source= "sbeAttachment.sizeInBytes", target = "size")
+  AttachmentInfo sbeAttachmentToAttachmentInfo(MessageAttachment sbeAttachment);
 
 }

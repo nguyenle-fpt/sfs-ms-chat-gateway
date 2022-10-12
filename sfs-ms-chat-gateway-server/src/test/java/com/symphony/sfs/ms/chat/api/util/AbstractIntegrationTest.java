@@ -170,7 +170,7 @@ public class AbstractIntegrationTest implements ConfiguredDynamoTest, LocalProfi
     // services
     streamService = mock(StreamService.class);
     symphonySystemMessageTemplateProcessor = spy(new SymphonySystemMessageTemplateProcessor(handlebarsConfiguration.handlebars()));
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, symphonySystemMessageTemplateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper, objectMapper));
     connectionsServices = new ConnectionsService(sessionManager);
     connectionRequestManager = spy(new ConnectionRequestManager(connectionsServices, podConfiguration, datafeedSessionPool));
     empSchemaService = new EmpSchemaService(adminClient);

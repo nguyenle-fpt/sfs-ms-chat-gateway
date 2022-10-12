@@ -1,6 +1,8 @@
 package com.symphony.sfs.ms.chat.service;
 
 import com.amazonaws.util.Base64;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.security.helper.ClientCryptoHandler;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
@@ -39,6 +41,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -86,6 +89,7 @@ public class SymphonyMessageSender {
   private final EmpSchemaService empSchemaService;
   private final MessageSource messageSource;
   private final MessageInfoMapper messageInfoMapper;
+  private final ObjectMapper objectMapper;
 
 
   public Optional<MessageInfoWithCustomEntities> sendRawMessage(SessionSupplier<SymphonySession> session, String streamId, String messageContent) {
@@ -300,6 +304,21 @@ public class SymphonyMessageSender {
     if (quote.isPresent()) {
       messageInfo.setMessage(messageInfo.getMessage().substring(quote.get().getEndIndex()));
       String quotedId = StreamUtil.toUrlSafeStreamId(quote.get().getData().get("id").toString());
+      Object oAttachments = quote.get().getData().get("attachments");
+      if (oAttachments != null) {
+        try {
+          String sAttachments = objectMapper.writeValueAsString(oAttachments);
+          MessageAttachment[] sbeQuotedAttachments = objectMapper.readValue(sAttachments, MessageAttachment[].class);
+          if (sbeQuotedAttachments != null) {
+            messageInfo.setAttachments(Arrays.asList(sbeQuotedAttachments)
+              .stream()
+              .map(messageInfoMapper::sbeAttachmentToAttachmentInfo)
+              .collect(Collectors.toList()));
+          }
+        } catch (JsonProcessingException e) {
+          LOG.warn("Could not parse quoted attachment in message custom entities");
+        }
+      }
       Optional<SBEEventMessage> inlineMessageOptional = Optional.empty();
       if (retrievedMessages.containsKey(quotedId)) {
         inlineMessageOptional = Optional.of(retrievedMessages.get(quotedId).toBuilder().build());
@@ -343,7 +362,7 @@ public class SymphonyMessageSender {
     if(sbeEventMessage.getAttachments() != null) {
       List<AttachmentInfo> attachmentInfos = sbeEventMessage.getAttachments()
         .stream()
-        .map(sbeMessageAttachment -> new AttachmentInfo().contentType(sbeMessageAttachment.getContentType()).fileName(sbeMessageAttachment.getName()))
+        .map(messageInfoMapper::sbeAttachmentToAttachmentInfo)
         .collect(Collectors.toList());
 
       messageInfo.setAttachments(attachmentInfos);

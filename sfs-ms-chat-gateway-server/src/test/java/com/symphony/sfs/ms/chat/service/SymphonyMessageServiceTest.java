@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
 import com.symphony.sfs.ms.chat.config.properties.ChatConfiguration;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
@@ -146,7 +147,7 @@ class SymphonyMessageServiceTest {
 
     MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
 
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, null, null, messageInfoMapper));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, new MessageIOMonitor(meterManager), messageEncryptor, messageDecryptor, symphonyService, null, null, messageInfoMapper, new ObjectMapper()));
     empClient = mock(EmpClient.class);
     empConfig = new EmpConfig();
     tenantDetailRepository = mock(TenantDetailRepository.class);

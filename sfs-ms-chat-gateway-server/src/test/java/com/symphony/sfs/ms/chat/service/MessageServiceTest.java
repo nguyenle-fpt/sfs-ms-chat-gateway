@@ -1,5 +1,6 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.io.ClassPathTemplateLoader;
 import com.github.jknack.handlebars.io.TemplateLoader;
@@ -198,7 +199,7 @@ class MessageServiceTest implements I18nTest {
     MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
 
     // really instantiate SymphonyMessageSender to test Handlebars templates.
-    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper));
+    symphonyMessageSender = spy(new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper, new ObjectMapper()));
     messageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
   }
 

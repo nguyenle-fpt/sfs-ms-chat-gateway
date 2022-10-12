@@ -6,6 +6,7 @@ import com.symphony.sfs.ms.chat.datafeed.MessageDecryptor;
 import com.symphony.sfs.ms.chat.exception.DecryptionException;
 import com.symphony.sfs.ms.chat.exception.EncryptionException;
 import com.symphony.sfs.ms.chat.exception.InlineReplyMessageException;
+import com.symphony.sfs.ms.chat.generated.model.AttachmentInfo;
 import com.symphony.sfs.ms.chat.generated.model.MessageInfoWithCustomEntities;
 import com.symphony.sfs.ms.chat.generated.model.SendMessageFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.SymphonyAttachment;
@@ -70,7 +71,7 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     messageDecryptor = mock(MessageDecryptor.class);
     symphonyService = mock(SymphonyService.class);
     MessageInfoMapper messageInfoMapper = new MessageInfoMapperImpl();
-    symphonyMessageSender = new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper);
+    symphonyMessageSender = new SymphonyMessageSender(podConfiguration, datafeedSessionPool, federatedAccountRepository, streamService, templateProcessor, messageMetrics, messageEncryptor, messageDecryptor, symphonyService, empSchemaService, messageSource, messageInfoMapper, objectMapper);
     userSession = new SessionSupplier<>("username", new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
   }
 
@@ -266,26 +267,69 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
   }
 
   @Test
-  public void decryptAndBuildMessageInfo_WithQuote() throws EncryptionException, DecryptionException {
+  public void decryptAndBuildMessageInfo_WithQuote() throws DecryptionException, JsonProcessingException {
     String symphonyUserId = "123456789";
     String messageId = "messageId1///n1ZVrIxbQ==";
 
-    Map<String, Object> data = new HashMap<>();
-    data.put("id", messageId);
-    CustomEntity customEntity = CustomEntity.builder().data(data).type(CustomEntity.QUOTE_TYPE).endIndex(0).build();
-    List<CustomEntity> parsedCustomEntities = List.of(customEntity);
-
-    SBEEventMessage sbeEventMessage1 = SBEEventMessage.builder().messageId(messageId).text("Message").build();
-    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder().messageId("messageId2///n2ZVrIxbQ==").text("Reply to message").parsedCustomEntities(parsedCustomEntities).build();
+    String customEntities = "[\n" +
+      "  {\n" +
+      "    \"type\": \"com.symphony.sharing.quote\",\n" +
+      "    \"beginIndex\": 0,\n" +
+      "    \"endIndex\": 13,\n" +
+      "    \"data\": {\n" +
+      "      \"attachments\": [\n" +
+      "        {\n" +
+      "          \"fileId\": \"external_13469017566287%2FEwfQ5eSXxpi8DArTh4cFiQ%3D%3D\",\n" +
+      "          \"name\": \"55c0edab9f685bfe.JPG\",\n" +
+      "          \"encrypted\": true,\n" +
+      "          \"sizeInBytes\": 62412,\n" +
+      "          \"images\": {\n" +
+      "            \"600\": \"external_13469017566287%2FE36ZvDh6pA%2BAjFaI81ETzw%3D%3D\"\n" +
+      "          },\n" +
+      "          \"contentType\": \"image/jpeg\"\n" +
+      "        }\n" +
+      "      ],\n" +
+      "     \"id\": \"messageId1///n1ZVrIxbQ==\"" +
+      "    }\n" +
+      "  }\n" +
+      "]";
+    List<CustomEntity> parsedCustomEntities = Arrays.asList(objectMapper.readValue(customEntities, CustomEntity[].class));
+    SBEEventMessage sbeEventMessage1 = SBEEventMessage.builder().messageId(messageId).text("Message").ingestionDate(1665413611L).build();
+    SBEEventMessage sbeEventMessage2 = SBEEventMessage.builder()
+      .messageId("messageId2///n2ZVrIxbQ==")
+      .text("In reply to: New message")
+      .ingestionDate(1665413648L)
+      .customEntities(customEntities)
+      .parsedCustomEntities(parsedCustomEntities)
+      .build();
+    SBEEventMessage sbeEventMessage3 = SBEEventMessage.builder()
+      .messageId("messageId3///n3ZVrIxbQ==")
+      .text("message with attachment")
+      .ingestionDate(1665413648L)
+      .attachments(List.of(MessageAttachment.builder().fileId("fileId").name("fileName.pdf").contentType("application/pdf").sizeInBytes(123L).images(Map.of("600", "fileId600")).build()))
+      .build();
     Map<String, SBEEventMessage> retrievedMessage = new HashMap<>();
     retrievedMessage.put("messageId1___n1ZVrIxbQ", sbeEventMessage1);
     retrievedMessage.put("messageId2___n2ZVrIxbQ", sbeEventMessage2);
 
     doNothing().when(messageDecryptor).decrypt(any(SBEEventMessage.class), eq(symphonyUserId), eq(userSession.getPrincipal()));
 
-    MessageInfoWithCustomEntities messageInfoWithCustomEntities = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage2, symphonyUserId, userSession, retrievedMessage);
-    assertEquals("messageId2___n2ZVrIxbQ", messageInfoWithCustomEntities.getMessageId());
-    assertNotNull(messageInfoWithCustomEntities.getParentMessage());
+    MessageInfoWithCustomEntities messageInfoWithCustomEntities1 = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage2, symphonyUserId, userSession, retrievedMessage);
+    MessageInfoWithCustomEntities messageInfoWithCustomEntities2 = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage3, symphonyUserId, userSession, retrievedMessage);
+    assertEquals(new MessageInfoWithCustomEntities()
+      .messageId("messageId2___n2ZVrIxbQ")
+      .timestamp(1665413648L)
+      .parentMessage(new MessageInfoWithCustomEntities().messageId("messageId1___n1ZVrIxbQ").message("Message").timestamp(1665413611L))
+      .message("New message")
+      .customEntities(customEntities)
+      .attachments(List.of(new AttachmentInfo().id("external_13469017566287%2FEwfQ5eSXxpi8DArTh4cFiQ%3D%3D").fileName("55c0edab9f685bfe.JPG").contentType("image/jpeg").size(62412L).images(Map.of("600", "external_13469017566287%2FE36ZvDh6pA%2BAjFaI81ETzw%3D%3D")))),
+      messageInfoWithCustomEntities1);
+    assertEquals(new MessageInfoWithCustomEntities()
+        .messageId("messageId3___n3ZVrIxbQ")
+        .timestamp(1665413648L)
+        .message("message with attachment")
+        .attachments(List.of(new AttachmentInfo().id("fileId").fileName("fileName.pdf").contentType("application/pdf").size(123L).images(Map.of("600", "fileId600")))),
+      messageInfoWithCustomEntities2);
   }
 
 }

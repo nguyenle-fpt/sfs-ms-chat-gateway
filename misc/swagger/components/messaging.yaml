@@ -162,6 +162,14 @@ attachment-info:
     - contentType
     - fileName
   properties:
+    id:
+      type: string
+    size:
+      type: long
+    images:
+      type: object
+      additionalProperties:
+        type: string
     contentType:
       type: string
     fileName:
