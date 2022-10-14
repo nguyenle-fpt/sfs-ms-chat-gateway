@@ -97,7 +97,7 @@ public class RoomService implements DatafeedListener {
       .readOnly(false) // FALSE mandatory for Cross Pod Room
       .copyProtected(false) // assume users want to be able to copy
       .crossPod(true) // Obviously we want a crossPod rooms between Client Pods and Federation Pod
-      .viewHistory(false) // FALSE mandatory for Cross Pod Room
+      .viewHistory(roomRequest.isViewHistory()) // Allow history of room depending on the EMP
       .multiLateralRoom(false) // Only Federation Pod + Client Pod
       .build();
 
@@ -105,6 +105,7 @@ public class RoomService implements DatafeedListener {
     RoomResponse roomResponse = new RoomResponse();
     roomResponse.setStreamId(symphonyRoom.getRoomSystemInfo().getId());
     roomResponse.setRoomName(symphonyRoom.getRoomAttributes().getName());
+    roomResponse.setViewHistory(symphonyRoom.getRoomAttributes().isViewHistory());
 
     return roomResponse;
 

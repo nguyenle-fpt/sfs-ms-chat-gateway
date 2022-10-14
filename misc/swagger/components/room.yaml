@@ -3,10 +3,13 @@ room-request:
   type: object
   required:
     - roomName
+    - viewHistory
   properties:
     roomName:
       type: string
       maxLength: 50
+    viewHistory:
+      type: boolean
 
 update-room-activity-member-request:
   type: object
@@ -120,6 +123,8 @@ room-response:
       type: string
     streamId:
       type: string
+    viewHistory:
+      type: boolean
 
 update-room-activity-member-response:
   type: object

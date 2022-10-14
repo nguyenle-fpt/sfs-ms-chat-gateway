@@ -115,7 +115,7 @@ class RoomApiTest extends AbstractIntegrationTest {
     String podUrl = podConfiguration.getUrl();
     doReturn(Optional.empty()).when(streamService).createRoom(eq(podUrl), any(SessionSupplier.class), eq(roomAttributes));
 
-    RoomRequest roomRequest = new RoomRequest().roomName(ROOM_NAME);
+    RoomRequest roomRequest = new RoomRequest().roomName(ROOM_NAME).viewHistory(false);
     createRoomFail(roomRequest, com.symphony.sfs.ms.chat.generated.model.CreateRoomFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR);
 
   }
@@ -156,12 +156,12 @@ class RoomApiTest extends AbstractIntegrationTest {
 
     doReturn(Optional.of(symphonyRoom)).when(streamService).createRoom(eq(podUrl), any(SessionSupplier.class), eq(roomAttributes));
 
-    RoomRequest roomRequest = new RoomRequest().roomName(ROOM_NAME);
+    RoomRequest roomRequest = new RoomRequest().roomName(ROOM_NAME).viewHistory(false);
     RoomResponse roomResponse = createRoom(roomRequest);
 
     assertEquals(ROOM_STREAM_ID, roomResponse.getStreamId());
     assertEquals(ROOM_NAME, roomResponse.getRoomName());
-
+    assertEquals(false, roomResponse.isViewHistory());
   }
 
   ////////////////
