@@ -1,4 +1,4 @@
-FROM 189141687483.dkr.ecr.us-east-1.amazonaws.com/devops/openjdk:11.0.11-jre
+FROM 189141687483.dkr.ecr.us-east-1.amazonaws.com/devops/openjdk:11.0.17-jre
 
 ARG profile=dev
 ARG aws_paramstore_enabled=1
