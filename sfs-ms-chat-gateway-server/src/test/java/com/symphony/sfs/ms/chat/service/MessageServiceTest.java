@@ -604,7 +604,7 @@ class MessageServiceTest implements I18nTest {
     // session is mocked, null for now
     SessionSupplier<SymphonySession> symphonySession = null;// new SessionSupplier<>("username", new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
 
-    verify(symphonyMessageSender, once()).sendAlertMessage(symphonySession, "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.", null);
+    verify(symphonyMessageSender, once()).sendAlertMessage(symphonySession, "streamId", "Some users did not receive the message (messageId : messageId): firstName 2 lastName 2.", null);
   }
 
   @Test
@@ -654,7 +654,7 @@ class MessageServiceTest implements I18nTest {
 
     messageService.onIMMessage(message);
     // session is mocked, null for now
-    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Some users did not received the message (messageId : messageId): firstName 2 lastName 2.",
+    verify(symphonyMessageSender, once()).sendAlertMessage(null, "streamId", "Some users did not receive the message (messageId : messageId): firstName 2 lastName 2.",
       Arrays.asList("error coming directly from EMP"));
     String expectedMessage = "<messageML>\n" +
       "  <div>\n" +
@@ -665,7 +665,7 @@ class MessageServiceTest implements I18nTest {
       "        <body>\n" +
       "        \n" +
       "         \n" +
-      "           Some users did not received the message (messageId : messageId): firstName 2 lastName 2.\n" +
+      "           Some users did not receive the message (messageId : messageId): firstName 2 lastName 2.\n" +
       "            \n" +
       "                <br /><span class=\"tempo-text-color--secondary\">Errors:</span>\n" +
       "              \n" +
