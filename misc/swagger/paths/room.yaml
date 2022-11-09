@@ -148,6 +148,12 @@ room-members:
           application/json:
             schema:
               $ref: '../errors/channels.yaml#/unknown-federated-account'
+      '409':
+        description: Add member to room conflicted
+        content:
+          application/json:
+            schema:
+              $ref: '../errors/room.yaml#/add-room-member-conflicted'
       '500':
         description: Add member to room failed
         content:

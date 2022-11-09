@@ -504,7 +504,7 @@ class RoomApiTest extends AbstractIntegrationTest {
 
     RoomMemberRequest roomMemberRequest = new RoomMemberRequest().clientPodId(CLIENT_POD_ID).symphonyId(symphonyId("11", FEDERATION_POD_ID)).federatedUser(true).roomName(ROOM_NAME);
 
-    WebClientResponseException wcreWithDetail = WebClientResponseException.create(HttpStatus.INTERNAL_SERVER_ERROR.value(), "statusText", null,
+    WebClientResponseException wcreWithDetail = WebClientResponseException.create(HttpStatus.CONFLICT.value(), "statusText", null,
       objectMapper.writeValueAsString(Problem.builder().withType(new URI("http://my.problem.type")).withDetail("detail").build()).getBytes(Charset.defaultCharset()), Charset.defaultCharset());
     WebClientResponseException wcreWithoutDetail = WebClientResponseException.create(HttpStatus.INTERNAL_SERVER_ERROR.value(), "statusText", null,
       objectMapper.writeValueAsString(Problem.builder().withType(new URI("http://my.problem.type")).build()).getBytes(Charset.defaultCharset()), Charset.defaultCharset());
@@ -515,7 +515,7 @@ class RoomApiTest extends AbstractIntegrationTest {
       .thenThrow(new WebCallException(objectMapper, wcreWithoutDetail));
 
     // Check that Problem is built with detail from underlying problem if available
-    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem.class.getName(), HttpStatus.INTERNAL_SERVER_ERROR, "detail");
+    addRoomMemberFail(ROOM_STREAM_ID, roomMemberRequest, com.symphony.sfs.ms.chat.generated.model.AddRoomMemberConflictedProblem.class.getName(), HttpStatus.CONFLICT, "detail");
     verify(empClient, once()).addRoomMemberOrFail(ROOM_STREAM_ID,  emp("11"), empRoomMemberRequest);
     verify(streamService, once()).addRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));
     verify(streamService, once()).removeRoomMember(eq(podUrl), any(SessionSupplier.class), eq(ROOM_STREAM_ID), eq(symphonyId("11", FEDERATION_POD_ID)));

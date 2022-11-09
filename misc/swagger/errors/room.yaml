@@ -40,6 +40,20 @@ add-room-member-failed:
       type: integer
       format: 500
 
+add-room-member-conflicted:
+  type: object
+  description: 'Unable to add the member in the room.'
+  properties:
+    type:
+      type: string
+      format: 'add.room.member.conflicted'
+    title:
+      type: string
+      format: 'Unable to add the member in the room.'
+    status:
+      type: integer
+      format: 409
+
 reactivate-room-not-implemented:
   type: object
   description: 'Reactivate Room Not Implemented'

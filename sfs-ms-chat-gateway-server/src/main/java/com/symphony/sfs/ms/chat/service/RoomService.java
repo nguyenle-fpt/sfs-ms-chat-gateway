@@ -5,6 +5,7 @@ import com.symphony.oss.models.chat.canon.facade.IUser;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedListener;
 import com.symphony.sfs.ms.chat.datafeed.DatafeedSessionPool;
 import com.symphony.sfs.ms.chat.datafeed.ForwarderQueueConsumer;
+import com.symphony.sfs.ms.chat.generated.model.AddRoomMemberConflictedProblem;
 import com.symphony.sfs.ms.chat.generated.model.AddRoomMemberFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.CreateRoomFailedProblem;
 import com.symphony.sfs.ms.chat.generated.model.ReactivateRoomNotImplementedProblem;
@@ -42,6 +43,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import model.UserInfo;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -214,7 +216,11 @@ public class RoomService implements DatafeedListener {
         // Example:
         // If there is BusinessApi available, then sfs-ms-whatapp throws NoBusinessApiAvailableProblem with no detail
         // problemDetail which is set in AddRoomMembverFailedProblem is the NoBusinessApiAvailableProblem.problemType = https://symphony.com/problems/no.business.api.available
-        throw new AddRoomMemberFailedProblem(problemDetail);
+        if (wce.getStatusCode() == HttpStatus.CONFLICT) {
+          throw new AddRoomMemberConflictedProblem(problemDetail);
+        } else {
+          throw new AddRoomMemberFailedProblem(problemDetail);
+        }
       }
     }
 
