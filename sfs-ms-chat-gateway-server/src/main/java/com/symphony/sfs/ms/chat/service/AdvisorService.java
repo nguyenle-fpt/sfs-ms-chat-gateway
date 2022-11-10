@@ -40,7 +40,7 @@ public class AdvisorService implements DatafeedListener {
       return;
     }
 
-    List<AdvisorUpdateRequestItem> items = maestroMessage.getAffectedUsers().stream().map(this::iUserToAdvisorUpdateRequestItem).collect(Collectors.toList());
+    List<AdvisorUpdateRequestItem> items = maestroMessage.getAffectedUsers().stream().map((user) -> iUserToAdvisorUpdateRequestItem(user, podId)).collect(Collectors.toList());
     AdvisorUpdateRequest advisorUpdateRequest = new AdvisorUpdateRequest().advisors(items);
 
     LOG.info("Received UPDATE_USER event | podId={} affectedUsers={}", podId, items.stream().map(AdvisorUpdateRequestItem::getSymphonyId).collect(Collectors.toList()));
@@ -48,14 +48,15 @@ public class AdvisorService implements DatafeedListener {
   }
 
 
-  private AdvisorUpdateRequestItem iUserToAdvisorUpdateRequestItem(IUser iUser) {
+  private AdvisorUpdateRequestItem iUserToAdvisorUpdateRequestItem(IUser iUser, String podId) {
     return new AdvisorUpdateRequestItem()
       .symphonyId(iUser.getId().toString())
       .firstName(iUser.getFirstName())
       .lastName(iUser.getSurname())
       .displayName(iUser.getPrettyName())
       .companyName(iUser.getCompany())
-      .avatar(iUser.getImageUrl());
+      .avatar(iUser.getImageUrl())
+      .podId(podId);
   }
 
 }

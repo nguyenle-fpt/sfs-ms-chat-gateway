@@ -192,7 +192,8 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       .lastName("LastName")
       .displayName("DisplayName")
       .companyName("Symphony")
-      .avatar("../avatars/static/150/default.png");
+      .avatar("../avatars/static/150/default.png")
+      .podId("123");
     AdvisorUpdateRequest advisorUpdateRequest = new AdvisorUpdateRequest().addAdvisorsItem(item);
 
     verify(adminClient, once()).updateAdvisorInfo(advisorUpdateRequest);
@@ -212,7 +213,8 @@ public class PreventMIMRoomCreationTest extends AbstractIntegrationTest {
       .symphonyId("1234567891011")
       .displayName("DisplayName")
       .companyName("Symphony")
-      .avatar("../avatars/static/150/default.png");
+      .avatar("../avatars/static/150/default.png")
+      .podId("123");
     AdvisorUpdateRequest advisorUpdateRequest = new AdvisorUpdateRequest().addAdvisorsItem(item);
 
     verify(adminClient, once()).updateAdvisorInfo(advisorUpdateRequest);
