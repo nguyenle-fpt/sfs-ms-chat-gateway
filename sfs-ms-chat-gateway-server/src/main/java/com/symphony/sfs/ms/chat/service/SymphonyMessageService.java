@@ -1,5 +1,8 @@
 package com.symphony.sfs.ms.chat.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.symphony.oss.models.chat.canon.IAttachment;
 import com.symphony.oss.models.chat.canon.IAttachmentEntity;
@@ -55,12 +58,12 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.stream.ThreadMessagesResponse;
-import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
 import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import com.symphony.sfs.ms.starter.util.UserIdUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.MDC;
 import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.context.MessageSource;
@@ -69,7 +72,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.util.StringUtils;
 import org.zalando.problem.violations.Violation;
 
 import javax.annotation.PostConstruct;
@@ -108,6 +110,8 @@ public class SymphonyMessageService implements DatafeedListener {
   private static final int MAX_TEXT_LENGTH = 30000;
   protected static final int POD_BATCH_REQUEST_SIZE = 500;
   private static final String TEXT_TOO_LONG_WARNING = "The message was too long and was truncated. Only the first %,d characters were delivered";
+  public static final String TYPE = "type";
+  public static final String CONTACTS_MESSAGE_TYPE = "send_contacts";
 
   private final EmpConfig empConfig;
   private final EmpClient empClient;
@@ -126,6 +130,7 @@ public class SymphonyMessageService implements DatafeedListener {
   private final MessageIOMonitor messageMetrics;
   private final MessageSource messageSource;
   private final MessageDecryptor messageDecryptor;
+  private final ObjectMapper objectMapper;
 
 
   @PostConstruct
@@ -222,7 +227,8 @@ public class SymphonyMessageService implements DatafeedListener {
           allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("chimes.not.supported", null, Locale.getDefault()), Collections.emptyList()));
           messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
           continue;
-        } else if (gatewaySocialMessage.isTable() && (empSchema.getSupportedFeatures() == null || empSchema.getSupportedFeatures().isTable() == null || !empSchema.getSupportedFeatures().isTable())) {
+        } else if ((gatewaySocialMessage.isTable() && !isContactMessage(gatewaySocialMessage.getEntityJSON(), streamId, gatewaySocialMessage.getFromUserId()))
+            && (empSchema.getSupportedFeatures() == null || empSchema.getSupportedFeatures().isTable() == null || !empSchema.getSupportedFeatures().isTable())) {
           allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault()), Collections.emptyList()));
           messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
           continue;
@@ -490,7 +496,8 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-    public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded, String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
+    public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded,
+                                                     String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds, String jsonData, String presentationML) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
@@ -528,7 +535,7 @@ public class SymphonyMessageService implements DatafeedListener {
           }
         }
 
-        symphonyMessage = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, forwarded, textTooLong, maxTextLength, attachmentReplySupported, attachmentMessageIds)
+        symphonyMessage = forwardIncomingMessageToSymphony(streamId, fromSymphonyUserId, formatting, text, attachments, parentMessageId, forwarded, textTooLong, maxTextLength, attachmentReplySupported, attachmentMessageIds, jsonData, presentationML)
           .orElseThrow(SendMessageFailedProblem::new);
         // In the case the message was sent truncated, send an alert to the Symphony and Federated users (CES-1912)
         if (textTooLong) {
@@ -598,7 +605,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
 
   private Optional<MessageInfoWithCustomEntities> forwardIncomingMessageToSymphony(String streamId, String fromSymphonyUserId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, String parentMessageId, boolean forwarded,
-                                                                                   boolean truncate, int maxTextLength, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds) {
+                                                                                   boolean truncate, int maxTextLength, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds, String jsonData, String presentationML) {
     // TODO: remove this parameter for all call using it
     String toSymphonyUserId = null;
     LOG.info("incoming message");
@@ -608,7 +615,13 @@ public class SymphonyMessageService implements DatafeedListener {
       text = text.substring(0, maxTextLength) + "...";
     }
     String messageML = "<messageML>" + text + "</messageML>";
-    if (forwarded) {
+
+    boolean isContact = isContactMessage(jsonData, streamId, fromSymphonyUserId);
+
+    if (isContact) {
+      //TODO handle inline reply
+      return symphonyMessageSender.sendContactMessage(streamId, fromSymphonyUserId, text, jsonData, presentationML);
+    } else if (forwarded) {
       return symphonyMessageSender.sendForwardedMessage(streamId, fromSymphonyUserId, text, attachments);
     } else if (parentMessageId != null) {
       // we need pure text in case of relied message
@@ -693,5 +706,18 @@ public class SymphonyMessageService implements DatafeedListener {
 
     String message = messageSource.getMessage("contact.not.available", null, Locale.getDefault());
     return Optional.of(message);
+  }
+
+  private boolean isContactMessage(String jsonData, String streamId, String fromSymphonyUserId) {
+    if (StringUtils.isBlank(jsonData)) {
+      return false;
+    }
+    try {
+      JsonNode jsonNode = objectMapper.readTree(jsonData);
+      return jsonNode.has(TYPE) && jsonNode.get(TYPE).asText().equals(CONTACTS_MESSAGE_TYPE);
+    } catch (JsonProcessingException e){
+      LOG.info("Not supported jsonData sent | streamId={} fromSymphonyUserId={} jsonData={}", streamId, fromSymphonyUserId, jsonData);
+      return false;
+    }
   }
 }

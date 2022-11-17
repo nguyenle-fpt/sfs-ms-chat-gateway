@@ -65,6 +65,11 @@ public class MessageEncryptorTest {
       .ingestionDate(1634118131913L)
       .build();
   }
+
+  /////////////////////////////
+  //// Build Reply Message ////
+  /////////////////////////////
+
   @Test
   public void encrypt_shouldThrowEncryptionException() throws ContentKeyRetrievalException, UnknownUserException {
     when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
@@ -118,7 +123,7 @@ public class MessageEncryptorTest {
       encryptedMessage.getCustomEntities());
     assertEquals(encryptedMessage.getFormat(), "com.symphony.markdown");
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage), eq(Collections.emptyList()));
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage), eq(null), eq(Collections.emptyList()));
 
   }
 
@@ -140,7 +145,7 @@ public class MessageEncryptorTest {
       "\"version\":\"0.0.1\"}]" +
       "**");
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage), eq(msgAttachments));
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\nnew message text"), eq(null), anyString(), eq(parentMessage), eq(null), eq(msgAttachments));
   }
 
   @Test
@@ -160,7 +165,7 @@ public class MessageEncryptorTest {
       ":grinning:**");
 
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\n:grinning:"), eq(null), anyString(), eq(parentMessage), eq(Collections.emptyList()));
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_parent message text_\n———————————\n:grinning:"), eq(null), anyString(), eq(parentMessage), eq(null), eq(Collections.emptyList()));
 
   }
 
@@ -191,9 +196,13 @@ public class MessageEncryptorTest {
       "Test reply to forwarded message**");
 
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_New message text_\n———————————\nTest reply to forwarded message"), eq(null), anyString(), eq(repliedMessage), eq(Collections.emptyList()));
+      eq("**In reply to:**\n**User 1 13/10/21 @ 09:42**\n_New message text_\n———————————\nTest reply to forwarded message"), eq(null), anyString(), eq(repliedMessage), eq(null), eq(Collections.emptyList()));
 
   }
+
+  ///////////////////////////////
+  //// Build Forward Message ////
+  ///////////////////////////////
 
   @Test
   public void buildForwardedMessage_shouldThrowEncryptionException() throws ContentKeyRetrievalException, UnknownUserException {
@@ -249,9 +258,10 @@ public class MessageEncryptorTest {
     assertEquals(String.format("encrypted**%s**", Base64.encodeBase64String(ephemeralKey)), encryptedMessage.getEncryptedFileKey());
 
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("\n\n**Forwarded Message:**\nfrom a WhatsApp chat\nnew message text"), eq(null), anyString(), eq(null), eq(Collections.emptyList()));
+      eq("\n\n**Forwarded Message:**\nfrom a WhatsApp chat\nnew message text"), eq(null), anyString(), eq(null), eq(null), eq(Collections.emptyList()));
 
   }
+
   @Test
   public void buildForwardedMessage_shouldPutEncryptedInfoIntoMessage_emoji() throws EncryptionException, ContentKeyRetrievalException, JsonProcessingException, UnknownUserException {
     KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
@@ -268,7 +278,49 @@ public class MessageEncryptorTest {
       encryptedMessage.getText());
 
     verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
-      eq("\n\n**Forwarded Message:**\nfrom a WhatsApp chat\n:grinning:"), eq(null), anyString(), eq(null),  eq(Collections.emptyList()));
+      eq("\n\n**Forwarded Message:**\nfrom a WhatsApp chat\n:grinning:"), eq(null), anyString(), eq(null), eq(null), eq(Collections.emptyList()));
+
+  }
+
+  ///////////////////////////////
+  //// Build Contact Message ////
+  ///////////////////////////////
+
+  @Test
+  public void buildContactMessage_shouldThrowEncryptionException() throws ContentKeyRetrievalException, UnknownUserException {
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenThrow(new ContentKeyRetrievalException("threaId", "userId", 0L));
+    assertThrows( EncryptionException.class,
+      () -> messageEncryptor.buildContactMessage("123456789", "","streamId", "text", "{ \"type\": \"unknownType\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>")
+    );
+  }
+
+  @Test
+  public void buildContactMessage_shouldBuildCorrectMessage() throws EncryptionException, ContentKeyRetrievalException, JsonProcessingException, UnknownUserException {
+    KeyIdentifier keyIdentifier = new KeyIdentifier("FrgZb_0yPjOuShqA35oAM3___oOQU772dA".getBytes(), 123456789L, 0L);
+    when(contentKeyManager.getContentKeyIdentifier(any(String.class), any(String.class), anyString())).thenReturn(keyIdentifier);
+    doAnswer((Answer<String>) invocation -> {
+      String content = invocation.getArgument(2);
+      return String.format("encrypted**%s**", content);
+    }).when(messageEncryptor).encrypt(ArgumentMatchers.<byte[]>any(), any(KeyIdentifier.class), any(String.class));
+    SBEEventMessage encryptedMessage = messageEncryptor.buildContactMessage("123456789", "","FrgZb_0yPjOuShqA35oAM3___oOQU772dA", "text", "{ \"type\": \"send_contacts\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>");
+
+    assertEquals("encrypted**text**", encryptedMessage.getText());
+    assertEquals(encryptedMessage.getThreadId(), "FrgZb/0yPjOuShqA35oAM3///oOQU772dA==");
+    assertNull(encryptedMessage.getParentRelationshipType());
+    assertEquals(encryptedMessage.getMsgFeatures(), 3);
+    assertEquals(encryptedMessage.getChatType(), "CHATROOM");
+    assertEquals(encryptedMessage.getVersion(), "SOCIALMESSAGE");
+    assertEquals(encryptedMessage.getEntityJSON(), "encrypted**{ \"type\": \"send_contacts\"}**");
+    assertEquals(encryptedMessage.getEntities(), Map.of("hashtags", new ArrayList<String>(), "userMentions", new ArrayList<String>(), "urls", new ArrayList<String>()));
+    assertEquals(encryptedMessage.getEncryptedEntities(), "encrypted**{}**");
+    assertEquals(encryptedMessage.getEncryptedMedia(), "encrypted**{\"content\":[],\"mediaType\":\"JSON\"}**");
+    assertNull(encryptedMessage.getCustomEntities());
+    assertEquals(encryptedMessage.getFormat(), "com.symphony.messageml.v2");
+    assertNull(encryptedMessage.getFileKeyEncryptedAttachments());
+    assertNull(encryptedMessage.getEncryptedFileKey());
+
+    verify(messageEncryptor, once()).generateSBEEventMessage(eq(keyIdentifier), eq(null), eq("123456789"), eq("FrgZb/0yPjOuShqA35oAM3///oOQU772dA=="),
+      eq("text"), eq("<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>"), eq(null), eq(null), eq("{ \"type\": \"send_contacts\"}"), eq(Collections.emptyList()));
 
   }
 

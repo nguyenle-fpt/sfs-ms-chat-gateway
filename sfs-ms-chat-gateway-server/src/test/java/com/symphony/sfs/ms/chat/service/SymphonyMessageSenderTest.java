@@ -75,6 +75,12 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     userSession = new SessionSupplier<>("username", new SymphonyRsaAuthFunction(authenticationService, podConfiguration, parseRSAPrivateKey(chatConfiguration.getSharedPrivateKey().getData())));
   }
 
+
+  ////////////////////
+  //// Send Reply ////
+  ////////////////////
+
+
   @Test
   public void sendReply_FederatedUserNotFound() {
     assertThrows(SendMessageFailedProblem.class, () -> {
@@ -192,6 +198,12 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     assertEquals(newMessage.get().getMessageId(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
 
   }
+
+
+  //////////////////////
+  //// Send forward ////
+  //////////////////////
+
 
   @Test
   public void sendForwardedMessage_text_works() throws EncryptionException, JsonProcessingException {
@@ -330,6 +342,44 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
         .message("message with attachment")
         .attachments(List.of(new AttachmentInfo().id("fileId").fileName("fileName.pdf").contentType("application/pdf").size(123L).images(Map.of("600", "fileId600")))),
       messageInfoWithCustomEntities2);
+  }
+
+  //////////////////////
+  //// Send Contact ////
+  //////////////////////
+
+  @Test
+  public void sendContactMessage_noFederatedAccount()  {
+    assertThrows(SendMessageFailedProblem.class, () ->
+      symphonyMessageSender.sendContactMessage("streamId", "123456789", "text", "{ \"type\": \"unknownType\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>")
+    );
+  }
+
+  @Test
+  public void sendContactMessage_EncryptionProblem() throws EncryptionException {
+    federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").build());
+
+    when(messageEncryptor.buildContactMessage("123456789", "wa_bot_user_name", "streamId", "text", "{ \"type\": \"unknownType\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>")).thenThrow(new EncryptionException(null));
+
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendContactMessage("streamId", "123456789", "text", "{ \"type\": \"unknownType\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>");
+
+    verify(messageMetrics, times(1)).onMessageBlockToSymphony(ENCRYPTION_FAILED, "streamId");
+    assertTrue(newMessage.isEmpty());
+  }
+
+  @Test
+  public void sendContactMessage_OK() throws EncryptionException, JsonProcessingException {
+    federatedAccountRepository.save(FederatedAccount.builder().symphonyUserId("123456789").symphonyUsername("wa_bot_user_name").build());
+
+    SBEEventMessage messageToBeSent = SBEEventMessage.builder().build();
+    when(messageEncryptor.buildContactMessage("123456789", "wa_bot_user_name", "streamId", "text", "{ \"type\": \"send_contacts\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>")).thenReturn(messageToBeSent);
+    when(symphonyService.sendBulkMessage(eq(messageToBeSent), any(SessionSupplier.class))).thenReturn(SBEEventMessage.builder().messageId("NxqDE3jYX/ePoCu+ytgVXH///oOG+B9FdA==").build());
+
+    Optional<MessageInfoWithCustomEntities> newMessage = symphonyMessageSender.sendContactMessage("streamId", "123456789", "text", "{ \"type\": \"send_contacts\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>");
+
+    verify(messageMetrics, times(1)).onSendMessageToSymphony("123456789", "streamId");
+    assertEquals(newMessage.get().getMessageId(), "NxqDE3jYX_ePoCu-ytgVXH___oOG-B9FdA");
+
   }
 
 }

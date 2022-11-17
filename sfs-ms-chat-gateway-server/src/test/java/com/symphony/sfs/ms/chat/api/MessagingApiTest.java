@@ -1,6 +1,7 @@
 package com.symphony.sfs.ms.chat.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.symphony.sfs.ms.admin.generated.model.BlockedFileTypes;
 import com.symphony.sfs.ms.chat.api.util.AbstractIntegrationTest;
 import com.symphony.sfs.ms.chat.config.EmpConfig;
@@ -46,11 +47,9 @@ import com.symphony.sfs.ms.starter.symphony.stream.MessageEnvelope;
 import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamAttributes;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamInfo;
-import com.symphony.sfs.ms.starter.symphony.stream.StreamService;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamType;
 import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.stream.ThreadMessagesResponse;
-import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailEntity;
 import io.fabric8.mockwebserver.DefaultMockServer;
 import org.apache.commons.codec.binary.Base64;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,7 +69,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.MARKMESSAGESASREAD_ENDPOINT;
 import static com.symphony.sfs.ms.chat.generated.api.MessagingApi.RETRIEVEMESSAGES_ENDPOINT;
@@ -87,7 +85,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -143,10 +140,15 @@ class MessagingApiTest extends AbstractIntegrationTest {
     messageStatusService = mock(MessageStatusService.class);
 
     messageDecryptor = mock(MessageDecryptor.class);
-    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, mockAdminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor);
+    SymphonyMessageService symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, forwarderQueueConsumer, datafeedSessionPool, symphonyMessageSender, mockAdminClient, null, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), messageSource, messageDecryptor, objectMapper);
 
     symphonyMessagingApi = new MessagingApi(symphonyMessageService);
   }
+
+
+  //////////////////////
+  //// Send Message ////
+  //////////////////////
 
   @Test
   void sendMessage() {
@@ -283,6 +285,38 @@ class MessagingApiTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void sendMessage_withJsonData_notRecognized1() {
+    SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null).jsonData("{ \"entry\": \"value\"}").presentationML("<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>");
+    when(symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
+    assertEquals(expectedResponse, sendMessageResponse);
+  }
+
+  @Test
+  void sendMessage_withJsonData_notRecognized2() {
+    SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null).jsonData("{ \"type\": \"unknownType\"}").presentationML("<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>");
+    when(symphonyMessageSender.sendRawMessage("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null)).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
+    assertEquals(expectedResponse, sendMessageResponse);
+  }
+
+  @Test
+  void sendMessage_withJsonData_sendContact() {
+    SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null).jsonData("{ \"type\": \"send_contacts\"}").presentationML("<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>");
+    when(symphonyMessageSender.sendContactMessage("streamId", "fromSymphonyUserId", "text", "{ \"type\": \"send_contacts\"}", "<div data-format=\"PresentationML\" data-version=\"2.0\">PresentationML Content</div>")).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
+    MessageInfo sendMessageResponse = sendMessage(sendMessageRequest);
+    MessageInfo expectedResponse = new MessageInfo().messageId("symphonyMessageId");
+    assertEquals(expectedResponse, sendMessageResponse);
+  }
+
+  /////////////////////////////
+  //// Send System Message ////
+  /////////////////////////////
+
+
+  @Test
   void sendSystemMessageToRoom_noFormatting() {
     SendSystemMessageRequest sendsystemMessageRequest = new SendSystemMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text");
     when(symphonyMessageSender.sendRawMessage(botSession, "streamId", "<messageML>text</messageML>")).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
@@ -332,6 +366,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
     assertEquals(expectedResponse, sendSystemMessageResponse);
   }
 
+  ///////////////////////////////
+  //// Mark Messages As Read ////
+  ///////////////////////////////
+
   @Test
   void markMessagesAsRead() {
     Long timestamp = Instant.now().toEpochMilli();
@@ -342,6 +380,10 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
     verify(messageStatusService, once()).markMessagesAsRead(eq("podUrl"), ArgumentMatchers.<SessionSupplier<SymphonySession>>any(), eq(Collections.singletonList(sendMessageStatusRequest)));
   }
+
+  ///////////////////////////
+  //// Retrieve Messages ////
+  ///////////////////////////
 
   @Test
   void retrieveMessages_ok() {

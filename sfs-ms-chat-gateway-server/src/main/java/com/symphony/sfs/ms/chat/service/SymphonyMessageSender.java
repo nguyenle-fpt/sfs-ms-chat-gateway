@@ -254,6 +254,28 @@ public class SymphonyMessageSender {
     return Optional.empty();
   }
 
+  public Optional<MessageInfoWithCustomEntities> sendContactMessage(String streamId, String fromSymphonyUserId, String messageContent, String jsonData, String presentationMl) {
+    FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
+      LOG.error("fromSymphonyUser {} not found", fromSymphonyUserId);
+      messageMetrics.onMessageBlockToSymphony(UNKNOWN_SENDER, streamId);
+      return new SendMessageFailedProblem();
+    });
+
+    messageMetrics.onSendMessageToSymphony(fromSymphonyUserId, streamId);
+
+    SessionSupplier<SymphonySession> userSession = datafeedSessionPool.getSessionSupplier(federatedAccount);
+
+    try {
+      SBEEventMessage sbeMessageToBeSent = messageEncryptor.buildContactMessage(fromSymphonyUserId, federatedAccount.getSymphonyUsername(), streamId, messageContent, jsonData, presentationMl);
+      SBEEventMessage sentMessage = symphonyService.sendBulkMessage(sbeMessageToBeSent, userSession);
+      return Optional.of(decryptAndBuildMessageInfo(sentMessage, fromSymphonyUserId, userSession));
+    } catch (IOException e) {
+      LOG.error("Unable to forward message to Symphony: stream={} initiator={}", streamId, fromSymphonyUserId, e);
+      messageMetrics.onMessageBlockToSymphony(ENCRYPTION_FAILED, streamId);
+    }
+    return Optional.empty();
+  }
+
   private Optional<MessageAttachment> uploadBlastAttachment(SessionSupplier<SymphonySession> session, SymphonyAttachment attachment, byte[] ephemeralKey) {
     try {
       byte[] encryptedBytes = new ClientCryptoHandler().encryptMsgWithRotationIdZero(ephemeralKey, Base64.decode(attachment.getData()));

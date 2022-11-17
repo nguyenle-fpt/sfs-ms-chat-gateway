@@ -34,6 +34,10 @@ send-message-request:
       default: false
     formatting:
       $ref: '#/formatting-enum'
+    jsonData:
+      type: string
+    presentationML:
+      type: string
 
 send-system-message-request:
   type: object

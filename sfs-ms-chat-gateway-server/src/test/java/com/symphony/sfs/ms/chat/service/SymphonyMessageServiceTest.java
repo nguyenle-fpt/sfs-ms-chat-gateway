@@ -22,6 +22,7 @@ import com.symphony.sfs.ms.chat.service.external.AdminClient;
 import com.symphony.sfs.ms.chat.service.external.EmpClient;
 import com.symphony.sfs.ms.chat.service.symphony.SymphonyService;
 import com.symphony.sfs.ms.chat.util.SymphonySystemMessageTemplateProcessor;
+import com.symphony.sfs.ms.starter.config.JacksonConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.BotConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.PodConfiguration;
 import com.symphony.sfs.ms.starter.config.properties.common.PemResource;
@@ -108,6 +109,7 @@ class SymphonyMessageServiceTest {
   private AdminClient adminClient;
   private EmpSchemaService empSchemaService;
   private MessageStatusService messageStatusService;
+  private ObjectMapper objectMapper;
 
 
   @BeforeEach
@@ -154,8 +156,9 @@ class SymphonyMessageServiceTest {
     adminClient = mock(AdminClient.class);
     empSchemaService = mock(EmpSchemaService.class);
     messageStatusService = mock(MessageStatusService.class);
+    objectMapper = spy(new JacksonConfiguration().configureJackson(new ObjectMapper()));
 
-    symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), mock(MessageSource.class), mock(MessageDecryptor.class));
+    symphonyMessageService = new SymphonyMessageService(empConfig, empClient, tenantDetailRepository, federatedAccountRepository, mock(ForwarderQueueConsumer.class), datafeedSessionPool, symphonyMessageSender, adminClient, empSchemaService, symphonyService, messageStatusService, podConfiguration, botConfiguration, streamService, new MessageIOMonitor(meterManager), mock(MessageSource.class), mock(MessageDecryptor.class), objectMapper);
 
   }
 

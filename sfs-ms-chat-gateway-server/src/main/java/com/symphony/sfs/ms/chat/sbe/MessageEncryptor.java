@@ -24,6 +24,7 @@ import com.symphony.sfs.ms.starter.symphony.stream.SBEEventMessage;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -67,7 +68,7 @@ public class MessageEncryptor {
 
       String customEntitiesText = repliedToMessage == null ? null : generateReplyCustomEntities(repliedToMessage, attachments);
 
-      return generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationML, customEntitiesText, repliedToMessage, attachments);
+      return generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationML, customEntitiesText, repliedToMessage, null, attachments);
 
     } catch (IOException | UnknownUserException e) {
       throw new EncryptionException(e);
@@ -85,7 +86,7 @@ public class MessageEncryptor {
       String customEntitiesText = generateForwardedCustomEntities(threadId, forwardedPrefix, convertedMessageText, Collections.emptyList());
 
 
-      SBEEventMessage sbeEventMessage = generateSBEEventMessage(keyId, contentKey, userId, threadId, text, null, customEntitiesText, null, Collections.emptyList());
+      SBEEventMessage sbeEventMessage = generateSBEEventMessage(keyId, contentKey, userId, threadId, text, null, customEntitiesText, null, null, Collections.emptyList());
       sbeEventMessage.setFormat("com.symphony.markdown");
       sbeEventMessage.setChatType("CHATROOM");
       sbeEventMessage.setMsgFeatures(7);
@@ -103,13 +104,27 @@ public class MessageEncryptor {
     }
   }
 
+  public SBEEventMessage buildContactMessage(String userId, String userName, String streamId, String text, String jsonData, String presentationMl) throws EncryptionException {
+    try {
+      String threadId = StreamUtil.fromUrlSafeStreamId(streamId);
+      KeyIdentifier keyId = contentKeyManager.getContentKeyIdentifier(threadId, userId, userName);
+      byte[] contentKey = contentKeyManager.getContentKey(ThreadId.newBuilder().build(threadId), userId, userName, keyId.getRotationId());
 
+      SBEEventMessage sbeEventMessage = generateSBEEventMessage(keyId, contentKey, userId, threadId, text, presentationMl, null, null, jsonData, Collections.emptyList());
+      sbeEventMessage.setChatType("CHATROOM");
+      sbeEventMessage.setMsgFeatures(3);
+
+      return sbeEventMessage;
+    } catch (IOException | UnknownUserException e) {
+      throw new EncryptionException(e);
+    }
+  }
 
 
   public SBEEventMessage generateSBEEventMessage(KeyIdentifier keyId, byte[] contentKey,
                                                  String userId, String threadId, String text,
                                                  String presentationML, String customEntitiesText,
-                                                 SBEEventMessage repliedToMessage,
+                                                 SBEEventMessage repliedToMessage, String jsonData,
                                                  List<MessageAttachment> attachments) throws JsonProcessingException, EncryptionException {
     return SBEEventMessage.builder()
       .threadId(threadId)
@@ -119,7 +134,7 @@ public class MessageEncryptor {
       .presentationML(presentationML == null ? null : encrypt(contentKey, keyId, presentationML))
       .encryptedMedia(encrypt(contentKey, keyId, "{\"content\":[],\"mediaType\":\"JSON\"}"))
       .encryptedEntities(encrypt(contentKey, keyId, "{}"))
-      .entityJSON(encrypt(contentKey, keyId, "{}"))
+      .entityJSON(encrypt(contentKey, keyId, StringUtils.isNotBlank(jsonData)? jsonData : "{}"))
       .customEntities(customEntitiesText == null ? null : encrypt(contentKey, keyId, customEntitiesText))
       .entities(objectMapper.readValue(ENTITIES_CONTENT, Object.class))
       .attachments((attachments != null)? attachments : new ArrayList<>())
