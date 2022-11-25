@@ -36,6 +36,7 @@ public interface MessageInfoMapper {
   @Mapping(source= "sbeEventMessage.from.prettyName", target = "displayName")
   @Mapping(source= "sbeEventMessage.from.id", target = "symphonyId")
   @Mapping(source= "sbeEventMessage.ingestionDate", target = "timestamp")
+  @Mapping(source= "sbeEventMessage.text", target = "textMarkdown")
   MessageInfoWithCustomEntities sbeEventMessageToMessageInfo(SBEEventMessage sbeEventMessage);
 
   @Mapping(source= "sbeAttachment.fileId", target = "id")

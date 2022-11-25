@@ -159,6 +159,8 @@ message-info-with-custom-entities:
           type: string
         presentation-ml:
           type: string
+        text-markdown:
+          type: string
 
 attachment-info:
   type: object

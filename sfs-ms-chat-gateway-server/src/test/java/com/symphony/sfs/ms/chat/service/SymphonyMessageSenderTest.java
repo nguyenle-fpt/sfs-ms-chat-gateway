@@ -331,8 +331,9 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
     assertEquals(new MessageInfoWithCustomEntities()
       .messageId("messageId2___n2ZVrIxbQ")
       .timestamp(1665413648L)
-      .parentMessage(new MessageInfoWithCustomEntities().messageId("messageId1___n1ZVrIxbQ").message("Message").timestamp(1665413611L))
+      .parentMessage(new MessageInfoWithCustomEntities().messageId("messageId1___n1ZVrIxbQ").message("Message").textMarkdown("Message").timestamp(1665413611L))
       .message("New message")
+      .textMarkdown("In reply to: New message")
       .customEntities(customEntities)
       .attachments(List.of(new AttachmentInfo().id("external_13469017566287%2FEwfQ5eSXxpi8DArTh4cFiQ%3D%3D").fileName("55c0edab9f685bfe.JPG").contentType("image/jpeg").size(62412L).images(Map.of("600", "external_13469017566287%2FE36ZvDh6pA%2BAjFaI81ETzw%3D%3D")))),
       messageInfoWithCustomEntities1);
@@ -340,6 +341,7 @@ public class SymphonyMessageSenderTest extends AbstractIntegrationTest {
         .messageId("messageId3___n3ZVrIxbQ")
         .timestamp(1665413648L)
         .message("message with attachment")
+        .textMarkdown("message with attachment")
         .attachments(List.of(new AttachmentInfo().id("fileId").fileName("fileName.pdf").contentType("application/pdf").size(123L).images(Map.of("600", "fileId600")))),
       messageInfoWithCustomEntities2);
   }
