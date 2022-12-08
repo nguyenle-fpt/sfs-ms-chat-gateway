@@ -88,6 +88,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.symphony.sfs.ms.chat.service.MessageIOMonitor.BlockingCauseFromSymphony.NOT_ENOUGH_MEMBER;
@@ -228,7 +229,7 @@ public class SymphonyMessageService implements DatafeedListener {
           messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
           continue;
         } else if ((gatewaySocialMessage.isTable() && !isContactMessage(gatewaySocialMessage.getEntityJSON(), streamId, gatewaySocialMessage.getFromUserId()))
-            && (empSchema.getSupportedFeatures() == null || empSchema.getSupportedFeatures().isTable() == null || !empSchema.getSupportedFeatures().isTable())) {
+          && (empSchema.getSupportedFeatures() == null || empSchema.getSupportedFeatures().isTable() == null || !empSchema.getSupportedFeatures().isTable())) {
           allUserSessions.forEach(session -> symphonyMessageSender.sendAlertMessage(session, streamId, messageSource.getMessage("tables.not.supported", null, Locale.getDefault()), Collections.emptyList()));
           messageMetrics.onMessageBlockFromSymphony(UNSUPPORTED_MESSAGE_CONTENTS, streamId);
           continue;
@@ -263,7 +264,7 @@ public class SymphonyMessageService implements DatafeedListener {
               attachmentsContent = new ArrayList<>();
               for (IAttachment attachment : gatewaySocialMessage.getAttachments()) {
 
-                if(blockedAttachmentsType.contains(attachment.getContentType())) {
+                if (blockedAttachmentsType.stream().anyMatch((type) -> Pattern.compile(type).matcher(attachment.getContentType()).matches())) {
                   blockedAttachments.add(attachment);
                 } else {
                   Attachment result = new Attachment()
@@ -307,7 +308,7 @@ public class SymphonyMessageService implements DatafeedListener {
 
           messageMetrics.onSendMessageFromSymphony(gatewaySocialMessage.getFromUser(), toFederatedAccountsForEmp, streamId);
 
-          if(!StringUtils.isEmpty(gatewaySocialMessage.getTextContent()) || (attachmentsContent != null && !attachmentsContent.isEmpty())) {
+          if (!StringUtils.isEmpty(gatewaySocialMessage.getTextContent()) || (attachmentsContent != null && !attachmentsContent.isEmpty())) {
             Optional<SendMessageResponse> sendMessageResponse = empClient.sendMessage(emp,
               streamId,
               gatewaySocialMessage.getMessageId(),
@@ -463,7 +464,7 @@ public class SymphonyMessageService implements DatafeedListener {
       do {
         response = streamService.retrieveSocialMessagesList(podConfiguration.getUrl(), userSession, threadId, POD_BATCH_REQUEST_SIZE, from, to).orElseThrow(RetrieveMessageFailedProblem::new);
 
-        for (MessageEnvelope messageEnvelope: response.getEnvelopes()) {
+        for (MessageEnvelope messageEnvelope : response.getEnvelopes()) {
           sbeEventMessages.put(StreamUtil.toUrlSafeStreamId(messageEnvelope.getMessage().getMessageId()), messageEnvelope.getMessage());
         }
 
@@ -479,7 +480,7 @@ public class SymphonyMessageService implements DatafeedListener {
           sbeEventMessage = symphonyService.getEncryptedMessage(id.getMessageId(), userSession).orElseThrow(RetrieveMessageFailedProblem::new);
         }
 
-        if (sbeEventMessage != null){
+        if (sbeEventMessage != null) {
           MessageInfo messageInfo = symphonyMessageSender.decryptAndBuildMessageInfo(sbeEventMessage.toBuilder().build(), symphonyUserId, userSession, sbeEventMessages);
           messageInfos.add(messageInfo);
         }
@@ -496,8 +497,8 @@ public class SymphonyMessageService implements DatafeedListener {
   }
 
   @NewSpan
-    public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded,
-                                                     String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds, String jsonData, String presentationML) {
+  public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded,
+                                                   String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds, String jsonData, String presentationML) {
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
@@ -528,7 +529,9 @@ public class SymphonyMessageService implements DatafeedListener {
           Set<String> empBlockedTypes = blockedFileTypesOptional.isPresent() ? new HashSet<>(blockedFileTypesOptional.get()) : new HashSet<>();
 
           if (!empBlockedTypes.isEmpty()) {
-            List<SymphonyAttachment> attachmentsBlocked = attachments.stream().filter(a -> empBlockedTypes.contains(a.getContentType())).collect(Collectors.toList());
+            List<SymphonyAttachment> attachmentsBlocked = attachments.stream()
+              .filter(a -> empBlockedTypes.stream().anyMatch((type) -> Pattern.compile(type).matcher(a.getContentType()).matches()))
+              .collect(Collectors.toList());
             if (!attachmentsBlocked.isEmpty()) {
               throw new AttachmentBlockedProblem(null, Map.of("attachmentsBlocked", attachmentsBlocked.stream().map(a -> new AttachmentBlocked().name(a.getFileName()).mimeType(a.getContentType())).collect(Collectors.toList())));
             }
@@ -715,7 +718,7 @@ public class SymphonyMessageService implements DatafeedListener {
     try {
       JsonNode jsonNode = objectMapper.readTree(jsonData);
       return jsonNode.has(TYPE) && jsonNode.get(TYPE).asText().equals(CONTACTS_MESSAGE_TYPE);
-    } catch (JsonProcessingException e){
+    } catch (JsonProcessingException e) {
       LOG.info("Not supported jsonData sent | streamId={} fromSymphonyUserId={} jsonData={}", streamId, fromSymphonyUserId, jsonData);
       return false;
     }

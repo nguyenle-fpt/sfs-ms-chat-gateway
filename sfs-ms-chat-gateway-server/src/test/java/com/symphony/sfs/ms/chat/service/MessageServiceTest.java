@@ -487,6 +487,63 @@ class MessageServiceTest implements I18nTest {
   }
 
   @Test
+  void onIMMessageWithAttachments_AllBlocked() {
+    when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+
+    IUser fromSymphonyUser = buildDefaultFromUser();
+
+    BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
+    blockedFileTypes.addAll(List.of(".*"));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+    when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("input")
+      .attachments(List.of(new AttachmentEntity.Builder().withFileId("123").withName("filename.opus").withContentType("audio/ogg; codecs=opus").build()))
+      .chatType("CHATROOM")
+      .build();
+    SessionSupplier<SymphonySession> botSessionSupplier = mock(SessionSupplier.class);
+    when(datafeedSessionPool.getBotSessionSupplier()).thenReturn(botSessionSupplier);
+    messageService.onIMMessage(message);
+
+    verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
+    verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "input", "", Collections.emptyList(), null, null);
+    verify(symphonyMessageSender, once()).sendAlertMessage(any(), eq("streamId"), eq("Attachment undelivered. Your corporate policies prevent sharing audio/ogg; codecs=opus attachments in WhatsApp Connect rooms."), eq(Collections.emptyList()));
+  }
+
+  @Test
+  void onIMMessageWithAttachments_BlockedByType() {
+    when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
+    FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
+
+    IUser fromSymphonyUser = buildDefaultFromUser();
+
+    BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
+    blockedFileTypes.addAll(List.of("audio/.*"));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+
+    when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
+    when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
+    GatewaySocialMessage message = GatewaySocialMessage.builder().streamId("streamId").messageId("messageId").fromUser(fromSymphonyUser).members(Arrays.asList(FROM_SYMPHONY_USER_ID, TO_SYMPHONY_USER_ID)).timestamp(NOW).textContent("text")
+      .attachments(List.of(
+        new AttachmentEntity.Builder().withFileId("123").withName("filename.mp4").withContentType("audio/mp4").build(),
+        new AttachmentEntity.Builder().withFileId("123").withName("filename.pdf").withContentType("application/pdf").build()))
+      .chatType("CHATROOM")
+      .build();
+    SessionSupplier<SymphonySession> botSessionSupplier = mock(SessionSupplier.class);
+    when(datafeedSessionPool.getBotSessionSupplier()).thenReturn(botSessionSupplier);
+    messageService.onIMMessage(message);
+
+    verify(federatedAccountRepository, once()).findBySymphonyId(FROM_SYMPHONY_USER_ID);
+    verify(federatedAccountRepository, once()).findBySymphonyId(TO_SYMPHONY_USER_ID);
+    List<Attachment> attachments = Collections.singletonList(new Attachment().fileName("filename.pdf").contentType("application/pdf").data("abc"));
+    verify(empClient, once()).sendMessage("emp", "streamId", "messageId", fromSymphonyUser, Collections.singletonList(toFederatedAccount), NOW, "text", "", attachments, null, null);
+    verify(symphonyMessageSender, once()).sendAlertMessage(any(), eq("streamId"), eq("Attachment undelivered. Your corporate policies prevent sharing audio/mp4 attachments in WhatsApp Connect rooms."), eq(Collections.emptyList()));
+  }
+
+  @Test
   void onIMMessageWithAttachments_BlockedNoMessage() {
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
     FederatedAccount toFederatedAccount = buildDefaultToFederatedAccount();
@@ -513,6 +570,7 @@ class MessageServiceTest implements I18nTest {
     verify(symphonyMessageSender, once()).sendAlertMessage(any(), eq("streamId"), eq("Attachment undelivered. Your corporate policies prevent sharing audio/ogg; codecs=opus attachments in WhatsApp Connect rooms."), eq(Collections.emptyList()));
 
   }
+
   @Test
   void onIMMessageWithAttachments_PartiallyBlocked() {
     when(adminClient.canChat(FROM_SYMPHONY_USER_ID, "fed", "emp")).thenReturn(Optional.of(CanChatResponse.CAN_CHAT));
