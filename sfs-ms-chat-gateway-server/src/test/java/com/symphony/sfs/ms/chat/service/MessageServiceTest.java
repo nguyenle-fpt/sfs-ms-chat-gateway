@@ -467,7 +467,7 @@ class MessageServiceTest implements I18nTest {
 
     BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
     blockedFileTypes.addAll(List.of("audio/ogg; codecs=opus"));
-    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
@@ -495,7 +495,7 @@ class MessageServiceTest implements I18nTest {
 
     BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
     blockedFileTypes.addAll(List.of(".*"));
-    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
@@ -522,7 +522,7 @@ class MessageServiceTest implements I18nTest {
 
     BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
     blockedFileTypes.addAll(List.of("audio/.*"));
-    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
@@ -552,7 +552,7 @@ class MessageServiceTest implements I18nTest {
 
     BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
     blockedFileTypes.addAll(List.of("audio/ogg; codecs=opus"));
-    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");
@@ -580,7 +580,7 @@ class MessageServiceTest implements I18nTest {
 
     BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
     blockedFileTypes.addAll(List.of("audio/ogg; codecs=opus"));
-    when(adminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+    when(adminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     when(federatedAccountRepository.findBySymphonyId(TO_SYMPHONY_USER_ID)).thenReturn(Optional.of(toFederatedAccount));
     when(symphonyService.getAttachment(anyString(), anyString(), anyString(), any())).thenReturn("abc");

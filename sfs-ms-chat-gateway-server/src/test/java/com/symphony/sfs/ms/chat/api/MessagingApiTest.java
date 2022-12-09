@@ -177,6 +177,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void sendMessage_forwarded() {
+    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(new BlockedFileTypes()));
     SendMessageRequest sendMessageRequest = createTestMessage("streamId", "fromSymphonyUserId", "text", null);
     sendMessageRequest.setForwarded(true);
     var attachments = Collections.singletonList(new SymphonyAttachment().contentType("image/png").fileName("attachment.png").data("data"));
@@ -240,6 +241,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
 
   @Test
   void sendMessageToRoom_withAttachments() {
+    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(new BlockedFileTypes()));
     SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").addAttachmentsItem(attachment);
     when(symphonyMessageSender.sendRawMessageWithAttachments("streamId", "fromSymphonyUserId", "<messageML>text</messageML>", null, Collections.singletonList(attachment))).thenReturn(Optional.of(new MessageInfoWithCustomEntities().messageId("symphonyMessageId")));
@@ -253,7 +255,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   void sendMessageToRoom_withAttachments_notBlocked() {
     BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
     blockedFileTypes.add("image/jpg");
-    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").tenantId("123").addAttachmentsItem(attachment);
@@ -268,7 +270,7 @@ class MessagingApiTest extends AbstractIntegrationTest {
   void sendMessageToRoom_withAttachments_blocked() {
     BlockedFileTypes blockedFileTypes = new BlockedFileTypes();
     blockedFileTypes.addAll(List.of("image/png", "application/pdf"));
-    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
+    when(mockAdminClient.getBlockedFileTypes(anyString(), anyString())).thenReturn(Optional.of(blockedFileTypes));
 
     SymphonyAttachment attachment = new SymphonyAttachment().contentType("image/png").data(Base64.encodeBase64String("image".getBytes(StandardCharsets.UTF_8))).fileName("attachment.png");
     SendMessageRequest sendMessageRequest = new SendMessageRequest().streamId("streamId").fromSymphonyUserId("fromSymphonyUserId").text("text").tenantId("123").addAttachmentsItem(attachment);

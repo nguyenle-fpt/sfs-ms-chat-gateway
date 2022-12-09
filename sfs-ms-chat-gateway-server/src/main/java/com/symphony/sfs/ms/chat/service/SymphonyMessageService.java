@@ -60,7 +60,6 @@ import com.symphony.sfs.ms.starter.symphony.stream.StreamTypes;
 import com.symphony.sfs.ms.starter.symphony.stream.ThreadMessagesResponse;
 import com.symphony.sfs.ms.starter.symphony.tds.TenantDetailRepository;
 import com.symphony.sfs.ms.starter.util.StreamUtil;
-import com.symphony.sfs.ms.starter.util.UserIdUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -217,7 +216,6 @@ public class SymphonyMessageService implements DatafeedListener {
       }
 
       // Forward the message to all EMP users
-      String tenantId = UserIdUtils.extractPodId(gatewaySocialMessage.getFromUserId());
       for (Map.Entry<String, List<FederatedAccount>> entry : federatedAccountsByEmp.entrySet()) {
         String emp = entry.getKey();
         // Check if message contents can be sent
@@ -257,7 +255,7 @@ public class SymphonyMessageService implements DatafeedListener {
           List<IAttachment> blockedAttachments = new ArrayList<>();
           long totalsize = 0;
           if (!CollectionUtils.isEmpty(gatewaySocialMessage.getAttachments())) {
-            Optional<BlockedFileTypes> blockedFileTypesOptional = adminClient.getBlockedFileTypes(streamId, tenantId, emp);
+            Optional<BlockedFileTypes> blockedFileTypesOptional = adminClient.getBlockedFileTypes(streamId, emp);
             Set<String> blockedAttachmentsType = blockedFileTypesOptional.isPresent() ? new HashSet<>(blockedFileTypesOptional.get()) : new HashSet<>();
             // retrieve the attachment
             try {
@@ -499,6 +497,7 @@ public class SymphonyMessageService implements DatafeedListener {
   @NewSpan
   public MessageInfoWithCustomEntities sendMessage(String streamId, String fromSymphonyUserId, String tenantId, FormattingEnum formatting, String text, List<SymphonyAttachment> attachments, boolean forwarded,
                                                    String parentMessageId, boolean attachmentReplySupported, Optional<List<String>> attachmentMessageIds, String jsonData, String presentationML) {
+    //TODO remove unused tenantId
     MDC.put("streamId", streamId);
     FederatedAccount federatedAccount = federatedAccountRepository.findBySymphonyId(fromSymphonyUserId).orElseThrow(() -> {
       messageMetrics.onMessageBlockToSymphony(FEDERATED_ACCOUNT_NOT_FOUND, streamId);
@@ -524,8 +523,8 @@ public class SymphonyMessageService implements DatafeedListener {
         int maxTextLength = empConfig.getMaxTextLength().getOrDefault(federatedAccount.getEmp(), MAX_TEXT_LENGTH);
         boolean textTooLong = (text.length() > maxTextLength);
 
-        if (attachments != null && attachments.size() > 0 && tenantId != null) {
-          Optional<BlockedFileTypes> blockedFileTypesOptional = adminClient.getBlockedFileTypes(streamId, tenantId, federatedAccount.getEmp());
+        if (attachments != null && attachments.size() > 0) {
+          Optional<BlockedFileTypes> blockedFileTypesOptional = adminClient.getBlockedFileTypes(streamId, federatedAccount.getEmp());
           Set<String> empBlockedTypes = blockedFileTypesOptional.isPresent() ? new HashSet<>(blockedFileTypesOptional.get()) : new HashSet<>();
 
           if (!empBlockedTypes.isEmpty()) {

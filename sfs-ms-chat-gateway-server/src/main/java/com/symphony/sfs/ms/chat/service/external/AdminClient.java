@@ -18,5 +18,5 @@ public interface AdminClient {
 
    void updateAdvisorInfo(AdvisorUpdateRequest advisorUpdateRequest);
 
-   Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String tenantId, String emp);
+   Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String emp);
 }

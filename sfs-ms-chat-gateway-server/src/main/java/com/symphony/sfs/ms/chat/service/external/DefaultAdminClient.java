@@ -58,8 +58,8 @@ public class DefaultAdminClient implements AdminClient {
   }
 
   @Override
-  public Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String tenantId, String emp) {
+  public Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String emp) {
     adminClient.getAttachmentConfigApi().getApiClient().setSfsAuthentication(jwtTokenGenerator.generateMicroserviceToken());
-    return adminClient.getAttachmentConfigApi().getBlockedFilesTypes(streamId, tenantId, emp);
+    return adminClient.getAttachmentConfigApi().getBlockedFilesTypes(streamId, emp);
   }
 }

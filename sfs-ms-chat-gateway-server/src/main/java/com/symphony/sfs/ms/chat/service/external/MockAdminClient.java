@@ -35,7 +35,7 @@ public class MockAdminClient implements AdminClient {
   }
 
   @Override
-  public Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String tenantId, String emp) {
+  public Optional<BlockedFileTypes> getBlockedFileTypes(String streamId, String emp) {
     return null;
   }
 }
