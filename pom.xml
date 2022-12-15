@@ -52,6 +52,21 @@
       <artifactId>crypto</artifactId>
       <version>1.64.24</version>
     </dependency>
+    <dependency>
+      <groupId>com.googlecode.libphonenumber</groupId>
+      <artifactId>libphonenumber</artifactId>
+      <version>8.13.2</version>
+    </dependency>
+    <dependency>
+      <groupId>com.sendgrid</groupId>
+      <artifactId>sendgrid-java</artifactId>
+      <version>4.4.4</version>
+    </dependency>
+    <dependency>
+      <groupId>com.sendgrid</groupId>
+      <artifactId>java-http-client</artifactId>
+      <version>4.5.1</version>
+    </dependency>
   </dependencies>
 
 </project>
